@@ -1,0 +1,35 @@
+// Optional Gradle init script for cloud/CI machines where Maven Central
+// (repo1.maven.org) rate-limits requests with HTTP 429. It puts Google's public
+// Maven Central mirror in front of every repository list and points
+// Robolectric's runtime jar downloads at the same mirror.
+//
+// Installed into ~/.gradle/init.d/ by scripts/setup-android-sdk.sh.
+// Not needed (and not used) on a normal developer machine.
+
+def mirrorUrl = 'https://maven-central.storage-download.googleapis.com/maven2/'
+
+def addMirror = { RepositoryHandler repos ->
+    if (repos.findByName('MavenCentralMirror') == null) {
+        repos.maven {
+            name = 'MavenCentralMirror'
+            url = mirrorUrl
+            content {
+                excludeGroupByRegex 'androidx.*'
+                excludeGroupByRegex 'com\\.android.*'
+                excludeGroupByRegex 'com\\.google\\.android.*'
+            }
+        }
+    }
+}
+
+beforeSettings { settings ->
+    addMirror(settings.pluginManagement.repositories)
+    addMirror(settings.dependencyResolutionManagement.repositories)
+}
+
+allprojects {
+    tasks.withType(Test).configureEach {
+        systemProperty 'robolectric.dependency.repo.url', mirrorUrl
+        systemProperty 'robolectric.dependency.repo.id', 'MavenCentralMirror'
+    }
+}

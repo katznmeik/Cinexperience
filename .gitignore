@@ -1,0 +1,29 @@
+# Gradle / build outputs
+.gradle/
+.kotlin/
+build/
+*/build/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Local configuration
+local.properties
+
+# Signing material — never commit (spec §14.4)
+*.jks
+*.keystore
+*.p12
+keystore.properties
+
+# IDE / OS files
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+.cxx/
+.externalNativeBuild/
