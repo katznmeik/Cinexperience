@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.seatmap
 
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -23,12 +24,16 @@ fun NavGraphBuilder.hallDetailScreen(
     onAddVisit: () -> Unit,
 ) {
     composable<HallDetailRoute> {
-        HallDetailScreen(onBack = onBack, onEditLayout = onEditLayout, onAddVisit = onAddVisit)
+        HallDetailScreen(
+            onBack = dropUnlessResumed(block = onBack),
+            onEditLayout = dropUnlessResumed(block = onEditLayout),
+            onAddVisit = dropUnlessResumed(block = onAddVisit),
+        )
     }
 }
 
 fun NavGraphBuilder.layoutEditorScreen(onBack: () -> Unit) {
     composable<LayoutEditorRoute> {
-        LayoutEditorScreen(onBack = onBack)
+        LayoutEditorScreen(onBack = dropUnlessResumed(block = onBack))
     }
 }

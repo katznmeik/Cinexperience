@@ -38,6 +38,9 @@ import io.github.katznmeik.cinexperience.feature.visits.visitEditScreen
  * Root composable: bottom navigation (shown on the three tab screens only, as in
  * the mockups) and the navigation graph that wires the feature modules together.
  * Feature modules never depend on each other; cross-feature navigation happens here.
+ * Back uses navigateUp (never pops the start destination); the feature modules also
+ * wrap every navigation callback in dropUnlessResumed, so double taps during a
+ * transition are ignored.
  */
 @Composable
 fun CinexApp(
@@ -79,23 +82,23 @@ fun CinexApp(
                 onAddVisit = navController::navigateToVisitEdit,
             )
             cinemaDetailScreen(
-                onBack = navController::popBackStack,
+                onBack = navController::navigateUp,
                 onOpenHall = navController::navigateToHallDetail,
             )
             hallDetailScreen(
-                onBack = navController::popBackStack,
+                onBack = navController::navigateUp,
                 onEditLayout = navController::navigateToLayoutEditor,
                 onAddVisit = navController::navigateToVisitEdit,
             )
-            layoutEditorScreen(onBack = navController::popBackStack)
-            visitEditScreen(onBack = navController::popBackStack)
+            layoutEditorScreen(onBack = navController::navigateUp)
+            visitEditScreen(onBack = navController::navigateUp)
 
             // Rankings tab
             rankingsScreen()
 
             // Settings tab
             settingsScreen(onOpenAllVisits = navController::navigateToAllVisits)
-            allVisitsScreen(onBack = navController::popBackStack)
+            allVisitsScreen(onBack = navController::navigateUp)
         }
     }
 }

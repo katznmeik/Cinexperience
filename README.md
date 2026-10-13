@@ -22,6 +22,13 @@ Android Studio installs the SDK for you. On Linux or cloud machines without it, 
 scripts/setup-android-sdk.sh        # SDK into $HOME/android-sdk + local.properties
 ```
 
+The script also installs a Gradle init script,
+`~/.gradle/init.d/maven-central-mirror.gradle`. It routes Maven Central (and
+Robolectric's runtime downloads) through Google's Maven Central mirror, because
+Maven Central often rate-limits cloud machines. It applies to **every Gradle
+project on that machine**. To skip it, run the script with
+`CINEX_NO_MAVEN_MIRROR=1`. To remove it, delete that file.
+
 Then:
 
 ```sh

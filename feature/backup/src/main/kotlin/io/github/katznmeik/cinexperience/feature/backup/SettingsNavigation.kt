@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.backup
 
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import kotlinx.serialization.Serializable
@@ -10,6 +11,6 @@ data object SettingsRoute
 
 fun NavGraphBuilder.settingsScreen(onOpenAllVisits: () -> Unit) {
     composable<SettingsRoute> {
-        SettingsScreen(onOpenAllVisits = onOpenAllVisits)
+        SettingsScreen(onOpenAllVisits = dropUnlessResumed(block = onOpenAllVisits))
     }
 }

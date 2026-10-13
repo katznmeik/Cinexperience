@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.visits
 
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -19,12 +20,12 @@ fun NavController.navigateToAllVisits() = navigate(AllVisitsRoute)
 
 fun NavGraphBuilder.visitEditScreen(onBack: () -> Unit) {
     composable<VisitEditRoute> {
-        VisitEditScreen(onBack = onBack)
+        VisitEditScreen(onBack = dropUnlessResumed(block = onBack))
     }
 }
 
 fun NavGraphBuilder.allVisitsScreen(onBack: () -> Unit) {
     composable<AllVisitsRoute> {
-        AllVisitsScreen(onBack = onBack)
+        AllVisitsScreen(onBack = dropUnlessResumed(block = onBack))
     }
 }

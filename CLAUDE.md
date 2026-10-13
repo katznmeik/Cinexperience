@@ -19,11 +19,17 @@ is required.
 ## Commands
 
 ```sh
-./gradlew testDebugUnitTest recordRoborazziDebug assembleDebug   # what CI runs (plus release)
+./gradlew testDebugUnitTest recordRoborazziDebug assembleDebug   # local pre-push check
 ./gradlew :core:model:test                                       # pure JVM unit tests
 ./gradlew recordRoborazziDebug    # PNGs -> app/build/outputs/roborazzi/
 ./gradlew assembleRelease         # needs CINEX_* env vars, else debug-signed + warning
 ```
+
+CI (`.github/workflows/android.yml`) first runs `testDebugUnitTest recordRoborazziDebug`.
+If the `CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
+`CINEX_REQUIRE_RELEASE_SIGNING=true`, so a missing or blank signing value fails
+the build instead of falling back to the debug key. Without that secret it runs
+`assembleDebug` and uploads a `-debug` APK.
 
 Look at the screenshot PNGs after every UI change.
 

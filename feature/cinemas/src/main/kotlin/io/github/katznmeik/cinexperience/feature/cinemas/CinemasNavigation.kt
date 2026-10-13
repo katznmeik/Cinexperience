@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.cinemas
 
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -20,7 +21,10 @@ fun NavGraphBuilder.cinemasScreen(
     onAddVisit: () -> Unit,
 ) {
     composable<CinemasRoute> {
-        CinemasScreen(onOpenCinema = onOpenCinema, onAddVisit = onAddVisit)
+        CinemasScreen(
+            onOpenCinema = dropUnlessResumed(block = onOpenCinema),
+            onAddVisit = dropUnlessResumed(block = onAddVisit),
+        )
     }
 }
 
@@ -29,6 +33,9 @@ fun NavGraphBuilder.cinemaDetailScreen(
     onOpenHall: () -> Unit,
 ) {
     composable<CinemaDetailRoute> {
-        CinemaDetailScreen(onBack = onBack, onOpenHall = onOpenHall)
+        CinemaDetailScreen(
+            onBack = dropUnlessResumed(block = onBack),
+            onOpenHall = dropUnlessResumed(block = onOpenHall),
+        )
     }
 }
