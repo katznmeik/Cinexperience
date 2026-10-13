@@ -21,9 +21,11 @@ compose-bom = "2026.09.00"
 
 # Kotlin libraries
 kotlinx-serialization = "1.11.0"
+kotlinx-coroutines = "1.10.2"
 
 # Testing
 junit4 = "4.13.2"
+androidx-test-core = "1.6.1"
 robolectric = "4.17"
 roborazzi = "1.76.0"
 
@@ -36,6 +38,7 @@ androidx-navigation-compose = { module = "androidx.navigation:navigation-compose
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "androidx-room" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "androidx-room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "androidx-room" }
+androidx-room-testing = { module = "androidx.room:room-testing", version.ref = "androidx-room" }
 
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
@@ -48,8 +51,11 @@ compose-foundation = { module = "androidx.compose.foundation:foundation" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 
 junit4 = { module = "junit:junit", version.ref = "junit4" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
@@ -63,6 +69,7 @@ compose-gradle-plugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle
 serialization-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
 ksp-gradle-plugin = { module = "com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin", version.ref = "ksp" }
 roborazzi-gradle-plugin = { module = "io.github.takahirom.roborazzi:roborazzi-gradle-plugin", version.ref = "roborazzi" }
+room-gradle-plugin = { module = "androidx.room:room-gradle-plugin", version.ref = "androidx-room" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -72,6 +79,7 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
+room = { id = "androidx.room", version.ref = "androidx-room" }
 
 # Convention plugins (build-logic)
 cinex-android-application = { id = "cinex.android.application" }

@@ -10,6 +10,7 @@ dependencies {
     compileOnly(libs.compose.gradle.plugin)
     compileOnly(libs.ksp.gradle.plugin)
     compileOnly(libs.roborazzi.gradle.plugin)
+    compileOnly(libs.room.gradle.plugin)
 }
 
 gradlePlugin {
