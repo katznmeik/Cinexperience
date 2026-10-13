@@ -83,6 +83,8 @@ internal class FileReferenceImageStore(
             throw e
         } catch (e: Exception) { // e.g. SecurityException (no read grant), IllegalArgumentException (bad URI)
             throw IOException("Couldn't read the image", e)
+        } catch (e: OutOfMemoryError) { // an absurdly large image; report it instead of crashing
+            throw IOException("The image is too large", e)
         }
         try {
             folder.mkdirs()
