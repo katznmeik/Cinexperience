@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13
+**Last updated:** 2026-10-13 (rev. 2)
 
 ---
 
@@ -63,6 +63,9 @@ All data is stored locally in a Room (SQLite) database.
 | cinemaId | Long | FK → Cinema |
 | name | String | e.g. "Saal 1" |
 | layout | SeatLayout? | null until drawn by the user |
+| screenWidth | Float? | screen width, in seat-widths (grid columns); adjustable |
+| screenDistance | Float? | gap between screen and first row, in row-depths; adjustable |
+| referenceImageUri | String? | screenshot of the hall plan from the Yorck app (see §6.5) |
 | notes | String? | |
 
 ### 4.3 SeatLayout (grid)
@@ -73,7 +76,14 @@ A rectangular grid of `rows × columns` cells. Each cell is one of:
 
 Row labels and seat numbers are auto-generated (row 1…n, seat 1…m per row,
 skipping gaps/aisles) and can be edited to match the cinema's real labels.
-The screen is always drawn at the top.
+
+**Split rows:** a row interrupted by an aisle forms separate *blocks*
+(e.g. left / centre / right). Per row, the user chooses whether seat numbering
+runs continuously across blocks or restarts in each block, and can set the
+starting number of each block. A row can also be shifted by half a seat
+(staggered rows), as seen in some halls.
+
+The screen is always drawn at the top, with the width and distance from §4.2.
 
 ### 4.4 Visit
 | Field | Type | Notes |
@@ -96,6 +106,7 @@ Cinema-level categories, rated separately from halls (1–5, optional):
 - Atmosphere
 - Bar / snacks
 - Popcorn quality
+- Seat comfort (cinema-wide impression, independent of the per-hall rating)
 
 Stored per visit (the visit's hall → cinema) so they average over time like hall
 ratings. Shown as an optional section in the "Add visit" form.
@@ -144,8 +155,9 @@ Bottom navigation with three tabs: **Cinemas**, **Rankings**, **Settings**.
 
 ### 6.3 Hall detail
 - **Seat map** (zoomable/pannable) coloured per §5. Tap a seat →
-  bottom sheet: average seat rating, visits in that seat, set colour override,
-  set/unset favourite.
+  bottom sheet: average seat rating, visits in that seat, approximate
+  viewing angle to the screen (derived from screen width/distance), set colour
+  override, set/unset favourite.
 - **Score breakdown:** six categories with bars and rating counts.
 - **Visit history:** newest first; tap to open/edit a visit.
 - Button **"Add visit"** (hall pre-selected).
@@ -164,9 +176,19 @@ Single scrolling form:
 Save is always allowed — nothing besides hall is required.
 
 ### 6.5 Layout editor
+- **Reference screenshot:** attach a screenshot of the hall's seat plan from the
+  Yorck app. It is shown semi-transparently behind the grid (adjustable opacity,
+  zoom and position), so the layout can be traced exactly — including split and
+  staggered rows. The screenshot is kept with the hall for later comparison.
+- **Seed layouts from screenshots:** screenshots supplied by the owner during
+  development are transcribed into preloaded layouts (see §9), so those halls
+  work out of the box.
 - Set number of rows and columns.
 - Tap/drag cells to cycle SEAT → GAP → AISLE.
-- Edit row labels and starting seat numbers.
+- Edit row labels and starting seat numbers; per row: block numbering
+  (continuous / restart per block) and half-seat offset.
+- **Screen:** drag handles to adjust the screen's width and its distance to the
+  first row; numeric entry is available as well.
 - Preview with screen at the top; save / discard.
 - Changing a layout that already has visits warns if seats with data would
   disappear.
@@ -204,7 +226,8 @@ Save is always allowed — nothing besides hall is required.
 ## 9. Preloaded data
 
 The app ships with a seed list of Yorck cinemas and their halls
-(names + addresses; no seat layouts). The list below is **preliminary and must
+(names + addresses). Seat layouts are preloaded for every hall the owner
+supplies a Yorck-app screenshot for; all other halls are drawn in the app. The list below is **preliminary and must
 be verified against yorck.de in milestone M1** — the chain changes venues over time.
 
 Babylon (Kreuzberg), Capitol Dahlem, Cinema Paris, Delphi Filmpalast,
@@ -251,7 +274,7 @@ redacted) to build and test the parser.
 |---|---|---|
 | M0 | Project setup | Android project, theme, navigation skeleton, CI build |
 | M1 | Data foundation | Room schema, verified seed data, cinema & hall CRUD |
-| M2 | Layout editor | Grid editor, seat map rendering |
+| M2 | Layout editor | Grid editor incl. split/staggered rows, screen size & distance, reference screenshot overlay, seat map rendering, seed layouts from screenshots |
 | M3 | Visit logging | Add/edit visit form incl. seat picker, photo, format |
 | M4 | Scores & seat map | Rating aggregation, seat colours, overrides, favourite |
 | M5 | Rankings | Sortable rankings for halls and cinemas |
@@ -259,8 +282,40 @@ redacted) to build and test the parser.
 | M7 | Polish & release | Accessibility pass, app icon, signed APK → v1.0 |
 | M8 | Ticket import | Share-intent parser (v1.1) |
 
-## 13. Open items
+## 13. Development approach
+
+The code is split into Gradle modules with clear boundaries, so work can be
+divided — and partly parallelised between multiple AI agents — by module and
+complexity:
+
+| Module | Content | Complexity |
+|---|---|---|
+| `core:model` | Domain classes, rating & seat-colour logic | Medium — fully unit-tested |
+| `core:data` | Room DB, repositories, seed data | Medium |
+| `core:ui` | Theme, shared components (star rating, cards) | Low |
+| `feature:seatmap` | Seat map canvas, layout editor, screenshot overlay | **High** |
+| `feature:cinemas` | Cinema list/detail, hall detail | Low–medium |
+| `feature:visits` | Add/edit visit form, photo handling | Medium |
+| `feature:rankings` | Rankings screen | Low |
+| `feature:backup` | Export / import, schema migration | Medium |
+| `feature:ticketimport` | Share-intent parser (v1.1) | High |
+
+Working rules:
+- **Sequential first:** M0 (project setup) and `core:model` / `core:data` are
+  built first by a single agent, because every feature depends on them.
+- **Parallel afterwards:** once the core is in place, independent feature
+  modules (e.g. `seatmap`, `rankings`, `backup`) can be built in parallel, each
+  on its own branch, against the shared interfaces.
+- **Effort by complexity:** high-complexity modules (seat map/editor, ticket
+  parser) get the most careful design, review and tests; simple screens are
+  handled in lighter passes.
+- **Integration & review:** every module is merged only after building, passing
+  its tests and a review pass. One integration step at the end of each
+  milestone checks the app as a whole.
+
+## 14. Open items
 
 - Verify the current list of Yorck cinemas and hall names (M1).
 - Sample ticket email/PDF for v1.1 parser.
+- Yorck-app screenshots of hall seat plans (for preloaded layouts).
 - App icon and final accent colour.
