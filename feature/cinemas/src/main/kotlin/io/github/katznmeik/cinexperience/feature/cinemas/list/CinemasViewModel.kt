@@ -24,7 +24,7 @@ enum class CinemaSort(val label: String) {
 
 data class CinemasUiState(
     val isLoading: Boolean = true,
-    val sort: CinemaSort = CinemaSort.NAME,
+    val sort: CinemaSort = CinemaSort.SCORE,
     val cinemas: List<CinemaSummary> = emptyList(),
     val errorMessage: String? = null,
 ) {
@@ -44,10 +44,10 @@ fun List<CinemaSummary>.sortedFor(sort: CinemaSort): List<CinemaSummary> = when 
     CinemaSort.MOST_VISITED -> sortedByDescending { it.visitCount }
 }
 
-/** The cinema list (spec §6.1). Name order is the default (spec); the choice is not persisted. */
+/** The cinema list (spec §6.1). Score order is the default (owner decision); the choice is not persisted. */
 class CinemasViewModel(cinemaRepository: CinemaRepository) : ViewModel() {
 
-    private val sort = MutableStateFlow(CinemaSort.NAME)
+    private val sort = MutableStateFlow(CinemaSort.SCORE)
 
     private val cinemas = cinemaRepository.observeCinemas()
         .map { Result.success(it) }

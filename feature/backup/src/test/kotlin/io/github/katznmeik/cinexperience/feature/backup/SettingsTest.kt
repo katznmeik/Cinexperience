@@ -12,7 +12,9 @@ import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -62,7 +64,8 @@ class SettingsScreenshotTest {
 
     @Test
     fun settings() {
-        val state = SettingsUiState(appVersion = "0.1.0", counts = DataCounts(13, 36, 4, 27))
+        val cinemas = runBlocking { FakeCinexRepository(SampleData.store()).observeCinemaDetails().first() }
+        val state = SettingsUiState(appVersion = "0.1.0", counts = DataCounts.of(cinemas))
         composeRule.setContent {
             CinexTheme {
                 Box(Modifier.fillMaxSize().background(CinexTheme.colors.background)) {

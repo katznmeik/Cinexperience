@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,9 +54,9 @@ internal fun SettingsScreen(
             RowDivider()
             SettingsRow(CinexIcons.Import, "Import backup", LATER_VERSION, enabled = false)
             RowDivider()
-            SettingsRow(CinexIcons.Cloud, "Android auto backup", LATER_VERSION, enabled = false) {
-                // The manifest allows backup (spec §8), so it is on; the toggle itself comes in M6.
-                Switch(checked = true, onCheckedChange = null, enabled = false)
+            // The manifest allows Android Auto Backup (spec §8); a switch for it follows in M6.
+            SettingsRow(CinexIcons.Cloud, "Android auto backup", "Backs up to your Google account", onClick = null) {
+                Text("On", style = MaterialTheme.typography.labelLarge, color = CinexTheme.colors.textMuted)
             }
         }
         Section("Data") {
@@ -112,7 +111,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 
 /**
  * Icon, title, muted subtitle and a trailing chevron (or [trailing]). Disabled rows
- * are drawn muted and can't be tapped.
+ * are drawn muted and can't be tapped; rows without [onClick] are informational.
  */
 @Composable
 private fun SettingsRow(
@@ -120,7 +119,7 @@ private fun SettingsRow(
     title: String,
     subtitle: String?,
     enabled: Boolean = true,
-    onClick: () -> Unit = {},
+    onClick: (() -> Unit)? = {},
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val titleColor = if (enabled) CinexTheme.colors.text else CinexTheme.colors.textMuted
@@ -128,7 +127,9 @@ private fun SettingsRow(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 64.dp)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .then(
+                if (enabled && onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier,
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -146,7 +147,7 @@ private fun SettingsRow(
         }
         when {
             trailing != null -> trailing()
-            enabled -> Icon(
+            enabled && onClick != null -> Icon(
                 CinexIcons.ChevronRight,
                 contentDescription = null,
                 tint = CinexTheme.colors.textMuted,

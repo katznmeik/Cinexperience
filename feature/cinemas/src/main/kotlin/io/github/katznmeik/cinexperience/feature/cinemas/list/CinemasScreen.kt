@@ -16,9 +16,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,9 +46,18 @@ internal fun CinemasEntry(
     viewModel: CinemasViewModel,
     onOpenCinema: (Long) -> Unit,
     onAddVisit: () -> Unit,
+    message: String?,
+    onMessageShown: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    CinemasScreen(state, onSortChange = viewModel::setSort, onOpenCinema = onOpenCinema, onAddVisit = onAddVisit)
+    CinemasScreen(
+        state,
+        onSortChange = viewModel::setSort,
+        onOpenCinema = onOpenCinema,
+        onAddVisit = onAddVisit,
+        message = message,
+        onMessageShown = onMessageShown,
+    )
 }
 
 /** Cinema list (spec §6.1): sort chips, one card per cinema, "Add visit" button. */
@@ -55,7 +68,16 @@ internal fun CinemasScreen(
     onOpenCinema: (Long) -> Unit,
     onAddVisit: () -> Unit,
     modifier: Modifier = Modifier,
+    message: String? = null,
+    onMessageShown: () -> Unit = {},
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            onMessageShown()
+        }
+    }
     Box(modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -81,19 +103,21 @@ internal fun CinemasScreen(
                 .align(Alignment.BottomEnd)
                 .padding(20.dp),
         )
+        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
     }
 }
 
 @Composable
 private fun Header(state: CinemasUiState, onSortChange: (CinemaSort) -> Unit) {
     Column(
-        modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 28.dp, bottom = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        // The chips' 48 dp touch targets add 6 dp above and below their 36 dp pills.
+        modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(Modifier.fillMaxWidth()) {
             ScreenTitle("Cinemas", Modifier.alignByBaseline())
             Spacer(Modifier.weight(1f))
-            if (!state.isLoading) {
+            if (!state.isLoading && state.errorMessage == null) {
                 Text(
                     text = "${countText(state.cinemas.size, "venue")} · ${countText(state.totalVisits, "visit")}",
                     style = MaterialTheme.typography.bodySmall,

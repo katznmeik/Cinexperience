@@ -62,24 +62,24 @@ class CinemasViewModelTest {
     }
 
     @Test
-    fun defaultIsNameSortAndSortCanBeChanged() = runTest {
+    fun defaultIsScoreSortAndSortCanBeChanged() = runTest {
         val vm = CinemasViewModel(FakeCinexRepository(SampleData.store()))
         collect(vm)
 
         var state = vm.uiState.value
         assertFalse(state.isLoading)
-        assertEquals(CinemaSort.NAME, state.sort)
-        assertEquals(13, state.cinemas.size)
-        assertEquals("Babylon Kreuzberg", state.cinemas.first().cinema.name)
-        assertEquals(SampleData.visits.size, state.totalVisits)
-
-        vm.setSort(CinemaSort.SCORE)
-        state = vm.uiState.value
         assertEquals(CinemaSort.SCORE, state.sort)
+        assertEquals(13, state.cinemas.size)
+        assertEquals(SampleData.visits.size, state.totalVisits)
         val scores = state.cinemas.map { it.overallScore }
         val rated = scores.takeWhile { it != null }.map { it!! }
         assertEquals(rated.sortedDescending(), rated)
         assertEquals(List(scores.size - rated.size) { null }, scores.drop(rated.size))
+
+        vm.setSort(CinemaSort.NAME)
+        state = vm.uiState.value
+        assertEquals(CinemaSort.NAME, state.sort)
+        assertEquals("Babylon Kreuzberg", state.cinemas.first().cinema.name)
     }
 
     @Test
