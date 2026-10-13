@@ -200,6 +200,8 @@ internal fun LayoutEditorEntry(
             onClose()
         }
     }
+    // Stays enabled while saving: Back is then swallowed (the ViewModel ignores it)
+    // instead of leaving mid-save.
     BackHandler(enabled = !state.isClosed) { actions.onDiscard() }
     LayoutEditorScreen(state, referenceBitmap, actions)
 }
@@ -222,7 +224,12 @@ internal fun LayoutEditorScreen(
     }
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            EditorTopBar(state.hallName, state.status == EditorStatus.Ready && !state.isSaving, actions)
+            EditorTopBar(
+                hallName = state.hallName,
+                canSave = state.status == EditorStatus.Ready && !state.isSaving,
+                canDiscard = !state.isSaving,
+                actions = actions,
+            )
             when (state.status) {
                 EditorStatus.Loading -> Unit
                 EditorStatus.NotFound -> Message("This hall no longer exists.")
@@ -239,7 +246,7 @@ internal fun LayoutEditorScreen(
 }
 
 @Composable
-private fun EditorTopBar(hallName: String, canSave: Boolean, actions: LayoutEditorActions) {
+private fun EditorTopBar(hallName: String, canSave: Boolean, canDiscard: Boolean, actions: LayoutEditorActions) {
     Column {
         Row(
             modifier = Modifier
@@ -247,8 +254,13 @@ private fun EditorTopBar(hallName: String, canSave: Boolean, actions: LayoutEdit
                 .padding(start = 4.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = actions::onDiscard) {
-                Text("Discard", style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text.copy(alpha = 0.8f))
+            // Disabled while saving: the save closes the editor itself.
+            TextButton(onClick = actions::onDiscard, enabled = canDiscard) {
+                Text(
+                    "Discard",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CinexTheme.colors.text.copy(alpha = if (canDiscard) 0.8f else 0.35f),
+                )
             }
             Text(
                 text = "${hallName.uppercase()} · LAYOUT",
@@ -808,6 +820,14 @@ internal fun confirmSaveText(dialog: EditorDialog.ConfirmSave): String = buildSt
     if (dialog.replacesUnreadableLayout) {
         if (isNotEmpty()) append("\n\n")
         append("The saved layout can't be read by this version of the app and will be replaced.")
+        when (val count = dialog.unreadableSeatsWithData) {
+            0 -> Unit
+            1 -> append(" 1 of its seats has visits or seat settings: its visits will keep no seat, and its colour and favourite are deleted.")
+            else -> append(
+                " $count of its seats have visits or seat settings: their visits will keep no seat, " +
+                    "and their colours and favourites are deleted.",
+            )
+        }
     }
 }
 

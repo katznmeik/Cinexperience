@@ -156,6 +156,24 @@ internal fun alignedBy(
     )
 }
 
+/** What touches on the editor canvas do. */
+internal enum class CanvasMode {
+    /** Paint cells, select rows, drag the screen handles; two fingers zoom. */
+    EDIT,
+
+    /** One or two fingers move and scale the reference screenshot. */
+    ALIGN_REFERENCE,
+
+    /** Reference mode while the screenshot isn't there (yet): only zoom and pan, never paint. */
+    VIEW_ONLY,
+}
+
+internal fun canvasMode(referenceMode: Boolean, hasReferenceImage: Boolean): CanvasMode = when {
+    !referenceMode -> CanvasMode.EDIT
+    hasReferenceImage -> CanvasMode.ALIGN_REFERENCE
+    else -> CanvasMode.VIEW_ONLY
+}
+
 /** Where a touch on the editor canvas lands. */
 internal sealed interface CanvasHit {
     data class WidthHandle(val right: Boolean) : CanvasHit
@@ -166,8 +184,10 @@ internal sealed interface CanvasHit {
 }
 
 /**
- * Hit-test of a screen point: the screen's width handles first (a finger-sized
- * circle), then the screen bar and its distance label, then cells and row labels.
+ * Hit-test of a screen point: above the grid, the screen's width handles first
+ * (a finger-sized circle), then the screen bar and its distance label; then
+ * cells and row labels. The screen controls never reach into row 0, so a wide
+ * hall or a small screen distance can't turn a paint stroke into a screen drag.
  */
 internal fun hitTest(
     point: Offset,
@@ -176,17 +196,19 @@ internal fun hitTest(
     handleTouchRadius: Float,
     distanceLabelHeight: Float,
 ): CanvasHit {
-    val left = transform.toScreen(Offset(geometry.screenLeft, geometry.screenY))
-    val right = transform.toScreen(Offset(geometry.screenRight, geometry.screenY))
-    val toRight = (point - right).getDistance()
-    val toLeft = (point - left).getDistance()
-    if (min(toLeft, toRight) <= handleTouchRadius) return CanvasHit.WidthHandle(right = toRight <= toLeft)
-    val gridTop = transform.toScreen(Offset(0f, 0f)).y
-    val onBar = point.x in left.x..right.x && abs(point.y - left.y) <= handleTouchRadius * 0.6f
-    val centre = (left.x + right.x) / 2f
-    val onLabel = abs(point.x - centre) <= handleTouchRadius * 3f &&
-        point.y in left.y..min(left.y + distanceLabelHeight, gridTop - 1f)
-    if (onBar || onLabel) return CanvasHit.DistanceHandle
+    // Top of row 0's band (cells own half of the row gap above them, see cellAt).
+    val gridTop = transform.toScreen(Offset(0f, -geometry.metrics.rowGap / 2f)).y
+    if (point.y < gridTop) {
+        val left = transform.toScreen(Offset(geometry.screenLeft, geometry.screenY))
+        val right = transform.toScreen(Offset(geometry.screenRight, geometry.screenY))
+        val toRight = (point - right).getDistance()
+        val toLeft = (point - left).getDistance()
+        if (min(toLeft, toRight) <= handleTouchRadius) return CanvasHit.WidthHandle(right = toRight <= toLeft)
+        val onBar = point.x in left.x..right.x && abs(point.y - left.y) <= handleTouchRadius * 0.6f
+        val centre = (left.x + right.x) / 2f
+        val onLabel = abs(point.x - centre) <= handleTouchRadius * 3f && point.y in left.y..left.y + distanceLabelHeight
+        if (onBar || onLabel) return CanvasHit.DistanceHandle
+    }
     val content = transform.toContent(point)
     geometry.cellAt(content)?.let { return CanvasHit.Cell(it) }
     geometry.rowLabelAt(content)?.let { return CanvasHit.RowLabel(it) }
@@ -241,7 +263,7 @@ internal fun EditorCanvas(
     val currentGeometry by rememberUpdatedState(geometry)
     val currentDraft by rememberUpdatedState(draft)
     val currentActions by rememberUpdatedState(actions)
-    val currentReferenceMode by rememberUpdatedState(referenceMode && referenceImage != null)
+    val currentMode by rememberUpdatedState(canvasMode(referenceMode, referenceImage != null))
     val currentAlignment by rememberUpdatedState(referenceAlignment)
     // Read only while drawing, so changing them (e.g. every frame while aligning the
     // screenshot) redraws without rebuilding the grid's cached paths.
@@ -280,7 +302,7 @@ internal fun EditorCanvas(
                         val transform = viewState.transformFor(bounds(viewport))
                         val zoomPan: (Offset, Offset, Float) -> Unit = { centroid, pan, zoom ->
                             val b = bounds(viewport)
-                            viewState.userTransform = b.clamp(viewState.transformFor(b).zoomed(zoom, centroid).panned(pan))
+                            viewState.userTransform = b.pinched(viewState.transformFor(b), centroid, pan, zoom)
                         }
                         val slop = viewConfiguration.touchSlop
                         // Outside the cells, one finger pans only when there is something to pan,
@@ -289,13 +311,20 @@ internal fun EditorCanvas(
                             val b = bounds(viewport)
                             b.canPan(viewState.transformFor(b))
                         }
-                        if (currentReferenceMode) {
-                            var alignment = currentAlignment ?: defaultReferenceAlignment(g)
-                            trackZoomPan(slop, canPanWithOneFinger = { true }, onGesture = { centroid, pan, zoom ->
-                                alignment = alignedBy(alignment, g, viewState.transformFor(bounds(viewport)), centroid, pan, zoom)
-                                currentActions.onReferenceAlignment(alignment)
-                            })
-                            return@awaitEachGesture
+                        when (currentMode) {
+                            CanvasMode.ALIGN_REFERENCE -> {
+                                var alignment = currentAlignment ?: defaultReferenceAlignment(g)
+                                trackZoomPan(slop, canPanWithOneFinger = { true }, onGesture = { centroid, pan, zoom ->
+                                    alignment = alignedBy(alignment, g, viewState.transformFor(bounds(viewport)), centroid, pan, zoom)
+                                    currentActions.onReferenceAlignment(alignment)
+                                })
+                                return@awaitEachGesture
+                            }
+                            CanvasMode.VIEW_ONLY -> {
+                                trackZoomPan(slop, canPanWithOneFinger = canPan, onGesture = zoomPan)
+                                return@awaitEachGesture
+                            }
+                            CanvasMode.EDIT -> Unit
                         }
                         when (val hit = hitTest(down.position, g, transform, handleTouchRadius, distanceLabelHeight)) {
                             is CanvasHit.WidthHandle -> {

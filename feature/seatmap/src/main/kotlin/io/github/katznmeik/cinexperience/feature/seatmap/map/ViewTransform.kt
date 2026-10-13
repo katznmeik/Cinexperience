@@ -65,6 +65,16 @@ data class ViewBounds(
         )
     }
 
+    /**
+     * A pinch on [transform]: zoom by [zoom] about [centroid] (the zoom limited
+     * *before* applying it, so the content under the fingers stays put at the
+     * limits), then pan by [pan], then keep the content edges in view.
+     */
+    fun pinched(transform: ViewTransform, centroid: Offset, pan: Offset, zoom: Float): ViewTransform {
+        val factor = (transform.scale * zoom).coerceIn(minScale, maxScale) / transform.scale
+        return clamp(transform.zoomed(factor, centroid).panned(pan))
+    }
+
     /** Whether content can move with one finger (it's larger than the viewport). */
     fun canPan(transform: ViewTransform): Boolean =
         content.width * transform.scale > viewport.width + 0.5f || content.height * transform.scale > viewport.height + 0.5f
@@ -72,7 +82,7 @@ data class ViewBounds(
     /** Double tap: zoom in around [focus], or back to the fitted view when already zoomed in. */
     fun toggleZoom(transform: ViewTransform, focus: Offset): ViewTransform? =
         if (transform.scale < fitScale * DOUBLE_TAP_THRESHOLD) {
-            clamp(transform.zoomed(fitScale * DOUBLE_TAP_ZOOM / transform.scale, focus))
+            pinched(transform, focus, Offset.Zero, fitScale * DOUBLE_TAP_ZOOM / transform.scale)
         } else {
             null
         }

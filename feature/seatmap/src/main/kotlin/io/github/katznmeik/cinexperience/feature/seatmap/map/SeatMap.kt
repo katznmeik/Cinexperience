@@ -174,7 +174,7 @@ fun SeatMap(
                     },
                     onGesture = { centroid, pan, zoom ->
                         val b = bounds(size.toSize())
-                        viewState.userTransform = b.clamp(viewState.transformFor(b).zoomed(zoom, centroid).panned(pan))
+                        viewState.userTransform = b.pinched(viewState.transformFor(b), centroid, pan, zoom)
                     },
                 )
             }

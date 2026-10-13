@@ -39,9 +39,15 @@ sealed interface EditorDialog {
     /**
      * Saving would remove seats that have visits or overrides (spec §6.5), listed
      * by their labels in the stored layout, and/or replace a layout this app
-     * version can't read.
+     * version can't read. The seats of an unreadable layout have no labels; with
+     * [unreadableSeatsWithData] > 0 that many of them have visits or overrides,
+     * and replacing the layout removes them all.
      */
-    data class ConfirmSave(val removedSeats: List<SeatLabel>, val replacesUnreadableLayout: Boolean) : EditorDialog
+    data class ConfirmSave(
+        val removedSeats: List<SeatLabel>,
+        val replacesUnreadableLayout: Boolean,
+        val unreadableSeatsWithData: Int = 0,
+    ) : EditorDialog
 
     /** Saving failed; with [canReload] the editor can start over from the stored layout. */
     data class SaveFailed(val message: String, val canReload: Boolean) : EditorDialog
@@ -305,7 +311,7 @@ class LayoutEditorViewModel(
 
     /** Result of the photo picker; `null` if the user cancelled. */
     fun onReferenceImagePicked(uri: String?) {
-        if (uri == null || state.status != EditorStatus.Ready) return
+        if (uri == null || state.status != EditorStatus.Ready || state.isSaving) return
         _uiState.update { it.copy(isImportingReference = true) }
         viewModelScope.launch {
             try {
@@ -363,12 +369,19 @@ class LayoutEditorViewModel(
                 failSave(HALL_GONE, canReload = false)
                 return@launch
             }
-            val removed = current.session.removedSeatsWithData(seatsWithData(detail.visits, detail.overrides))
-            if (removed.isNotEmpty() || detail.hall.layoutUnreadable) {
+            val withData = seatsWithData(detail.visits, detail.overrides)
+            val removed = current.session.removedSeatsWithData(withData)
+            val unreadable = detail.hall.layoutUnreadable
+            if (removed.isNotEmpty() || unreadable) {
                 pendingSave = detail.hall
-                _uiState.update {
-                    it.copy(isSaving = false, dialog = EditorDialog.ConfirmSave(removed.map { r -> r.label }, detail.hall.layoutUnreadable))
-                }
+                // An unreadable layout is replaced as a whole: none of its seats survive
+                // (new seats get ids above every id that visits and overrides use).
+                val dialog = EditorDialog.ConfirmSave(
+                    removedSeats = removed.map { it.label },
+                    replacesUnreadableLayout = unreadable,
+                    unreadableSeatsWithData = if (unreadable) withData.size else 0,
+                )
+                _uiState.update { it.copy(isSaving = false, dialog = dialog) }
             } else {
                 write(detail.hall)
             }
@@ -421,8 +434,12 @@ class LayoutEditorViewModel(
         _uiState.update { it.copy(isSaving = false, dialog = EditorDialog.SaveFailed(message, canReload)) }
     }
 
-    /** Back or "Discard": asks first if there are unsaved changes. */
+    /**
+     * Back or "Discard": asks first if there are unsaved changes. Ignored while a
+     * save is running, so the save is never undercut (it closes the editor itself).
+     */
     fun requestDiscard() {
+        if (state.isSaving) return
         endGesture()
         if (state.status == EditorStatus.Ready && state.hasUnsavedChanges) {
             _uiState.update { it.copy(dialog = EditorDialog.ConfirmDiscard) }
@@ -431,8 +448,13 @@ class LayoutEditorViewModel(
         }
     }
 
-    /** Leaves without saving; screenshots picked in this session are deleted. */
+    /**
+     * Leaves without saving; screenshots picked in this session are deleted.
+     * Ignored while a save is running: deleting a just-saved screenshot would leave
+     * the hall pointing at a missing file.
+     */
     fun discard() {
+        if (state.isSaving || state.isClosed) return
         _uiState.update { it.copy(dialog = null) }
         viewModelScope.launch {
             deleteImports(keep = null)
@@ -451,7 +473,7 @@ class LayoutEditorViewModel(
 
     fun dismissDialog() {
         pendingSave = null
-        _uiState.update { it.copy(dialog = null, isSaving = false) }
+        _uiState.update { it.copy(dialog = null) }
     }
 
     fun messageShown() {
