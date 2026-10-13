@@ -1,0 +1,138 @@
+package io.github.katznmeik.cinexperience.core.ui.component
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
+
+/** Top bar of a pushed screen: back arrow on the left, optional icon actions on the right. */
+@Composable
+fun BackTopBar(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, end = 4.dp, top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TopBarIconButton(icon = CinexIcons.Back, contentDescription = "Back", onClick = onBack)
+        Spacer(Modifier.weight(1f))
+        actions()
+    }
+}
+
+/** A 48 dp icon button in the text colour, for top bars and list rows. */
+@Composable
+fun TopBarIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = CinexTheme.colors.text,
+) {
+    IconButton(onClick = onClick, modifier = modifier) {
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(22.dp))
+    }
+}
+
+/** Small outlined pill button from the mockups, e.g. "+ Add hall": 36 dp tall, 48 dp touch target. */
+@Composable
+fun OutlinedPillButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = CinexIcons.Add,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .height(36.dp),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, CinexTheme.colors.outline),
+        contentPadding = PaddingValues(horizontal = 12.dp),
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = CinexTheme.colors.text, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.size(6.dp))
+        }
+        Text(text, style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.text)
+    }
+}
+
+/**
+ * Single-choice chip (e.g. sort mode): filled light when selected, outlined otherwise.
+ * Drawn 36 dp tall with a 48 dp touch target.
+ */
+@Composable
+fun ChoiceChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(18.dp)
+    val base = modifier
+        .minimumInteractiveComponentSize()
+        .height(36.dp)
+        .clip(shape)
+        .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+    Box(
+        modifier = if (selected) {
+            base.background(CinexTheme.colors.text)
+        } else {
+            base.border(1.dp, CinexTheme.colors.outline, shape)
+        }.padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            ),
+            color = if (selected) CinexTheme.colors.onPrimary else CinexTheme.colors.text,
+        )
+    }
+}
+
+/** Horizontal row of [ChoiceChip]s with the mockup spacing. */
+@Composable
+fun ChoiceChipRow(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = modifier.selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        content = content,
+    )
+}

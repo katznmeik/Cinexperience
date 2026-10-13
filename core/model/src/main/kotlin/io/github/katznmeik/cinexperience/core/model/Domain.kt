@@ -52,6 +52,9 @@ data class Hall(
     val nextSeatId: Int = SeatLayout.FIRST_SEAT_ID,
     val layoutUnreadable: Boolean = false,
 ) {
+    /** The hall has a stored seat layout (even if this app version can't read it). */
+    val isLayoutDrawn: Boolean get() = layout != null || layoutUnreadable
+
     /** Starts editing this hall's layout (spec §6.5) with correct seat id handling. */
     fun startLayoutEdit(): LayoutEditSession = LayoutEditSession.start(layout, nextSeatId)
 }

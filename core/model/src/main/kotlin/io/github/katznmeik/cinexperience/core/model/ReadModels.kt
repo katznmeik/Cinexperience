@@ -10,6 +10,7 @@ data class CinemaSummary(
     val cinema: Cinema,
     val overallScore: Double?,
     val visitCount: Int,
+    val hallCount: Int,
 )
 
 /** One hall in the cinema detail (spec §6.2). */

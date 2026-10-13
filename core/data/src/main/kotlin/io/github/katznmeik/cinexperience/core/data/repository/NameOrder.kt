@@ -6,9 +6,9 @@ import java.util.Locale
 
 /**
  * Natural, case-insensitive name order: "delphi LUX" sorts among the D's and
- * "Saal 2" before "Saal 10".
+ * "Saal 2" before "Saal 10". The order of every name-sorted repository list.
  */
-internal object NameOrder : Comparator<String> {
+object NameOrder : Comparator<String> {
     private val collator: Collator = Collator.getInstance(Locale.ENGLISH).apply { strength = Collator.SECONDARY }
     private val chunk = Regex("\\d+|\\D+")
 

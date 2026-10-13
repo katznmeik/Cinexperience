@@ -17,6 +17,9 @@ import kotlinx.coroutines.SupervisorJob
  */
 interface AppContainer {
     val applicationContext: Context
+
+    /** Version name of the installed app, shown in Settings → About. */
+    val appVersion: String
     val cinemaRepository: CinemaRepository
     val hallRepository: HallRepository
     val visitRepository: VisitRepository
@@ -25,6 +28,10 @@ interface AppContainer {
 
 class DefaultAppContainer(context: Context) : AppContainer {
     override val applicationContext: Context = context.applicationContext
+
+    override val appVersion: String by lazy {
+        applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0).versionName.orEmpty()
+    }
 
     /** Lives as long as the process; used for app-wide work such as seeding the database. */
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
