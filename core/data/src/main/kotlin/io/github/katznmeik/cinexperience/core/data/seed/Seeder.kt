@@ -71,9 +71,9 @@ internal class Seeder(
                 cinemas += entity.copy(id = cinemaId)
             } else {
                 val key = seedCinema.seedKey
+                // Adopting a user-added cinema only links it to the seed; it stays deletable.
                 val updated = matched.copy(
                     seedKey = key,
-                    isPreloaded = true,
                     address = snapshots.fill(CINEMA, key, "address", matched.address, seedCinema.address),
                 )
                 if (updated != matched) {
@@ -107,9 +107,9 @@ internal class Seeder(
                     )
                     halls += entity.copy(id = hallDao.insert(entity))
                 } else {
+                    // Adopting a user-added hall only links it to the seed; it stays deletable.
                     var updated = matchedHall.copy(
                         seedKey = key,
-                        isPreloaded = true,
                         screenWidth = snapshots.fill(HALL, key, "screenWidth", matchedHall.screenWidth?.toString(), seedHall.screenWidth?.toString())
                             ?.toFloat(),
                         screenDistance = snapshots.fill(HALL, key, "screenDistance", matchedHall.screenDistance?.toString(), seedHall.screenDistance?.toString())

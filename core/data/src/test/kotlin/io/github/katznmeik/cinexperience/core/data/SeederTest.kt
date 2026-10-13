@@ -169,7 +169,7 @@ internal class SeederTest : DatabaseTest() {
         val alpha = all.single { it.id == cinemaId }
         assertEquals("alpha", alpha.name) // the user's name is kept
         assertEquals("alpha", alpha.seedKey)
-        assertTrue(alpha.isPreloaded)
+        assertFalse(alpha.isPreloaded) // adopted items stay user-deletable
         assertEquals("Street 1", alpha.address) // empty field filled
         assertEquals("mine", alpha.notes)
 
@@ -178,7 +178,7 @@ internal class SeederTest : DatabaseTest() {
         val adopted = hallsAfter.single { it.id == hallId }
         assertEquals("SAAL 1", adopted.name)
         assertEquals("alpha/1", adopted.seedKey)
-        assertTrue(adopted.isPreloaded)
+        assertFalse(adopted.isPreloaded) // adopted items stay user-deletable
         assertEquals(layoutOf("SS"), halls.getHall(hallId)!!.layout)
         assertNull(hallsAfter.single { it.id == otherHall }.seedKey)
     }
