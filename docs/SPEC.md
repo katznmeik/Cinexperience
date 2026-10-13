@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 9)
+**Last updated:** 2026-10-13 (rev. 10)
 
 ---
 
@@ -193,12 +193,17 @@ Save is always allowed — nothing besides hall is required.
 - **Reference screenshot:** attach a screenshot of the hall's seat plan from the
   Yorck app. It is shown semi-transparently behind the grid (adjustable opacity,
   zoom and position), so the layout can be traced exactly — including split and
-  staggered rows. The screenshot is kept with the hall for later comparison.
+  staggered rows. The screenshot is kept with the hall for later comparison;
+  its alignment (position, zoom, opacity) applies to the current editing
+  session only.
 - **Seed layouts from screenshots:** screenshots supplied by the owner during
   development are transcribed into preloaded layouts (see §9), so those halls
   work out of the box.
-- Set number of rows and columns.
-- Tap/drag cells to cycle SEAT → GAP → AISLE.
+- Set number of rows and columns (added/removed at the end; rows can also be
+  inserted above/below the selected row or deleted).
+- **Paint tool:** choose Seat / Gap / Aisle (and for seats a type: standard,
+  wheelchair, companion, sofa), then tap or drag across cells to paint them.
+  Two fingers zoom and pan. Undo/redo for every change.
 - Edit row labels and starting seat numbers; per row: block numbering
   (continuous / restart per block) and half-seat offset.
 - **Screen:** drag handles to adjust the screen's width and its distance to the
