@@ -91,6 +91,27 @@ class ViewTransformTest {
     }
 
     @Test
+    fun pinchingPastTheZoomLimitsKeepsTheContentUnderTheFingers() {
+        val focus = Offset(130f, 170f)
+        var t = bounds.clamp(ViewTransform(7f, Offset(-400f, -250f)))
+        val under = t.toContent(focus)
+        repeat(3) { t = bounds.pinched(t, focus, Offset.Zero, zoom = 1.5f) } // 7 → limited at 8
+        assertEquals(8f, t.scale)
+        assertOffset(under, t.toContent(focus))
+        t = bounds.pinched(t, focus, Offset.Zero, zoom = 1.5f) // already at the limit: nothing moves
+        assertOffset(under, t.toContent(focus))
+
+        // Zooming out stops at the minimum the same way.
+        val out = bounds.pinched(bounds.fitted(), Offset(200f, 100f), Offset.Zero, zoom = 0.5f)
+        assertEquals(2f, out.scale)
+        assertOffset(bounds.fitted().offset, out.offset)
+
+        // Pan still applies.
+        val panned = bounds.pinched(ViewTransform(4f, Offset(0f, 100f)), focus, Offset(-10f, -5f), zoom = 1f)
+        assertOffset(Offset(-10f, 95f), panned.offset)
+    }
+
+    @Test
     fun doubleTapZoomsInThenBackToTheFittedView() {
         val zoomedIn = bounds.toggleZoom(bounds.fitted(), Offset(200f, 100f))!!
         assertEquals(5f, zoomedIn.scale) // 2.5 × fit
