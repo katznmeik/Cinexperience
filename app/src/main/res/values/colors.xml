@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mirrors CinexColors.background in core:ui; used only before Compose draws. -->
+    <color name="cinex_background">#0E0D0C</color>
+    <color name="cinex_text">#F3F0EA</color>
+</resources>
