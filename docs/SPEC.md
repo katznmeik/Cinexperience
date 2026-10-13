@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 3)
+**Last updated:** 2026-10-13 (rev. 4)
 
 ---
 
@@ -199,16 +199,28 @@ Save is always allowed — nothing besides hall is required.
 - Sorted list, highest first; items with no data at the bottom.
 
 ### 6.7 Settings
-- Export backup / Import backup (§8)
-- Manage cinemas & halls (add, rename, delete user-added ones)
-- About / version
+- **Backup:** Export backup (shows date and contents of the last export),
+  Import backup (warns that it replaces all data), Android Auto Backup on/off (§8)
+- **Data:** Manage cinemas & halls (add, rename, delete user-added ones; shows
+  counts and how many layouts are drawn); All visits (§6.8)
+- **About:** version, note that the app is unofficial and not affiliated with
+  Yorck Kinos
+
+### 6.8 All visits
+- One chronological list of every visit across all cinemas, newest first.
+- Each entry: film, date, cinema · hall, seat, screening format, seat rating.
+- Tap to open/edit the visit (§6.4).
+- Reached from Settings → Data → All visits.
 
 ## 7. Look & feel
 
 - **Dark theme only** in v1 (comfortable to use in a dark auditorium).
-- Visual style loosely inspired by Yorck's branding: dark background,
-  clean typography, restrained accent colour. No Yorck logos or trademarks are
+- Visual style loosely inspired by Yorck's branding: near-black background,
+  bold uppercase display type, **black-and-white only** — the seat colours
+  (green / yellow / red) are the only colours in the UI, so the seat map stands out. No Yorck logos or trademarks are
   used in the app.
+- Mockups of all v1 screens: https://claude.ai/artifact/24gq7hLsHPUoABFm2Ro8Q9
+- Seats to avoid carry a × mark; the favourite seat carries a ⭐.
 - Seat colours must be distinguishable in the dark theme and also carry a
   secondary cue (icon/pattern) for colour-blind readability.
 - Material 3 components via Jetpack Compose.
