@@ -39,6 +39,39 @@ object CinexIcons {
 
     val Add: ImageVector by lazy { strokeIcon("Add", "M12 5v14M5 12h14", strokeWidth = 2.2f) }
 
+    val Edit: ImageVector by lazy { strokeIcon("Edit", "M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z") }
+
+    /** Vertical three-dot overflow menu. */
+    val More: ImageVector by lazy {
+        strokeIcon("More", "M12 5h.01M12 12h.01M12 19h.01", strokeWidth = 3f)
+    }
+
+    val Export: ImageVector by lazy { strokeIcon("Export", "M12 3v12M7 10l5 5 5-5M4 19h16") }
+
+    val Import: ImageVector by lazy { strokeIcon("Import", "M12 15V3M7 8l5-5 5 5M4 19h16") }
+
+    val Cloud: ImageVector by lazy { strokeIcon("Cloud", "M7 18a5 5 0 0 1-.5-10A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z") }
+
+    val List: ImageVector by lazy {
+        strokeIcon("List", "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01")
+    }
+
+    /** Filled star marking the favourite seat (spec §5). */
+    val Star: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "Star",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        ).apply {
+            addPath(
+                pathData = PathParser().parsePathString("M12 2l3 6.9 7.5.7-5.7 5 1.7 7.4L12 18l-6.5 4 1.7-7.4-5.7-5 7.5-.7z").toNodes(),
+                fill = SolidColor(Color.Black),
+            )
+        }.build()
+    }
+
     private fun strokeIcon(name: String, vararg paths: String, strokeWidth: Float = 2f): ImageVector =
         ImageVector.Builder(
             name = name,

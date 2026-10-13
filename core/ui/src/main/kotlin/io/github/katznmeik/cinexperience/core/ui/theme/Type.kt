@@ -31,8 +31,10 @@ data class CinexTextStyles(
     val sectionHeader: TextStyle,
     /** Card / list item title, e.g. a cinema name. Render uppercase. */
     val cardTitle: TextStyle,
-    /** Big score number. */
+    /** Score number in list rows and cards. */
     val score: TextStyle,
+    /** The big overall score in a detail header. */
+    val scoreLarge: TextStyle,
     /** Bottom navigation label. */
     val navigationLabel: TextStyle,
 )
@@ -64,6 +66,12 @@ val DefaultCinexTextStyles = CinexTextStyles(
         fontWeight = FontWeight.ExtraBold,
         fontSize = 22.sp,
         lineHeight = 26.sp,
+    ),
+    scoreLarge = TextStyle(
+        fontFamily = Archivo,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 40.sp,
+        lineHeight = 44.sp,
     ),
     navigationLabel = TextStyle(
         fontFamily = InstrumentSans,
