@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 4)
+**Last updated:** 2026-10-13 (rev. 5)
 
 ---
 
@@ -325,6 +325,40 @@ Working rules:
 - **Integration & review:** every module is merged only after building, passing
   its tests and a review pass. One integration step at the end of each
   milestone checks the app as a whole.
+
+### 13.1 Agent orchestration & effort levels
+
+Claude (this session) acts as **orchestrator**: it briefs each dev agent with a
+task from this spec, reviews and tests the result, and merges it. Every agent
+runs on **Opus 5.5** with an effort level matched to the task's risk and
+complexity (higher effort = more careful reasoning, but more time and usage):
+
+| Task | Effort | Reason |
+|---|---|---|
+| M0: project setup, CI, signing | medium | Mostly standard setup |
+| `core:model`: rating & seat-colour logic | high | Small, but every score depends on it; fully tested |
+| `core:data`: Room DB, seed data | high | Schema is hard to change later; backups depend on it |
+| `core:ui`: theme, shared components | medium | Follows the mockups |
+| `feature:cinemas`: lists & detail screens | medium | Standard screens |
+| `feature:visits`: visit form, photos | medium | Form plus photo storage |
+| `feature:rankings` | low | Sorting a list |
+| `feature:seatmap`: seat map & layout editor | xhigh | Hardest part: zoom/pan, split & staggered rows, overlay, screen geometry |
+| `feature:backup`: export / import | high | Errors mean data loss |
+| Seed layouts from Yorck-app screenshots | high | Seats must be transcribed exactly |
+| `feature:ticketimport` parser (v1.1) | xhigh | Error-prone free-text parsing |
+| Review agents | high (xhigh for seat map & backup) | Independent check before merge |
+| Stubborn bugs | max | Only when needed |
+
+At most **two agents build in parallel**, so builds don't slow each other down
+on the cloud machine.
+
+### 13.2 Branches & pull requests
+
+- `claude/cool-curie-fx1oko` is the **integration branch** (holds this spec).
+- Each milestone or module is developed on its **own branch**
+  (e.g. `claude/m0-setup`, `claude/seatmap`) and delivered as a pull request
+  into the integration branch.
+- A PR is merged only when CI is green and the owner has reviewed it (§14).
 
 ## 14. Build & verification
 
