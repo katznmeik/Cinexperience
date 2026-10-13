@@ -136,4 +136,27 @@ class ScoresTest {
         assertEquals("3.3", formatScore(10.0 / 3))
         assertEquals("5.0", formatScore(5.0))
     }
+
+    @Test
+    fun formatScoreIsNotFooledByFloatingPointNoise() {
+        // Mean of category means 3.6, 3.75 and 4.5 is exactly 3.95.
+        val mean = listOf(3.6, 3.75, 4.5).average()
+        assertTrue(mean < 3.95) // the double really is just below
+        assertEquals("4.0", formatScore(mean))
+        assertEquals("2.5", formatScore(2.45))
+        assertEquals("3.9", formatScore(3.94))
+        // The same through the real aggregation: hall overall of those category means.
+        val visits = listOf(
+            visit(hall = HallRatings(sound = r(3), picture = r(4), screenSize = r(4))),
+            visit(hall = HallRatings(sound = r(4), picture = r(4), screenSize = r(5))),
+            visit(hall = HallRatings(sound = r(4), picture = r(3))),
+            visit(hall = HallRatings(sound = r(4), picture = r(4))),
+            visit(hall = HallRatings(sound = r(3))),
+        )
+        val scores = hallScores(visits)
+        assertEquals(3.6, scores[HallCategory.SOUND]!!.average, 1e-12)
+        assertEquals(3.75, scores[HallCategory.PICTURE]!!.average, 1e-12)
+        assertEquals(4.5, scores[HallCategory.SCREEN_SIZE]!!.average, 1e-12)
+        assertEquals("4.0", formatScore(scores.overall))
+    }
 }

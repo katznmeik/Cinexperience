@@ -90,6 +90,16 @@ private fun meanOrNull(values: List<Double>): Double? = if (values.isEmpty()) nu
 /** Placeholder shown for unrated values (spec §5). */
 const val NO_SCORE_TEXT: String = "–"
 
-/** Formats a score with one decimal (half up, e.g. 4.25 → "4.3"), or [NO_SCORE_TEXT] for `null`. */
+/**
+ * Formats a score with one decimal (half up, e.g. 4.25 → "4.3"), or [NO_SCORE_TEXT]
+ * for `null`. Scores are means of means, so floating-point noise can put an exact
+ * x.x5 just below the boundary (3.95 is computed as 3.9499999999999997); the value
+ * is first rounded to 9 decimals to remove that noise, then to one decimal.
+ */
 fun formatScore(score: Double?): String =
-    score?.let { BigDecimal.valueOf(it).setScale(1, RoundingMode.HALF_UP).toPlainString() } ?: NO_SCORE_TEXT
+    score?.let {
+        BigDecimal.valueOf(it)
+            .setScale(9, RoundingMode.HALF_EVEN)
+            .setScale(1, RoundingMode.HALF_UP)
+            .toPlainString()
+    } ?: NO_SCORE_TEXT
