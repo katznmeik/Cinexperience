@@ -96,7 +96,9 @@ fun OutlinedPillButton(
 /**
  * Single-choice chip (e.g. sort mode): filled light when selected, outlined otherwise.
  * Drawn 36 dp tall with a 48 dp touch target. The default is a pill; the layout
- * editor's tool chips pass [SegmentChipShape]. An optional [icon] precedes the text.
+ * editor's tool chips pass [SegmentChipShape]. An optional [icon] precedes the
+ * text; with an empty [text] the chip shows only the icon (give it a content
+ * description through [modifier]).
  */
 @Composable
 fun ChoiceChip(
@@ -125,13 +127,15 @@ fun ChoiceChip(
         if (icon != null) {
             Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
         }
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            ),
-            color = contentColor,
-        )
+        if (text.isNotEmpty()) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                ),
+                color = contentColor,
+            )
+        }
     }
 }
 

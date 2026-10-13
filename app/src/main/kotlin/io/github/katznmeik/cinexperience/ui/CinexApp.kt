@@ -102,7 +102,11 @@ fun CinexApp(
                 onEditLayout = navController::navigateToLayoutEditor,
                 onAddVisit = navController::navigateToVisitEdit,
             )
-            layoutEditorScreen(onBack = navController::navigateUp)
+            layoutEditorScreen(
+                hallRepository = container.hallRepository,
+                referenceImageStore = container.referenceImageStore,
+                onClose = navController::navigateUp,
+            )
             visitEditScreen(onBack = navController::navigateUp)
 
             // Rankings tab
