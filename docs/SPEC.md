@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 7)
+**Last updated:** 2026-10-13 (rev. 8)
 
 ---
 
@@ -153,7 +153,7 @@ Bottom navigation with three tabs: **Cinemas**, **Rankings**, **Settings**.
 
 ### 6.1 Cinemas (home)
 - List of all cinemas: name, overall score, number of visits.
-- Sort: name (default) / score / most visited.
+- Sort: score (default; unrated last) / name / most visited.
 - FAB "Add visit" (quick entry: pick cinema → hall).
 
 ### 6.2 Cinema detail
