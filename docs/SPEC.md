@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 2)
+**Last updated:** 2026-10-13 (rev. 3)
 
 ---
 
@@ -251,7 +251,8 @@ Users can add, rename or delete cinemas and halls at any time.
 | Seat map | Custom Compose `Canvas` with zoom/pan |
 | Build | Gradle (Kotlin DSL), version catalog |
 | Testing | Unit tests for rating logic & backup; Compose UI tests for key flows |
-| Distribution | Signed release APK, sideloaded |
+| Distribution | Signed APK, sideloaded (see §14) |
+| CI | GitHub Actions: build, tests, screenshots (see §14) |
 
 ## 11. Future: ticket import (v1.1)
 
@@ -272,7 +273,7 @@ redacted) to build and test the parser.
 
 | # | Milestone | Content |
 |---|---|---|
-| M0 | Project setup | Android project, theme, navigation skeleton, CI build |
+| M0 | Project setup | Android project, theme, navigation skeleton, GitHub Actions CI (APK + tests + screenshots), fixed signing key |
 | M1 | Data foundation | Room schema, verified seed data, cinema & hall CRUD |
 | M2 | Layout editor | Grid editor incl. split/staggered rows, screen size & distance, reference screenshot overlay, seat map rendering, seed layouts from screenshots |
 | M3 | Visit logging | Add/edit visit form incl. seat picker, photo, format |
@@ -313,7 +314,58 @@ Working rules:
   its tests and a review pass. One integration step at the end of each
   milestone checks the app as a whole.
 
-## 14. Open items
+## 14. Build & verification
+
+### 14.1 Flow
+1. Each milestone is developed on a branch and delivered as a pull request.
+2. **GitHub Actions** runs on every push and:
+   - builds the signed APK and attaches it to the run as a downloadable artifact;
+   - runs all unit tests;
+   - renders **screenshots of every screen** (Compose screenshot tests,
+     e.g. Roborazzi) and attaches them to the run / PR.
+3. The owner reviews screenshots, tests the APK on the PC emulator and/or
+   phone, and gives feedback in the PR or chat.
+4. The PR is merged once the owner is satisfied and CI is green.
+
+The developer (Claude) builds and runs tests in the cloud before every push,
+but cannot run an emulator there — hands-on verification is done by the owner.
+
+### 14.2 Windows PC (emulator)
+- **Requirements:** 16 GB RAM recommended (8 GB minimum), ~20 GB free disk,
+  hardware virtualisation enabled.
+- **One-time setup:** install Android Studio → Device Manager → create a
+  virtual device (e.g. Pixel 9) with the **Android 16** system image.
+- **Testing without code:** download the APK from the CI run and drag it onto
+  the emulator window.
+- **Testing with code:** open the repository in Android Studio and press Run;
+  tests can be run locally too.
+- Windows Subsystem for Android is discontinued and not used.
+
+### 14.3 Galaxy S25
+- **APK install (default):** download the APK on the phone (or copy from PC).
+  - Temporarily disable **Auto Blocker**
+    (Settings → Security and privacy → Auto Blocker).
+  - Allow "Install unknown apps" for the browser / My Files.
+  - On a Play Protect warning: More details → Install anyway.
+- **Optional:** Developer options → Wireless debugging, paired with
+  Android Studio, to install directly from the IDE.
+
+### 14.4 Signing & data safety
+- One fixed signing key is created in M0 and stored as a **GitHub Actions
+  secret** (never committed). All builds use it, so every new APK installs as
+  an update over the previous one and **keeps existing data**.
+- Before installing a new version once real data exists, make an **Export**
+  backup (§8) as a precaution.
+
+### 14.5 Review routine per milestone
+| Step | Where | Time |
+|---|---|---|
+| Check screenshots | Browser (PR) | ~2 min |
+| Click through new features | Emulator on PC | ~10–15 min |
+| Real-world use | Galaxy S25 | as desired |
+| Feedback | PR comment or chat | – |
+
+## 15. Open items
 
 - Verify the current list of Yorck cinemas and hall names (M1).
 - Sample ticket email/PDF for v1.1 parser.
