@@ -12,12 +12,35 @@ plugins {
 //   CINEX_KEY_ALIAS          key alias
 //   CINEX_KEY_PASSWORD       key password
 // Without them, release builds fall back to the debug key so they still build locally.
+// CI sets CINEX_REQUIRE_RELEASE_SIGNING=true: then any missing value fails the build
+// instead, so a debug-signed APK can never be published as the release.
 val releaseKeystorePath: String? = providers.environmentVariable("CINEX_KEYSTORE_PATH").orNull
 val releaseKeystorePassword: String? = providers.environmentVariable("CINEX_KEYSTORE_PASSWORD").orNull
 val releaseKeyAlias: String? = providers.environmentVariable("CINEX_KEY_ALIAS").orNull
 val releaseKeyPassword: String? = providers.environmentVariable("CINEX_KEY_PASSWORD").orNull
-val hasReleaseSigning = listOf(releaseKeystorePath, releaseKeystorePassword, releaseKeyAlias, releaseKeyPassword)
-    .all { !it.isNullOrBlank() } && file(releaseKeystorePath!!).isFile
+val requireReleaseSigning =
+    providers.environmentVariable("CINEX_REQUIRE_RELEASE_SIGNING").orNull.equals("true", ignoreCase = true)
+
+val missingSigningProblems: List<String> = buildList {
+    mapOf(
+        "CINEX_KEYSTORE_PATH" to releaseKeystorePath,
+        "CINEX_KEYSTORE_PASSWORD" to releaseKeystorePassword,
+        "CINEX_KEY_ALIAS" to releaseKeyAlias,
+        "CINEX_KEY_PASSWORD" to releaseKeyPassword,
+    ).forEach { (name, value) -> if (value.isNullOrBlank()) add("$name is not set") }
+    if (!releaseKeystorePath.isNullOrBlank() && !file(releaseKeystorePath).isFile) {
+        add("CINEX_KEYSTORE_PATH does not point to an existing file")
+    }
+}
+val hasReleaseSigning = missingSigningProblems.isEmpty()
+
+if (requireReleaseSigning && !hasReleaseSigning) {
+    throw GradleException(
+        "CINEX_REQUIRE_RELEASE_SIGNING=true but release signing is incomplete: " +
+            missingSigningProblems.joinToString("; ") +
+            ". Check the CINEX_* repository secrets.",
+    )
+}
 
 android {
     defaultConfig {

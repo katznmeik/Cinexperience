@@ -14,6 +14,8 @@ permissions:
 
 jobs:
   build:
+    # A claude/** branch in this repo already builds on push; skip its duplicate PR run.
+    if: github.event_name == 'push' || !(startsWith(github.head_ref, 'claude/') && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -31,6 +33,13 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache Robolectric runtime jars
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: robolectric-
 
       - name: Install Android SDK packages
         run: |
@@ -51,6 +60,8 @@ jobs:
       - name: Build signed release APK
         if: env.HAS_SIGNING_KEY == 'true'
         env:
+          # Fail instead of silently falling back to debug signing if any secret is missing.
+          CINEX_REQUIRE_RELEASE_SIGNING: "true"
           CINEX_KEYSTORE_PASSWORD: ${{ secrets.CINEX_KEYSTORE_PASSWORD }}
           CINEX_KEY_ALIAS: ${{ secrets.CINEX_KEY_ALIAS }}
           CINEX_KEY_PASSWORD: ${{ secrets.CINEX_KEY_PASSWORD }}
