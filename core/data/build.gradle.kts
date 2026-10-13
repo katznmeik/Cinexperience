@@ -1,8 +1,11 @@
 plugins {
     alias(libs.plugins.cinex.android.library)
     alias(libs.plugins.cinex.android.room)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 dependencies {
-    implementation(projects.core.model)
+    api(projects.core.model)
+    api(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
 }
