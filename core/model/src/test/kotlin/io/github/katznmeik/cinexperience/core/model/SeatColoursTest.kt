@@ -44,7 +44,7 @@ class SeatColoursTest {
 
     @Test
     fun seatStatesCoverEverySeatAndAggregatePerSeat() {
-        val layout = SeatLayout.fromPatterns("SSS")
+        val layout = layoutOf("SSS")
         val states = seatStates(
             layout,
             visits = listOf(visit(1, 5), visit(1, 4), visit(1, null), visit(2, 1), visit(null, 3)),
@@ -70,7 +70,7 @@ class SeatColoursTest {
 
     @Test
     fun seatStatesApplyOverridePrecedenceAndFavourite() {
-        val layout = SeatLayout.fromPatterns("SS")
+        val layout = layoutOf("SS")
         val states = seatStates(
             layout,
             visits = listOf(visit(1, 5)),
@@ -93,7 +93,7 @@ class SeatColoursTest {
     @Test
     fun seatStatesIgnoreDataOfSeatsNotInLayout() {
         val states = seatStates(
-            SeatLayout.fromPatterns("S"),
+            layoutOf("S"),
             visits = listOf(visit(9, 1)),
             overrides = listOf(SeatOverride(hallId, SeatId(9), isFavourite = true)),
         )

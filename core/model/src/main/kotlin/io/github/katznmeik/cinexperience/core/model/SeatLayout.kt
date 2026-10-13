@@ -13,9 +13,16 @@ package io.github.katznmeik.cinexperience.core.model
  * Instead, every `SEAT` cell carries a [SeatId] that is stored inside the layout
  * itself. The id is allocated from [SeatLayout.nextSeatId] when a cell *becomes*
  * a seat and moves with the cell when rows or columns are inserted or removed
- * around it. Ids are positive, unique within a layout and **never reused**:
- * `nextSeatId` only grows, so a seat that is deleted and later redrawn gets a new
- * id and old visits do not silently re-attach to a different seat.
+ * around it. Ids are positive, unique within a layout and **never reused within
+ * a hall**: a seat that is deleted and later redrawn gets a new id, so old visits
+ * do not silently re-attach to a different seat.
+ *
+ * Never reusing ids must also hold when a layout is *replaced* (new grid, cleared
+ * and redrawn, filled from seed data). The hall therefore keeps its own
+ * high-water mark, [Hall.nextSeatId], and the repository rejects a layout whose
+ * new seats (ids not in the stored layout) are below that mark. Editors should
+ * use [LayoutEditSession], which starts new grids at the hall's mark and also
+ * gives a seat its original id back when a cell is toggled away and back again.
  *
  * Consequences:
  * - Visits and overrides store `(hallId, seatId)`; display labels are derived on
@@ -149,6 +156,30 @@ data class SeatLayout(
 
     fun positionOf(seatId: SeatId): CellPosition? = seatPositions[seatId]
 
+    /**
+     * Whether this layout can be an edit of [previous]: the seats both share keep
+     * their relative grid placement. Inserting and removing rows and columns, and
+     * changing cells, preserve it; numbering a *new* grid from the same ids does
+     * not (e.g. 3×4 → 2×6 moves id 5 from row 2 to row 1 next to id 4), which is
+     * how the repository detects a replaced layout that reuses old seat ids.
+     *
+     * Formally: mapping each shared seat's old row to its new row must give a
+     * strictly increasing function, and the same for columns.
+     */
+    fun isEditOf(previous: SeatLayout): Boolean {
+        val shared = seatPositions.keys.filter { it in previous.seatPositions }
+        fun monotone(coordinate: (CellPosition) -> Int): Boolean {
+            val mapping = HashMap<Int, Int>()
+            for (id in shared) {
+                val old = coordinate(previous.seatPositions.getValue(id))
+                val new = coordinate(seatPositions.getValue(id))
+                if (mapping.getOrPut(old) { new } != new) return false
+            }
+            return mapping.entries.sortedBy { it.key }.zipWithNext().all { (a, b) -> a.value < b.value }
+        }
+        return monotone { it.row } && monotone { it.column }
+    }
+
     // ---- Editing (all keep existing seat ids attached to their cells) ----
 
     /** Sets one cell's type. A cell that becomes a seat gets a fresh id; an unchanged type is a no-op. */
@@ -159,6 +190,33 @@ data class SeatLayout(
         val newRows = rows.toMutableList()
         newRows[row] = rows[row].copy(cells = rows[row].cells.toMutableList().also { it[column] = newCell })
         return SeatLayout(newRows, allocator.next)
+    }
+
+    /**
+     * Turns one non-seat cell into a seat with the given, currently unused [id]
+     * (used by [LayoutEditSession] to give a seat its original id back).
+     */
+    fun withSeat(row: Int, column: Int, id: SeatId): SeatLayout {
+        require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
+        require(id !in seatPositions) { "$id is already used in this layout" }
+        val newRows = rows.toMutableList()
+        newRows[row] = rows[row].copy(
+            cells = rows[row].cells.toMutableList().also { it[column] = LayoutCell.Seat(id) },
+        )
+        return SeatLayout(newRows, maxOf(nextSeatId, id.value + 1))
+    }
+
+    /**
+     * The same layout with every seat id (and [nextSeatId]) increased by [delta] ≥ 0.
+     * Used to move seed layouts, whose ids start at 1, above a hall's id mark.
+     */
+    fun withIdsShiftedBy(delta: Int): SeatLayout {
+        require(delta >= 0) { "delta must not be negative" }
+        if (delta == 0) return this
+        val newRows = rows.map { row ->
+            row.copy(cells = row.cells.map { if (it is LayoutCell.Seat) LayoutCell.Seat(SeatId(it.id.value + delta)) else it })
+        }
+        return SeatLayout(newRows, nextSeatId + delta)
     }
 
     /** Cycles one cell SEAT → GAP → AISLE → SEAT (spec §6.5). */
@@ -217,22 +275,29 @@ data class SeatLayout(
     }
 
     companion object {
-        /** A new `rows × columns` layout filled with [fill]; seat ids are assigned row-major from 1. */
-        fun create(rows: Int, columns: Int, fill: CellType = CellType.SEAT): SeatLayout {
+        /**
+         * A new `rows × columns` layout filled with [fill]; seat ids are assigned
+         * row-major from [firstSeatId]. For a hall that already had seats, pass the
+         * hall's [Hall.nextSeatId] (or use [LayoutEditSession.newGrid]).
+         */
+        fun create(rows: Int, columns: Int, firstSeatId: Int, fill: CellType = CellType.SEAT): SeatLayout {
             require(rows > 0 && columns > 0) { "Layout must be at least 1×1" }
-            val allocator = IdAllocator(FIRST_SEAT_ID)
+            require(firstSeatId >= FIRST_SEAT_ID) { "firstSeatId must be positive" }
+            val allocator = IdAllocator(firstSeatId)
             return SeatLayout(List(rows) { LayoutRow(List(columns) { allocator.cell(fill) }) }, allocator.next)
         }
 
         /**
          * Builds a layout from compact row patterns (see [LayoutPattern]), assigning
-         * seat ids row-major from 1. Handy for seed data and tests:
-         * `SeatLayout.fromPatterns("SSS|SSS", ".SS|SS.")`.
+         * seat ids row-major from [firstSeatId]. Handy for seed data and tests:
+         * `SeatLayout.fromPatterns("SSS|SSS", ".SS|SS.", firstSeatId = 1)`.
          */
-        fun fromPatterns(vararg patterns: String): SeatLayout = fromPatterns(patterns.toList())
+        fun fromPatterns(vararg patterns: String, firstSeatId: Int): SeatLayout =
+            fromPatterns(patterns.toList(), firstSeatId)
 
-        fun fromPatterns(patterns: List<String>): SeatLayout {
-            var id = FIRST_SEAT_ID
+        fun fromPatterns(patterns: List<String>, firstSeatId: Int): SeatLayout {
+            require(firstSeatId >= FIRST_SEAT_ID) { "firstSeatId must be positive" }
+            var id = firstSeatId
             val rows = patterns.map { pattern ->
                 val ids = List(LayoutPattern.seatCount(pattern)) { SeatId(id++) }
                 LayoutRow(LayoutPattern.decode(pattern, ids))
@@ -240,6 +305,7 @@ data class SeatLayout(
             return SeatLayout(rows, id)
         }
 
+        /** First seat id of a hall that never had seats. */
         const val FIRST_SEAT_ID: Int = 1
     }
 }

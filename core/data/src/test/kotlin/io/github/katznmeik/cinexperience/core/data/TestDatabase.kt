@@ -7,12 +7,21 @@ import io.github.katznmeik.cinexperience.core.data.repository.RoomCinemaReposito
 import io.github.katznmeik.cinexperience.core.data.repository.RoomHallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomSeatOverrideRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomVisitRepository
+import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
+import io.github.katznmeik.cinexperience.core.model.SeatLayout
+import io.github.katznmeik.cinexperience.core.model.Visit
 import kotlinx.coroutines.Dispatchers
 import org.junit.After
 import org.junit.Before
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+
+/** A layout from row patterns with ids from 1, as for a hall that never had seats. */
+internal fun layoutOf(vararg patterns: String): SeatLayout = SeatLayout.fromPatterns(*patterns, firstSeatId = 1)
+
+/** Saves and returns the visit id. */
+internal suspend fun VisitRepository.save(visit: Visit): Long = saveVisit(visit).visitId
 
 /** Base class for tests against a fresh in-memory database on Robolectric. */
 @RunWith(RobolectricTestRunner::class)

@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 
 class LayoutEditImpactTest {
 
-    private val old = SeatLayout.fromPatterns("SSS", "SSS")
+    private val old = layoutOf("SSS", "SSS")
     private fun visit(seat: Int?) = Visit(hallId = 1, date = LocalDate.of(2026, 1, 1), seatId = seat?.let(::SeatId))
 
     @Test

@@ -112,6 +112,9 @@ internal interface VisitDao {
     @Query("DELETE FROM visit WHERE id = :id")
     suspend fun delete(id: Long): Int
 
+    @Query("SELECT MAX(seat_id) FROM visit WHERE hall_id = :hallId")
+    suspend fun maxSeatId(hallId: Long): Int?
+
     @Query(
         """
         SELECT visit.*, hall.name AS hall_name, hall.layout_json AS hall_layout_json,
@@ -135,6 +138,18 @@ internal interface SeatOverrideDao {
 
     @Query("DELETE FROM seat_override WHERE hall_id = :hallId")
     suspend fun deleteForHall(hallId: Long)
+
+    @Query("SELECT MAX(seat_id) FROM seat_override WHERE hall_id = :hallId")
+    suspend fun maxSeatId(hallId: Long): Int?
+}
+
+@Dao
+internal interface SeedSnapshotDao {
+    @Query("SELECT * FROM seed_snapshot")
+    suspend fun getAll(): List<SeedSnapshotEntity>
+
+    @Upsert
+    suspend fun putAll(entries: List<SeedSnapshotEntity>)
 }
 
 @Dao

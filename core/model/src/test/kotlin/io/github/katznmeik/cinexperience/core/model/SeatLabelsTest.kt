@@ -19,7 +19,7 @@ class SeatLabelsTest {
 
     @Test
     fun simpleGridIsNumberedFromOne() {
-        val layout = SeatLayout.fromPatterns("SSS", "SSS")
+        val layout = layoutOf("SSS", "SSS")
         val labels = layout.labels()
         assertEquals(listOf("1", "2"), labels.rowLabels)
         assertEquals(SeatLabel("1", 1), labels.labelOf(SeatId(1)))
@@ -30,7 +30,7 @@ class SeatLabelsTest {
 
     @Test
     fun gapsAreSkippedAndDoNotSplitBlocks() {
-        val layout = SeatLayout.fromPatterns("..SS.SS")
+        val layout = layoutOf("..SS.SS")
         assertEquals(listOf(1, 2, 3, 4), layout.numbers(0))
         assertEquals(listOf(0, 0, 0, 0), layout.blocks(0))
         assertEquals(CellPosition(0, 2), layout.labels().seats.getValue(SeatId(1)).position)
@@ -38,7 +38,7 @@ class SeatLabelsTest {
 
     @Test
     fun rowsWithoutSeatsGetNoLabelAndDoNotCount() {
-        val layout = SeatLayout.fromPatterns("SS", "||", "SS", "..")
+        val layout = layoutOf("SS", "||", "SS", "..")
         val labels = layout.labels()
         assertEquals(listOf("1", null, "2", null), labels.rowLabels)
         assertEquals("2", labels.labelOf(SeatId(3))!!.row)
@@ -46,34 +46,34 @@ class SeatLabelsTest {
 
     @Test
     fun customRowLabelsWinAndAutoCounterKeepsPosition() {
-        val layout = SeatLayout.fromPatterns("SS", "SS", "SS")
+        val layout = layoutOf("SS", "SS", "SS")
             .updateRow(0) { it.copy(label = "A") }
         assertEquals(listOf("A", "2", "3"), layout.labels().rowLabels)
     }
 
     @Test
     fun customLabelOnSeatlessRowIsKept() {
-        val layout = SeatLayout.fromPatterns("||", "SS").updateRow(0) { it.copy(label = "Aisle") }
+        val layout = layoutOf("||", "SS").updateRow(0) { it.copy(label = "Aisle") }
         assertEquals(listOf("Aisle", "1"), layout.labels().rowLabels)
     }
 
     @Test
     fun splitRowContinuousNumbering() {
-        val layout = SeatLayout.fromPatterns("SSS|SSSS|SS")
+        val layout = layoutOf("SSS|SSSS|SS")
         assertEquals(listOf(1, 2, 3, 4, 5, 6, 7, 8, 9), layout.numbers(0))
         assertEquals(listOf(0, 0, 0, 1, 1, 1, 1, 2, 2), layout.blocks(0))
     }
 
     @Test
     fun splitRowRestartPerBlock() {
-        val layout = SeatLayout.fromPatterns("SSS|SSSS|SS")
+        val layout = layoutOf("SSS|SSSS|SS")
             .updateRow(0) { it.copy(numbering = SeatNumbering.RESTART_PER_BLOCK) }
         assertEquals(listOf(1, 2, 3, 1, 2, 3, 4, 1, 2), layout.numbers(0))
     }
 
     @Test
     fun restartWithCustomStartPerBlock() {
-        val layout = SeatLayout.fromPatterns("SS|SS|SS").updateRow(0) {
+        val layout = layoutOf("SS|SS|SS").updateRow(0) {
             it.copy(numbering = SeatNumbering.RESTART_PER_BLOCK, blockStartNumbers = listOf(null, 101, 201))
         }
         assertEquals(listOf(1, 2, 101, 102, 201, 202), layout.numbers(0))
@@ -81,7 +81,7 @@ class SeatLabelsTest {
 
     @Test
     fun continuousWithCustomStartResetsCounterForFollowingBlocks() {
-        val layout = SeatLayout.fromPatterns("SS|SS|SS").updateRow(0) {
+        val layout = layoutOf("SS|SS|SS").updateRow(0) {
             it.copy(blockStartNumbers = listOf(5, 20))
         }
         // Block 0 from 5, block 1 from 20, block 2 continues from block 1.
@@ -90,7 +90,7 @@ class SeatLabelsTest {
 
     @Test
     fun leadingTrailingAndDoubleAislesDoNotCreateEmptyBlocks() {
-        val layout = SeatLayout.fromPatterns("|SS||SS|").updateRow(0) {
+        val layout = layoutOf("|SS||SS|").updateRow(0) {
             it.copy(numbering = SeatNumbering.RESTART_PER_BLOCK)
         }
         assertEquals(listOf(0, 0, 1, 1), layout.blocks(0))
@@ -99,20 +99,20 @@ class SeatLabelsTest {
 
     @Test
     fun aisleSeparatedByGapStillSplits() {
-        val layout = SeatLayout.fromPatterns("SS.|.SS")
+        val layout = layoutOf("SS.|.SS")
         assertEquals(listOf(0, 0, 1, 1), layout.blocks(0))
     }
 
     @Test
     fun staggeredRowsKeepTheirNumbering() {
-        val layout = SeatLayout.fromPatterns("SSSS", "SSS.")
+        val layout = layoutOf("SSSS", "SSS.")
             .updateRow(1) { it.copy(halfSeatOffset = true) }
         assertEquals(listOf(1, 2, 3), layout.numbers(1))
     }
 
     @Test
     fun labelsSurviveInsertingRowInFrontWithShiftedAutoNumbers() {
-        val before = SeatLayout.fromPatterns("SS", "SS")
+        val before = layoutOf("SS", "SS")
         val after = before.insertRow(0)
         // Same physical seat (id 3), now in auto row 3 instead of 2.
         assertEquals(SeatLabel("2", 1), before.labels().labelOf(SeatId(3)))
@@ -121,6 +121,6 @@ class SeatLabelsTest {
 
     @Test
     fun unknownSeatHasNoLabel() {
-        assertNull(SeatLayout.fromPatterns("S").labels().labelOf(SeatId(99)))
+        assertNull(layoutOf("S").labels().labelOf(SeatId(99)))
     }
 }

@@ -13,7 +13,7 @@ class ViewingAngleTest {
     @Test
     fun centredSeatSeesSymmetricScreen() {
         // 4 columns → centre at x = 2. Seat at column 1 with half offset → x = 2.0.
-        val layout = SeatLayout.fromPatterns("SSSS", "SSS.").updateRow(1) { it.copy(halfSeatOffset = true) }
+        val layout = layoutOf("SSSS", "SSS.").updateRow(1) { it.copy(halfSeatOffset = true) }
         val angle = viewingAngle(layout, screenWidth = 4f, screenDistance = 1.5f, seatId = SeatId(6), rowDepthInSeatWidths = 1.0)!!
         // Depth = 1.5 + 1 + 0.5 = 3; half width 2 → FOV = 2·atan(2/3).
         assertEquals(Math.toDegrees(2 * atan(2.0 / 3.0)), angle.fieldOfViewDegrees, eps)
@@ -22,7 +22,7 @@ class ViewingAngleTest {
 
     @Test
     fun sideSeatIsOffAxisAndSeesSmallerAngle() {
-        val layout = SeatLayout.fromPatterns("SSSSSS", "SSSSSS")
+        val layout = layoutOf("SSSSSS", "SSSSSS")
         val centreish = viewingAngle(layout, 6f, 2f, SeatId(9), 1.0)!! // row 1, col 2 → x 2.5
         val edge = viewingAngle(layout, 6f, 2f, SeatId(7), 1.0)!! // row 1, col 0 → x 0.5
         assertTrue(edge.offAxisDegrees > centreish.offAxisDegrees)
@@ -37,7 +37,7 @@ class ViewingAngleTest {
 
     @Test
     fun rowsFurtherBackSeeASmallerAngle() {
-        val layout = SeatLayout.fromPatterns("S", "S", "S")
+        val layout = layoutOf("S", "S", "S")
         val front = viewingAngle(layout, 1f, 1f, SeatId(1))!!
         val back = viewingAngle(layout, 1f, 1f, SeatId(3))!!
         assertTrue(back.fieldOfViewDegrees < front.fieldOfViewDegrees)
@@ -45,7 +45,7 @@ class ViewingAngleTest {
 
     @Test
     fun defaultRowDepthRatioIsApplied() {
-        val layout = SeatLayout.fromPatterns("SS")
+        val layout = layoutOf("SS")
         val angle = viewingAngle(layout, 2f, 0.5f, SeatId(1))!!
         // Seat x = 0.5, screen [0, 2], depth = (0.5 + 0.5) · 1.7.
         val depth = DEFAULT_ROW_DEPTH_IN_SEAT_WIDTHS
@@ -55,14 +55,14 @@ class ViewingAngleTest {
 
     @Test
     fun seatInFrontOfScreenEdgeStillHasPositiveAngle() {
-        val layout = SeatLayout.fromPatterns("SSSSSSSSSS")
+        val layout = layoutOf("SSSSSSSSSS")
         val angle = viewingAngle(layout, 2f, 0f, SeatId(1))!!
         assertTrue(angle.fieldOfViewDegrees > 0)
     }
 
     @Test
     fun missingGeometryOrSeatGivesNull() {
-        val layout = SeatLayout.fromPatterns("S")
+        val layout = layoutOf("S")
         assertNull(viewingAngle(layout, null, 1f, SeatId(1)))
         assertNull(viewingAngle(layout, 1f, null, SeatId(1)))
         assertNull(viewingAngle(layout, 0f, 1f, SeatId(1)))

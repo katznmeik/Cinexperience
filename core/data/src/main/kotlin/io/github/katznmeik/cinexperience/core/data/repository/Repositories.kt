@@ -58,17 +58,33 @@ interface HallRepository {
 
     /**
      * Saves the editable fields of [hall]: name, layout, screen width/distance,
-     * reference image and notes. `cinemaId`, `isPreloaded` and `seedKey` are not
-     * changeable. When the layout changes, overrides of seats that no longer exist
-     * are deleted (visits keep their seat id; it simply has no label any more).
-     * Check [io.github.katznmeik.cinexperience.core.model.removedSeatsWithData]
-     * first to warn the user (spec §6.5). Returns false if the hall doesn't exist.
+     * reference image and notes. `cinemaId`, `isPreloaded`, `seedKey` and
+     * `nextSeatId` are not changeable. When the layout changes, overrides of seats
+     * that no longer exist are deleted (visits keep their seat id; it simply has no
+     * label any more). Returns false if the hall doesn't exist.
+     *
+     * Seat ids are never reused within a hall: every seat that is not in the stored
+     * layout must have an id ≥ the hall's [Hall.nextSeatId], otherwise this throws
+     * IllegalArgumentException. Build layouts with
+     * [io.github.katznmeik.cinexperience.core.model.LayoutEditSession]
+     * (`hall.startLayoutEdit()`), which guarantees this, and show
+     * `session.removedSeatsWithData(...)` first to warn the user (spec §6.5).
+     *
+     * A hall read with [Hall.layoutUnreadable] and saved with `layout = null` keeps
+     * its stored (unreadable) layout; saving a new layout replaces it.
      */
     suspend fun updateHall(hall: Hall): Boolean
 
     /** Deletes a user-added hall with its visits and overrides. */
     suspend fun deleteHall(hallId: Long): DeleteResult
 }
+
+/** Outcome of [VisitRepository.saveVisit]. */
+data class SaveVisitResult(
+    val visitId: Long,
+    /** The visit's seat was not in the hall's current layout and was removed. */
+    val seatCleared: Boolean,
+)
 
 interface VisitRepository {
     /** Every visit across all cinemas, newest first (spec §6.8). */
@@ -78,8 +94,14 @@ interface VisitRepository {
 
     suspend fun getVisit(visitId: Long): Visit?
 
-    /** Inserts ([Visit.id] == 0) or updates a visit and returns its id. */
-    suspend fun saveVisit(visit: Visit): Long
+    /**
+     * Inserts ([Visit.id] == 0) or updates a visit. The seat must be a seat of the
+     * hall's current layout; otherwise (e.g. the visit was moved to another hall,
+     * or the hall has no layout) the seat is cleared and [SaveVisitResult.seatCleared]
+     * is true so the UI can tell the user. An unchanged seat of an unchanged hall is
+     * kept even if it was removed from the layout since.
+     */
+    suspend fun saveVisit(visit: Visit): SaveVisitResult
 
     suspend fun deleteVisit(visitId: Long): Boolean
 }

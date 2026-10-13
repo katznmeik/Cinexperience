@@ -59,6 +59,11 @@ internal data class HallEntity(
     @ColumnInfo(name = "is_preloaded") val isPreloaded: Boolean,
     /** Stable key from the seed asset (globally unique, e.g. "delphi-lux/saal-3"). */
     @ColumnInfo(name = "seed_key") val seedKey: String?,
+    /**
+     * Seat id high-water mark of this hall: ids below it may have been used by an
+     * earlier layout, so new seats must get ids at or above it (Hall.nextSeatId).
+     */
+    @ColumnInfo(name = "next_seat_id", defaultValue = "1") val nextSeatId: Int = 1,
 )
 
 @Entity(
@@ -119,6 +124,21 @@ internal data class SeatOverrideEntity(
     /** SeatColour.storageKey, null = automatic colour. */
     val colour: String?,
     @ColumnInfo(name = "is_favourite") val isFavourite: Boolean,
+)
+
+/**
+ * The value the seed last supplied for one field of one preloaded item (e.g. the
+ * address of cinema "delphi-lux"); `value` null = the seed had no value. Lets
+ * seeding tell "the user cleared a seeded value" (seed value unchanged → leave it
+ * empty) from "the seed has a new value" (fill the empty field).
+ */
+@Entity(tableName = "seed_snapshot", primaryKeys = ["kind", "seed_key", "field"])
+internal data class SeedSnapshotEntity(
+    /** "cinema" or "hall". */
+    val kind: String,
+    @ColumnInfo(name = "seed_key") val seedKey: String,
+    val field: String,
+    val value: String?,
 )
 
 /** Small key/value store for database bookkeeping (e.g. the applied seed version). */

@@ -1,0 +1,428 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "d9378b00094d4d0882ccb263636033ea",
+    "entities": [
+      {
+        "tableName": "cinema",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `address` TEXT, `notes` TEXT, `is_preloaded` INTEGER NOT NULL, `seed_key` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "address",
+            "columnName": "address",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isPreloaded",
+            "columnName": "is_preloaded",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seedKey",
+            "columnName": "seed_key",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_cinema_seed_key",
+            "unique": true,
+            "columnNames": [
+              "seed_key"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_cinema_seed_key` ON `${TABLE_NAME}` (`seed_key`)"
+          }
+        ]
+      },
+      {
+        "tableName": "hall",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `cinema_id` INTEGER NOT NULL, `name` TEXT NOT NULL, `layout_json` TEXT, `screen_width` REAL, `screen_distance` REAL, `reference_image_path` TEXT, `notes` TEXT, `is_preloaded` INTEGER NOT NULL, `seed_key` TEXT, `next_seat_id` INTEGER NOT NULL DEFAULT 1, FOREIGN KEY(`cinema_id`) REFERENCES `cinema`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cinemaId",
+            "columnName": "cinema_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "layoutJson",
+            "columnName": "layout_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "screenWidth",
+            "columnName": "screen_width",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "screenDistance",
+            "columnName": "screen_distance",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "referenceImagePath",
+            "columnName": "reference_image_path",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isPreloaded",
+            "columnName": "is_preloaded",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seedKey",
+            "columnName": "seed_key",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "nextSeatId",
+            "columnName": "next_seat_id",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_hall_cinema_id",
+            "unique": false,
+            "columnNames": [
+              "cinema_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_hall_cinema_id` ON `${TABLE_NAME}` (`cinema_id`)"
+          },
+          {
+            "name": "index_hall_seed_key",
+            "unique": true,
+            "columnNames": [
+              "seed_key"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_hall_seed_key` ON `${TABLE_NAME}` (`seed_key`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "cinema",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "cinema_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "visit",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `hall_id` INTEGER NOT NULL, `date` TEXT NOT NULL, `film_title` TEXT, `seat_id` INTEGER, `screening_format` TEXT, `rating_sound` INTEGER, `rating_picture` INTEGER, `rating_screen_size` INTEGER, `rating_seat_comfort` INTEGER, `rating_legroom` INTEGER, `rating_steepness` INTEGER, `seat_rating` INTEGER, `cinema_rating_atmosphere` INTEGER, `cinema_rating_bar_snacks` INTEGER, `cinema_rating_popcorn` INTEGER, `cinema_rating_seat_comfort` INTEGER, `note` TEXT, `photo_path` TEXT, FOREIGN KEY(`hall_id`) REFERENCES `hall`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hallId",
+            "columnName": "hall_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filmTitle",
+            "columnName": "film_title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "seatId",
+            "columnName": "seat_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "screeningFormat",
+            "columnName": "screening_format",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "ratingSound",
+            "columnName": "rating_sound",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "ratingPicture",
+            "columnName": "rating_picture",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "ratingScreenSize",
+            "columnName": "rating_screen_size",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "ratingSeatComfort",
+            "columnName": "rating_seat_comfort",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "ratingLegroom",
+            "columnName": "rating_legroom",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "ratingSteepness",
+            "columnName": "rating_steepness",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "seatRating",
+            "columnName": "seat_rating",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cinemaRatingAtmosphere",
+            "columnName": "cinema_rating_atmosphere",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cinemaRatingBarSnacks",
+            "columnName": "cinema_rating_bar_snacks",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cinemaRatingPopcorn",
+            "columnName": "cinema_rating_popcorn",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cinemaRatingSeatComfort",
+            "columnName": "cinema_rating_seat_comfort",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "photoPath",
+            "columnName": "photo_path",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_visit_hall_id",
+            "unique": false,
+            "columnNames": [
+              "hall_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_visit_hall_id` ON `${TABLE_NAME}` (`hall_id`)"
+          },
+          {
+            "name": "index_visit_date",
+            "unique": false,
+            "columnNames": [
+              "date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_visit_date` ON `${TABLE_NAME}` (`date`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "hall",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "hall_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "seat_override",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`hall_id` INTEGER NOT NULL, `seat_id` INTEGER NOT NULL, `colour` TEXT, `is_favourite` INTEGER NOT NULL, PRIMARY KEY(`hall_id`, `seat_id`), FOREIGN KEY(`hall_id`) REFERENCES `hall`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "hallId",
+            "columnName": "hall_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seatId",
+            "columnName": "seat_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "colour",
+            "columnName": "colour",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isFavourite",
+            "columnName": "is_favourite",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "hall_id",
+            "seat_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "hall",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "hall_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "seed_snapshot",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`kind` TEXT NOT NULL, `seed_key` TEXT NOT NULL, `field` TEXT NOT NULL, `value` TEXT, PRIMARY KEY(`kind`, `seed_key`, `field`))",
+        "fields": [
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seedKey",
+            "columnName": "seed_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "field",
+            "columnName": "field",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "kind",
+            "seed_key",
+            "field"
+          ]
+        }
+      },
+      {
+        "tableName": "app_metadata",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`))",
+        "fields": [
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "key"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd9378b00094d4d0882ccb263636033ea')"
+    ]
+  }
+}

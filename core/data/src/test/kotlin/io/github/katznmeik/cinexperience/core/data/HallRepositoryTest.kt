@@ -56,7 +56,7 @@ internal class HallRepositoryTest : DatabaseTest() {
     fun updateHallSavesEditableFieldsOnly() = runTest {
         val hallId = newHall()
         val original = halls.getHall(hallId)!!
-        val layout = SeatLayout.fromPatterns("SS|SS")
+        val layout = layoutOf("SS|SS")
         assertTrue(
             halls.updateHall(
                 original.copy(
@@ -88,10 +88,10 @@ internal class HallRepositoryTest : DatabaseTest() {
 
     @Test
     fun hallDetailCombinesLayoutScoresVisitsAndSeatStates() = runTest {
-        val hallId = newHall(SeatLayout.fromPatterns("SS|SS"))
-        visits.saveVisit(visit(hallId, day = 1, seat = 1, seatRating = 5, sound = 4))
-        visits.saveVisit(visit(hallId, day = 3, seat = 1, seatRating = 3))
-        visits.saveVisit(visit(hallId, day = 2, seat = 2, seatRating = 1, sound = 2))
+        val hallId = newHall(layoutOf("SS|SS"))
+        visits.save(visit(hallId, day = 1, seat = 1, seatRating = 5, sound = 4))
+        visits.save(visit(hallId, day = 3, seat = 1, seatRating = 3))
+        visits.save(visit(hallId, day = 2, seat = 2, seatRating = 1, sound = 2))
         overrides.setSeatColour(hallId, SeatId(2), SeatColour.GREEN)
         overrides.setFavouriteSeat(hallId, SeatId(4))
 
@@ -128,9 +128,9 @@ internal class HallRepositoryTest : DatabaseTest() {
 
     @Test
     fun layoutEditsKeepSeatDataAndPruneOverridesOfRemovedSeats() = runTest {
-        val old = SeatLayout.fromPatterns("SSS")
+        val old = layoutOf("SSS")
         val hallId = newHall(old)
-        val visitId = visits.saveVisit(visit(hallId, day = 1, seat = 3, seatRating = 5))
+        val visitId = visits.save(visit(hallId, day = 1, seat = 3, seatRating = 5))
         overrides.setFavouriteSeat(hallId, SeatId(1))
         overrides.setSeatColour(hallId, SeatId(2), SeatColour.RED)
 
@@ -174,11 +174,11 @@ internal class HallRepositoryTest : DatabaseTest() {
 
     @Test
     fun deletingHallCascadesToVisitsAndOverrides() = runTest {
-        val hallId = newHall(SeatLayout.fromPatterns("SS"))
+        val hallId = newHall(layoutOf("SS"))
         val cinemaId = halls.getHall(hallId)!!.cinemaId
         val otherHall = halls.createHall(cinemaId, "Saal 2")
-        val visitId = visits.saveVisit(visit(hallId, day = 1, seat = 1))
-        val otherVisit = visits.saveVisit(visit(otherHall, day = 1))
+        val visitId = visits.save(visit(hallId, day = 1, seat = 1))
+        val otherVisit = visits.save(visit(otherHall, day = 1))
         overrides.setSeatColour(hallId, SeatId(2), SeatColour.YELLOW)
 
         assertEquals(DeleteResult.DELETED, halls.deleteHall(hallId))

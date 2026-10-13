@@ -30,6 +30,13 @@ data class Cinema(
  *   screenshot used in the layout editor (§6.5), relative to the app's files dir.
  * @property isPreloaded see [Cinema.isPreloaded]; preloaded halls cannot be deleted.
  * @property seedKey see [Cinema.seedKey], e.g. `"delphi-lux/saal-3"`.
+ * @property nextSeatId the hall's seat id high-water mark: every id below it may
+ *   have been used by an earlier layout of this hall, so new seats must get ids at
+ *   or above it (see [SeatId], [LayoutEditSession]). Maintained by the repository;
+ *   not editable.
+ * @property layoutUnreadable the stored layout could not be read (e.g. written by
+ *   a newer app version). [layout] is then `null`, but the stored layout is kept
+ *   until a new layout is saved.
  */
 data class Hall(
     val id: Long = 0,
@@ -42,7 +49,12 @@ data class Hall(
     val notes: String? = null,
     val isPreloaded: Boolean = false,
     val seedKey: String? = null,
-)
+    val nextSeatId: Int = SeatLayout.FIRST_SEAT_ID,
+    val layoutUnreadable: Boolean = false,
+) {
+    /** Starts editing this hall's layout (spec §6.5) with correct seat id handling. */
+    fun startLayoutEdit(): LayoutEditSession = LayoutEditSession.start(layout, nextSeatId)
+}
 
 /**
  * Screening format of a visit (spec §4.4). [storageKey] is what the database and

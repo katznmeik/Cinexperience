@@ -23,7 +23,7 @@ import java.time.LocalDate
 
 internal class VisitAndOverrideRepositoryTest : DatabaseTest() {
 
-    private suspend fun hallWithLayout(cinema: String = "Kino", layout: SeatLayout = SeatLayout.fromPatterns("SS|SS")): Long {
+    private suspend fun hallWithLayout(cinema: String = "Kino", layout: SeatLayout = layoutOf("SS|SS")): Long {
         val cinemaId = cinemas.createCinema(cinema)
         val hallId = halls.createHall(cinemaId, "Saal 1")
         halls.updateHall(halls.getHall(hallId)!!.copy(layout = layout))
@@ -45,7 +45,7 @@ internal class VisitAndOverrideRepositoryTest : DatabaseTest() {
             note = "note",
             photoPath = "photos/1.jpg",
         )
-        val id = visits.saveVisit(visit)
+        val id = visits.save(visit)
         assertEquals(visit.copy(id = id, filmTitle = "Film"), visits.getVisit(id))
         assertEquals(visit.copy(id = id, filmTitle = "Film"), visits.observeVisit(id).first())
     }
@@ -53,7 +53,7 @@ internal class VisitAndOverrideRepositoryTest : DatabaseTest() {
     @Test
     fun unratedVisitStaysUnrated() = runTest {
         val hallId = hallWithLayout()
-        val id = visits.saveVisit(Visit(hallId = hallId, date = LocalDate.of(2026, 1, 1), filmTitle = " "))
+        val id = visits.save(Visit(hallId = hallId, date = LocalDate.of(2026, 1, 1), filmTitle = " "))
         val saved = visits.getVisit(id)!!
         assertEquals(HallRatings.NONE, saved.hallRatings)
         assertEquals(CinemaRatings.NONE, saved.cinemaRatings)
@@ -65,11 +65,11 @@ internal class VisitAndOverrideRepositoryTest : DatabaseTest() {
     @Test
     fun updateAndDeleteVisit() = runTest {
         val hallId = hallWithLayout()
-        val id = visits.saveVisit(Visit(hallId = hallId, date = LocalDate.of(2026, 1, 1)))
-        assertEquals(id, visits.saveVisit(visits.getVisit(id)!!.copy(seatRating = Rating(2))))
+        val id = visits.save(Visit(hallId = hallId, date = LocalDate.of(2026, 1, 1)))
+        assertEquals(id, visits.save(visits.getVisit(id)!!.copy(seatRating = Rating(2))))
         assertEquals(Rating(2), visits.getVisit(id)!!.seatRating)
         assertThrows(IllegalArgumentException::class.java) {
-            runBlocking { visits.saveVisit(Visit(id = 999, hallId = hallId, date = LocalDate.of(2026, 1, 1))) }
+            runBlocking { visits.save(Visit(id = 999, hallId = hallId, date = LocalDate.of(2026, 1, 1))) }
         }
         assertTrue(visits.deleteVisit(id))
         assertFalse(visits.deleteVisit(id))
@@ -79,11 +79,11 @@ internal class VisitAndOverrideRepositoryTest : DatabaseTest() {
     @Test
     fun allVisitsAreNewestFirstWithNamesAndSeatLabels() = runTest {
         val hallA = hallWithLayout("Alpha")
-        val hallB = hallWithLayout("Beta", SeatLayout.fromPatterns("SSS").updateRow(0) { it.copy(label = "K") })
-        visits.saveVisit(Visit(hallId = hallA, date = LocalDate.of(2026, 1, 5), seatId = SeatId(3)))
-        visits.saveVisit(Visit(hallId = hallB, date = LocalDate.of(2026, 2, 1), seatId = SeatId(2)))
-        visits.saveVisit(Visit(hallId = hallA, date = LocalDate.of(2026, 1, 5)))
-        visits.saveVisit(Visit(hallId = hallB, date = LocalDate.of(2025, 12, 31), seatId = SeatId(99)))
+        val hallB = hallWithLayout("Beta", layoutOf("SSS").updateRow(0) { it.copy(label = "K") })
+        visits.save(Visit(hallId = hallA, date = LocalDate.of(2026, 1, 5), seatId = SeatId(3)))
+        visits.save(Visit(hallId = hallB, date = LocalDate.of(2026, 2, 1), seatId = SeatId(2)))
+        visits.save(Visit(hallId = hallA, date = LocalDate.of(2026, 1, 5)))
+        visits.save(Visit(hallId = hallB, date = LocalDate.of(2025, 12, 31), seatId = SeatId(99)))
 
         val list = visits.observeAllVisits().first()
         assertEquals(
@@ -98,6 +98,59 @@ internal class VisitAndOverrideRepositoryTest : DatabaseTest() {
         assertEquals(SeatLabel("1", 3), list[2].seatLabel) // first seat after the aisle, continuous numbering
         assertNull(list[3].seatLabel) // seat no longer in the layout
         assertEquals(halls.getHall(hallA)!!.cinemaId, list[1].cinemaId)
+    }
+
+    @Test
+    fun seatIsValidatedAgainstTheHallOnInsert() = runTest {
+        val hallId = hallWithLayout() // seats 1..4
+        val ok = visits.saveVisit(Visit(hallId = hallId, date = LocalDate.of(2026, 1, 1), seatId = SeatId(4)))
+        assertFalse(ok.seatCleared)
+        assertEquals(SeatId(4), visits.getVisit(ok.visitId)!!.seatId)
+
+        val bad = visits.saveVisit(Visit(hallId = hallId, date = LocalDate.of(2026, 1, 1), seatId = SeatId(9)))
+        assertTrue(bad.seatCleared)
+        assertNull(visits.getVisit(bad.visitId)!!.seatId)
+
+        val noLayout = halls.createHall(halls.getHall(hallId)!!.cinemaId, "Saal 2")
+        val none = visits.saveVisit(Visit(hallId = noLayout, date = LocalDate.of(2026, 1, 1), seatId = SeatId(1)))
+        assertTrue(none.seatCleared)
+        assertNull(visits.getVisit(none.visitId)!!.seatId)
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { visits.saveVisit(Visit(hallId = 999, date = LocalDate.of(2026, 1, 1))) }
+        }
+    }
+
+    @Test
+    fun movingAVisitToAnotherHallRevalidatesItsSeat() = runTest {
+        val hallA = hallWithLayout("Alpha", layoutOf("SSSS")) // seats 1..4
+        val hallB = hallWithLayout("Beta", layoutOf("SS")) // seats 1..2
+        val id = visits.save(Visit(hallId = hallA, date = LocalDate.of(2026, 1, 1), seatId = SeatId(4), seatRating = Rating(5)))
+
+        val moved = visits.saveVisit(visits.getVisit(id)!!.copy(hallId = hallB))
+        assertTrue(moved.seatCleared)
+        val saved = visits.getVisit(id)!!
+        assertEquals(hallB, saved.hallId)
+        assertNull(saved.seatId)
+        assertEquals(Rating(5), saved.seatRating) // the rest of the visit is kept
+
+        // Moving with a seat that exists in the new hall keeps it.
+        val back = visits.saveVisit(saved.copy(hallId = hallA, seatId = SeatId(2)))
+        assertFalse(back.seatCleared)
+        assertEquals(SeatId(2), visits.getVisit(id)!!.seatId)
+
+        // Changing to a non-existent seat within the same hall clears it too.
+        assertTrue(visits.saveVisit(visits.getVisit(id)!!.copy(seatId = SeatId(77))).seatCleared)
+    }
+
+    @Test
+    fun unchangedSeatThatWasRemovedFromTheLayoutIsKept() = runTest {
+        val hallId = hallWithLayout() // seats 1..4
+        val id = visits.save(Visit(hallId = hallId, date = LocalDate.of(2026, 1, 1), seatId = SeatId(4)))
+        val hall = halls.getHall(hallId)!!
+        halls.updateHall(hall.copy(layout = hall.startLayoutEdit().removeColumn(4).layout))
+        val result = visits.saveVisit(visits.getVisit(id)!!.copy(filmTitle = "Edited"))
+        assertFalse(result.seatCleared)
+        assertEquals(SeatId(4), visits.getVisit(id)!!.seatId)
     }
 
     @Test

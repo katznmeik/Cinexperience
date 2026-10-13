@@ -2,7 +2,8 @@ package io.github.katznmeik.cinexperience.core.data
 
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
-import io.github.katznmeik.cinexperience.core.model.SeatLayout
+import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.Visit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -11,6 +12,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.time.LocalDate
 
 internal class SeederTest : DatabaseTest() {
 
@@ -89,7 +91,7 @@ internal class SeederTest : DatabaseTest() {
         assertEquals(3, hallsAfter.size)
         val seeded1 = hallsAfter.single { it.seedKey == "alpha/1" }
         assertEquals("Saal 1", seeded1.name) // name never overwritten
-        assertEquals(SeatLayout.fromPatterns("SSS"), LayoutJson.decode(seeded1.layoutJson!!)) // empty layout filled
+        assertEquals(layoutOf("SSS"), LayoutJson.decode(seeded1.layoutJson!!)) // empty layout filled
         assertEquals(10f, seeded1.screenWidth)
         assertEquals(alphaAfter.id, hallsAfter.single { it.seedKey == "alpha/2" }.cinemaId)
         assertNull(hallsAfter.single { it.id == userHall }.seedKey)
@@ -99,7 +101,7 @@ internal class SeederTest : DatabaseTest() {
     fun newerSeedDoesNotReplaceADrawnLayout() = runTest {
         seeder(v1).seedIfNeeded()
         val hall = halls.getHall(db.hallDao().getAll().single().id)!!
-        val drawn = SeatLayout.fromPatterns("S.S")
+        val drawn = layoutOf("S.S")
         halls.updateHall(hall.copy(layout = drawn, screenWidth = 3f))
 
         seeder(v2).seedIfNeeded()
@@ -108,6 +110,77 @@ internal class SeederTest : DatabaseTest() {
         assertEquals(drawn, after.layout)
         assertEquals(3f, after.screenWidth)
         assertEquals(2f, after.screenDistance) // was still empty
+    }
+
+    private fun seedWith(version: Int, address: String?, layoutCells: String?) = """
+        {"seedVersion": $version, "cinemas": [
+          {"seedKey": "alpha", "name": "Alpha", "address": ${address?.let { "\"$it\"" } ?: "null"}, "halls": [
+            {"seedKey": "alpha/1", "name": "Saal 1"
+             ${layoutCells?.let { """, "layout": {"formatVersion": 1, "rows": [{"cells": "$it"}]}""" } ?: ""}}
+          ]}
+        ]}
+    """
+
+    @Test
+    fun valueClearedByTheUserIsNotRefilledWithTheSameSeedValue() = runTest {
+        seeder(seedWith(1, "Street 1", "SSS")).seedIfNeeded()
+        val cinemaId = db.cinemaDao().getAll().single().id
+        val hall = halls.getHall(db.hallDao().getAll().single().id)!!
+        cinemas.updateCinema(cinemaId, "Alpha", address = null, notes = null)
+        halls.updateHall(hall.copy(layout = null))
+
+        seeder(seedWith(2, "Street 1", "SSS")).seedIfNeeded() // same values again
+        assertNull(db.cinemaDao().get(cinemaId)!!.address)
+        assertNull(halls.getHall(hall.id)!!.layout)
+
+        seeder(seedWith(3, "Street 2", "SSSS")).seedIfNeeded() // corrected values
+        assertEquals("Street 2", db.cinemaDao().get(cinemaId)!!.address)
+        assertEquals(4, halls.getHall(hall.id)!!.layout!!.seatCount)
+    }
+
+    @Test
+    fun seedLayoutFilledIntoAHallRespectsItsSeatIdMark() = runTest {
+        seeder(seedWith(1, null, "SSS")).seedIfNeeded() // ids 1..3
+        val hall = halls.getHall(db.hallDao().getAll().single().id)!!
+        assertEquals(4, hall.nextSeatId)
+        visits.save(Visit(hallId = hall.id, date = LocalDate.of(2026, 1, 1), seatId = SeatId(2)))
+        halls.updateHall(hall.copy(layout = null)) // user clears the layout
+
+        seeder(seedWith(2, null, "SS|SS")).seedIfNeeded() // a newly transcribed layout
+
+        val refilled = halls.getHall(hall.id)!!.layout!!
+        assertTrue(refilled.seatIds.all { it.value >= 4 })
+        // The visit on old seat 2 does not attach to a seat of the new layout.
+        assertTrue(halls.observeHallDetail(hall.id).first()!!.seats.values.all { it.visitCount == 0 })
+        assertEquals(8, halls.getHall(hall.id)!!.nextSeatId)
+    }
+
+    @Test
+    fun userAddedItemsWithTheSameNameAreAdoptedInsteadOfDuplicated() = runTest {
+        val cinemaId = cinemas.createCinema("  alpha ", address = null, notes = "mine")
+        val hallId = halls.createHall(cinemaId, "SAAL 1")
+        val otherCinema = cinemas.createCinema("Delta")
+        val otherHall = halls.createHall(otherCinema, "Saal 1") // same hall name, other cinema
+
+        seeder(seedWith(1, "Street 1", "SS")).seedIfNeeded()
+
+        val all = db.cinemaDao().getAll()
+        assertEquals(2, all.size)
+        val alpha = all.single { it.id == cinemaId }
+        assertEquals("alpha", alpha.name) // the user's name is kept
+        assertEquals("alpha", alpha.seedKey)
+        assertTrue(alpha.isPreloaded)
+        assertEquals("Street 1", alpha.address) // empty field filled
+        assertEquals("mine", alpha.notes)
+
+        val hallsAfter = db.hallDao().getAll()
+        assertEquals(2, hallsAfter.size)
+        val adopted = hallsAfter.single { it.id == hallId }
+        assertEquals("SAAL 1", adopted.name)
+        assertEquals("alpha/1", adopted.seedKey)
+        assertTrue(adopted.isPreloaded)
+        assertEquals(layoutOf("SS"), halls.getHall(hallId)!!.layout)
+        assertNull(hallsAfter.single { it.id == otherHall }.seedKey)
     }
 
     @Test

@@ -63,6 +63,18 @@ internal object LayoutJson {
 
     fun decode(text: String): SeatLayout = fromJson(json.decodeFromString(SeatLayoutJson.serializer(), text))
 
+    /**
+     * Like [decode], but returns `null` for an unreadable layout (corrupt, or a
+     * newer format version) instead of throwing. Use wherever a single bad row
+     * must not break a whole list or Flow.
+     */
+    fun decodeOrNull(text: String): SeatLayout? =
+        try {
+            decode(text)
+        } catch (e: IllegalArgumentException) { // includes SerializationException
+            null
+        }
+
     fun toJson(layout: SeatLayout): SeatLayoutJson = SeatLayoutJson(
         formatVersion = FORMAT_VERSION,
         nextSeatId = layout.nextSeatId,

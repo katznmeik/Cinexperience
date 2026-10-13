@@ -24,6 +24,7 @@ import java.time.LocalDate
         HallEntity::class,
         VisitEntity::class,
         SeatOverrideEntity::class,
+        SeedSnapshotEntity::class,
         MetadataEntity::class,
     ],
     version = 1,
@@ -36,6 +37,7 @@ internal abstract class CinexDatabase : RoomDatabase() {
     abstract fun visitDao(): VisitDao
     abstract fun seatOverrideDao(): SeatOverrideDao
     abstract fun metadataDao(): MetadataDao
+    abstract fun seedSnapshotDao(): SeedSnapshotDao
 
     companion object {
         /** Every migration, in order. Empty while the schema is at version 1. */

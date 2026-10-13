@@ -3,7 +3,6 @@ package io.github.katznmeik.cinexperience.core.data
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.SeatId
-import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -19,7 +18,7 @@ class LayoutJsonTest {
 
     @Test
     fun roundTripKeepsIdsSettingsAndNextSeatId() {
-        val layout = SeatLayout.fromPatterns("SS|SS", ".S|SS", "|||||")
+        val layout = layoutOf("SS|SS", ".S|SS", "|||||")
             .insertRow(0)
             .withCellType(1, 0, CellType.GAP)
             .updateRow(1) {
@@ -37,7 +36,7 @@ class LayoutJsonTest {
 
     @Test
     fun trailingAutomaticBlockStartsAreNotStored() {
-        val layout = SeatLayout.fromPatterns("S|S").updateRow(0) { it.copy(blockStartNumbers = listOf(3, null)) }
+        val layout = layoutOf("S|S").updateRow(0) { it.copy(blockStartNumbers = listOf(3, null)) }
         val decoded = LayoutJson.decode(LayoutJson.encode(layout))
         assertEquals(listOf(3), decoded.rows[0].blockStartNumbers)
     }

@@ -9,7 +9,6 @@ import io.github.katznmeik.cinexperience.core.model.HallRatings
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
-import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.Visit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -89,8 +88,8 @@ internal class CinemaRepositoryTest : DatabaseTest() {
     fun deletingCinemaCascadesToHallsVisitsAndOverrides() = runTest {
         val cinemaId = cinemas.createCinema("Mine")
         val hallId = halls.createHall(cinemaId, "Saal 1")
-        halls.updateHall(halls.getHall(hallId)!!.copy(layout = SeatLayout.fromPatterns("SS")))
-        val visitId = visits.saveVisit(Visit(hallId = hallId, date = date, seatId = SeatId(1)))
+        halls.updateHall(halls.getHall(hallId)!!.copy(layout = layoutOf("SS")))
+        val visitId = visits.save(Visit(hallId = hallId, date = date, seatId = SeatId(1)))
         overrides.setFavouriteSeat(hallId, SeatId(1))
 
         assertEquals(DeleteResult.DELETED, cinemas.deleteCinema(cinemaId))
@@ -118,16 +117,16 @@ internal class CinemaRepositoryTest : DatabaseTest() {
         val hall1 = halls.createHall(cinemaId, "Saal 2")
         val hall2 = halls.createHall(cinemaId, "Saal 10")
         val hall3 = halls.createHall(cinemaId, "Saal 1") // no visits
-        halls.updateHall(halls.getHall(hall1)!!.copy(layout = SeatLayout.fromPatterns("SSS")))
-        visits.saveVisit(
+        halls.updateHall(halls.getHall(hall1)!!.copy(layout = layoutOf("SSS")))
+        visits.save(
             Visit(
                 hallId = hall1, date = date,
                 hallRatings = HallRatings(sound = Rating(4), picture = Rating(2)),
                 cinemaRatings = CinemaRatings(atmosphere = Rating(5)),
             ),
         )
-        visits.saveVisit(Visit(hallId = hall2, date = date, hallRatings = HallRatings(legroom = Rating(5))))
-        visits.saveVisit(Visit(hallId = hall2, date = date)) // unrated
+        visits.save(Visit(hallId = hall2, date = date, hallRatings = HallRatings(legroom = Rating(5))))
+        visits.save(Visit(hallId = hall2, date = date)) // unrated
         overrides.setFavouriteSeat(hall1, SeatId(3))
 
         val summary = cinemas.observeCinemas().first().single()
@@ -167,7 +166,7 @@ internal class CinemaRepositoryTest : DatabaseTest() {
         val hallId = halls.createHall(id, "Saal 1")
         val flow = cinemas.observeCinemas()
         assertEquals(0, flow.first().single().visitCount)
-        visits.saveVisit(Visit(hallId = hallId, date = date))
+        visits.save(Visit(hallId = hallId, date = date))
         assertEquals(1, flow.first { it.single().visitCount == 1 }.single().visitCount)
     }
 }

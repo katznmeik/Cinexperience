@@ -6,6 +6,8 @@ import io.github.katznmeik.cinexperience.core.data.db.CinemaWithHalls
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
 import io.github.katznmeik.cinexperience.core.data.db.HallEntity
 import io.github.katznmeik.cinexperience.core.data.db.HallWithCinema
+import io.github.katznmeik.cinexperience.core.data.db.maxSeatId
+import io.github.katznmeik.cinexperience.core.data.db.seatIdMark
 import io.github.katznmeik.cinexperience.core.data.db.toEntity
 import io.github.katznmeik.cinexperience.core.data.db.toModel
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
@@ -112,7 +114,7 @@ internal class RoomCinemaRepository(
     private fun CinemaWithHalls.toDetail(): CinemaDetail {
         val scores = cinemaScores(halls.associate { row -> row.hall.id to row.visits.map { it.toModel() } })
         val hallSummaries = halls.map { row ->
-            val hall = row.hall.toModel()
+            val hall = row.hall.toModel(maxSeatId(row.visits, row.overrides))
             val hallScores = scores.halls.getValue(hall.id)
             val favourite = SeatOverrides.favourite(row.overrides.map { it.toModel() })
             HallSummary(
@@ -139,7 +141,9 @@ internal class RoomHallRepository(
             .map { it?.toDetail() }
             .prepared(awaitReady, dispatcher)
 
-    override suspend fun getHall(hallId: Long): Hall? = hallDao.get(hallId)?.toModel()
+    override suspend fun getHall(hallId: Long): Hall? = db.withTransaction {
+        hallDao.get(hallId)?.let { it.toModel(db.seatIdMark(it, null) - 1) }
+    }
 
     override suspend fun createHall(cinemaId: Long, name: String): Long {
         val cleanName = name.requireName()
@@ -175,16 +179,40 @@ internal class RoomHallRepository(
         return db.withTransaction {
             val existing = hallDao.get(hall.id) ?: return@withTransaction false
             require(existing.cinemaId == hall.cinemaId) { "Moving a hall to another cinema is not supported" }
+            val storedLayout = existing.layoutJson?.let(LayoutJson::decodeOrNull)
+            // A hall read with an unreadable layout comes back with layout = null; saving
+            // its other fields must not wipe the stored layout.
+            val keepStoredLayout = hall.layout == null && hall.layoutUnreadable &&
+                existing.layoutJson != null && storedLayout == null
+            val newLayoutJson = if (keepStoredLayout) existing.layoutJson else layoutJson
+
+            // Seat ids are never reused within a hall: a seat that is not in the stored
+            // layout must get an id at or above the hall's mark (see SeatId).
+            val mark = db.seatIdMark(existing, storedLayout)
+            val newLayout = hall.layout
+            if (newLayout != null) {
+                // (1) Seats not in the stored layout are new and need ids ≥ the mark.
+                val storedIds = storedLayout?.seatIds.orEmpty()
+                val reused = newLayout.seatIds.filter { it !in storedIds && it.value < mark }
+                // (2) Seats sharing an id with the stored layout must still be in the same
+                //     relative place; otherwise this is a new grid that reuses old ids.
+                val consistent = storedLayout == null || newLayout.isEditOf(storedLayout)
+                require(reused.isEmpty() && consistent) {
+                    "Layout of hall ${hall.id} reuses seat ids of other seats (mark $mark). " +
+                        "Start new grids at Hall.nextSeatId, e.g. with Hall.startLayoutEdit()."
+                }
+            }
             val updated = existing.copy(
                 name = cleanName,
-                layoutJson = layoutJson,
+                layoutJson = newLayoutJson,
                 screenWidth = hall.screenWidth,
                 screenDistance = hall.screenDistance,
                 referenceImagePath = hall.referenceImagePath.cleanText(),
                 notes = hall.notes.cleanText(),
+                nextSeatId = maxOf(mark, hall.layout?.nextSeatId ?: 0),
             )
             hallDao.update(updated)
-            if (existing.layoutJson != layoutJson) {
+            if (existing.layoutJson != newLayoutJson) {
                 // Overrides of seats that no longer exist would be invisible but could
                 // still hold the hall's only favourite, so they are removed.
                 val remaining = hall.layout?.seatIds.orEmpty()
@@ -209,7 +237,7 @@ internal class RoomHallRepository(
     }
 
     private fun HallWithCinema.toDetail(): HallDetail {
-        val hallModel = hall.toModel()
+        val hallModel = hall.toModel(maxSeatId(visits, overrides))
         val visitModels = visits.map { it.toModel() }.sortedWith(NEWEST_FIRST)
         val overrideModels = overrides.map { it.toModel() }.sortedBy { it.seatId.value }
         val layout = hallModel.layout
@@ -235,11 +263,16 @@ internal class RoomVisitRepository(
     override fun observeAllVisits(): Flow<List<VisitListItem>> =
         dao.observeAllWithContext()
             .map { rows ->
-                val labelsByLayout = HashMap<String, LayoutLabels>()
+                val labelsByLayout = HashMap<String, LayoutLabels?>()
                 rows.map { row ->
                     val visit = row.visit.toModel()
                     val labels = row.hallLayoutJson?.let { json ->
-                        labelsByLayout.getOrPut(json) { LayoutJson.decode(json).labels() }
+                        // Unreadable layouts give no labels instead of failing the list.
+                        if (json in labelsByLayout) {
+                            labelsByLayout[json]
+                        } else {
+                            LayoutJson.decodeOrNull(json)?.labels().also { labelsByLayout[json] = it }
+                        }
                     }
                     VisitListItem(
                         visit = visit,
@@ -257,18 +290,27 @@ internal class RoomVisitRepository(
 
     override suspend fun getVisit(visitId: Long): Visit? = dao.get(visitId)?.toModel()
 
-    override suspend fun saveVisit(visit: Visit): Long {
+    override suspend fun saveVisit(visit: Visit): SaveVisitResult = db.withTransaction {
+        val stored = if (visit.id == 0L) null else requireNotNull(dao.get(visit.id)) { "No visit ${visit.id}" }
+        val hall = requireNotNull(db.hallDao().get(visit.hallId)) { "No hall ${visit.hallId}" }
+        // An unchanged seat in an unchanged hall is kept even if it was since removed
+        // from the layout; any other seat must exist in the hall's current layout.
+        val unchangedSeat = stored != null && stored.hallId == visit.hallId && stored.seatId == visit.seatId?.value
+        val seatValid = visit.seatId == null || unchangedSeat ||
+            hall.layoutJson?.let(LayoutJson::decodeOrNull)?.seatIds?.contains(visit.seatId) == true
         val entity = visit.copy(
             filmTitle = visit.filmTitle.cleanText(),
             note = visit.note.cleanText(),
             photoPath = visit.photoPath.cleanText(),
+            seatId = if (seatValid) visit.seatId else null,
         ).toEntity()
-        return if (visit.id == 0L) {
+        val id = if (stored == null) {
             dao.insert(entity)
         } else {
-            require(dao.update(entity) > 0) { "No visit ${visit.id}" }
+            dao.update(entity)
             visit.id
         }
+        SaveVisitResult(visitId = id, seatCleared = !seatValid)
     }
 
     override suspend fun deleteVisit(visitId: Long): Boolean = dao.delete(visitId) > 0
@@ -290,7 +332,7 @@ internal class RoomSeatOverrideRepository(private val db: CinexDatabase) : SeatO
         db.withTransaction {
             val hall = requireNotNull(db.hallDao().get(hallId)) { "No hall $hallId" }
             if (seatId != null) {
-                val layout = hall.layoutJson?.let(LayoutJson::decode)
+                val layout = hall.layoutJson?.let(LayoutJson::decodeOrNull)
                 require(layout != null && seatId in layout.seatIds) { "$seatId is not in the layout of hall $hallId" }
             }
             val current = overrideDao.getForHall(hallId).map { it.toModel() }
