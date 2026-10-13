@@ -16,11 +16,14 @@ import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
+import io.github.katznmeik.cinexperience.core.model.SeatLayout
+import io.github.katznmeik.cinexperience.core.model.SeatOverride
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
 import io.github.katznmeik.cinexperience.core.model.cinemaScores
 import io.github.katznmeik.cinexperience.core.model.hallScores
 import io.github.katznmeik.cinexperience.core.model.labels
+import io.github.katznmeik.cinexperience.core.model.seatStates
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -152,7 +155,12 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         val hall = s.halls.firstOrNull { it.id == hallId } ?: return@map null
         val cinema = s.cinemas.first { it.id == hall.cinemaId }
         val visits = s.visits.filter { it.hallId == hallId }.sortedByDescending { it.date }
-        HallDetail(hall, cinema, hallScores(visits), visits, hall.layout?.labels(), emptyMap(), emptyList())
+        val labels = hall.layout?.labels()
+        // The fake keeps favourites by label; as overrides they point at the first seat with that label.
+        val favouriteSeat = s.favourites[hallId]?.let { label -> labels?.seats?.values?.firstOrNull { it.label == label }?.id }
+        val overrides = listOfNotNull(favouriteSeat?.let { SeatOverride(hallId, it, isFavourite = true) })
+        val seats = hall.layout?.let { seatStates(it, visits, overrides) }.orEmpty()
+        HallDetail(hall, cinema, hallScores(visits), visits, labels, seats, overrides)
     }.distinctUntilChanged()
 
     override suspend fun getHall(hallId: Long): Hall? = store.value.halls.firstOrNull { it.id == hallId }
@@ -171,11 +179,37 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         return updateHall(hall.copy(name = name))
     }
 
+    /**
+     * Like the Room repository: only the editable fields change, seat ids must not
+     * be reused (IllegalArgumentException) and the hall's id mark is raised.
+     */
     override suspend fun updateHall(hall: Hall): Boolean {
         write()
         val cleanName = hall.name.requireName()
-        if (store.value.halls.none { it.id == hall.id }) return false
-        store.update { s -> s.copy(halls = s.halls.map { if (it.id == hall.id) hall.copy(name = cleanName) else it }) }
+        val existing = store.value.halls.firstOrNull { it.id == hall.id } ?: return false
+        require(existing.cinemaId == hall.cinemaId) { "Moving a hall to another cinema is not supported" }
+        val stored = existing.layout
+        val mark = maxOf(existing.nextSeatId, stored?.nextSeatId ?: SeatLayout.FIRST_SEAT_ID)
+        val newLayout = hall.layout
+        if (newLayout != null) {
+            val storedIds = stored?.seatIds.orEmpty()
+            val reused = newLayout.seatIds.any { it !in storedIds && it.value < mark }
+            require(!reused && (stored == null || newLayout.isEditOf(stored))) {
+                "Layout of hall ${hall.id} reuses seat ids of other seats (mark $mark)"
+            }
+        }
+        val keepUnreadable = newLayout == null && hall.layoutUnreadable && existing.layoutUnreadable
+        val updated = existing.copy(
+            name = cleanName,
+            layout = newLayout,
+            screenWidth = hall.screenWidth,
+            screenDistance = hall.screenDistance,
+            referenceImagePath = hall.referenceImagePath.clean(),
+            notes = hall.notes.clean(),
+            nextSeatId = maxOf(mark, newLayout?.nextSeatId ?: 0),
+            layoutUnreadable = keepUnreadable,
+        )
+        store.update { s -> s.copy(halls = s.halls.map { if (it.id == hall.id) updated else it }) }
         return true
     }
 
