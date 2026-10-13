@@ -1,5 +1,5 @@
 {
-  "seedVersion": 1,
+  "seedVersion": 2,
   "cinemas": [
     {
       "seedKey": "babylon-kreuzberg",
@@ -56,31 +56,137 @@
       "halls": [
         {
           "seedKey": "delphi-lux/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "W.W|SSSSSSSSS|W.W" },
+              { "label": "2", "cells": "SS||SSSSSSSSS||SS" },
+              { "label": "3", "cells": "SS||SSSSSSSSS||SS" },
+              { "label": "4", "cells": "SS||SSSSSSSSS||SS" },
+              { "label": "5", "cells": "SS||SSSSSSSSS||SS" },
+              { "label": "6", "cells": "SS||SSSSSSSSS||SS" },
+              { "label": "7", "cells": "....SSSSSSSSS||SS" },
+              { "cells": "................." },
+              { "label": "8", "cells": "....SSSSSSSSS...." },
+              { "label": "9", "cells": "....SSSSSSSSS...." },
+              { "label": "10", "cells": "..SSSSSSSSSSSS..." }
+            ]
+          }
         },
         {
           "seedKey": "delphi-lux/saal-2",
-          "name": "Saal 2"
+          "name": "Saal 2",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "WWWCS|..SSSSSS" },
+              { "label": "2", "cells": "SSSSS|.SSSSSSS" },
+              { "label": "3", "cells": "SSSSS|SSSSSSSS" },
+              { "label": "4", "cells": "SSSSS|SSSSSSSS" },
+              { "label": "5", "cells": "SSSSS|SSSSSSSS" },
+              { "label": "6", "cells": "SSSSS|SSSSSSSS" },
+              { "label": "7", "cells": "SSSSS|SSSSSSSS" },
+              { "label": "8", "cells": "..SSS|SSSSSSSS" },
+              { "label": "9", "cells": "..SSS|SSSSSSSS" },
+              { "label": "10", "cells": "..SSS|.SSSSSSS" },
+              { "label": "11", "cells": "..SSS|..SSSSSS" },
+              { "label": "12", "cells": "..SSS|...SSSSS" }
+            ]
+          }
         },
         {
           "seedKey": "delphi-lux/saal-3",
-          "name": "Saal 3"
+          "name": "Saal 3",
+          "screenWidth": 11.5,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "W.SSSSSS.W.W" },
+              { "label": "2", "cells": "..SSSSSSSSSS" },
+              { "label": "3", "cells": "..SSSSSSSSSS" },
+              { "label": "4", "cells": "..SSSSSSSSSS" },
+              { "label": "5", "cells": "..SSSSSSSSSS" },
+              { "label": "6", "cells": "..SSSSSSSSSS" },
+              { "label": "7", "cells": ".....SSSSSSS" },
+              { "label": "8", "cells": ".....SSSSSSS" },
+              { "label": "9", "cells": "....SSSSSSSS" }
+            ]
+          }
         },
         {
           "seedKey": "delphi-lux/saal-4",
-          "name": "Saal 4"
+          "name": "Saal 4",
+          "screenWidth": 10.0,
+          "screenDistance": 2.0,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": ".WCSSSSSSS" },
+              { "label": "2", "cells": "SSSSSSSSSS" },
+              { "label": "3", "cells": "SSSSSSSSSS" },
+              { "label": "4", "cells": "SSSSSSSSSS" },
+              { "label": "5", "cells": "...SSSSSSS" },
+              { "label": "6", "cells": "..SSSSSSSS" }
+            ]
+          }
         },
         {
           "seedKey": "delphi-lux/saal-5",
-          "name": "Saal 5"
+          "name": "Saal 5",
+          "screenWidth": 9.0,
+          "screenDistance": 2.0,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "SSSSSSCW." },
+              { "label": "2", "cells": "SSSSSSSSS" },
+              { "label": "3", "cells": "SSSSSSSSS" },
+              { "label": "4", "cells": "SSSSSSSSS" },
+              { "label": "5", "cells": "SSSSSSSSS" },
+              { "label": "6", "cells": "...FFFFFF" }
+            ]
+          }
         },
         {
           "seedKey": "delphi-lux/saal-6",
-          "name": "Saal 6"
+          "name": "Saal 6",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "W.W|SSSSSSSSS|W.W" },
+              { "label": "2", "cells": ".SS|SSSSSSSSS||SS" },
+              { "label": "3", "cells": ".SS|SSSSSSSSS||SS" },
+              { "label": "4", "cells": ".SS|SSSSSSSSS||SS" },
+              { "label": "5", "cells": ".SS|SSSSSSSSS||SS" },
+              { "label": "6", "cells": ".SS|SSSSSSSSS||SS" },
+              { "label": "7", "cells": ".SS|SSSSSSSSS...." },
+              { "label": "8", "cells": ".SSSSSS.........." }
+            ]
+          }
         },
         {
           "seedKey": "delphi-lux/saal-7",
-          "name": "Saal 7"
+          "name": "Luxbox",
+          "screenWidth": 9.0,
+          "screenDistance": 2.0,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "SSSSCWS.." },
+              { "label": "2", "cells": "SSSSS...." },
+              { "label": "3", "cells": "SSSSS||SS" },
+              { "label": "4", "cells": "SSSSS||SS" },
+              { "label": "5", "cells": "SSSSSSSSS" }
+            ]
+          }
         }
       ]
     },
