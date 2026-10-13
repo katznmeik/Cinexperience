@@ -65,6 +65,20 @@ Don't duplicate config in module build files.
   together with callbacks.
 - **DI:** manual (`app/.../di/AppContainer.kt`), no Hilt.
 - **Data:** no invented sample data in the app.
+- **Seats** are identified by a stable `SeatId` stored in the layout (see
+  `core/model/.../SeatLayout.kt`), never by grid position or label. Ids are never
+  reused within a hall (`Hall.nextSeatId` is the hall's mark; the repository
+  rejects layouts that reuse ids). Edit layouts only through
+  `hall.startLayoutEdit()` (`LayoutEditSession`); derive labels with
+  `layout.labels()`.
+- **Scores and seat colours** come from the `core:model` functions
+  (`hallScores`, `cinemaScores`, `seatStates`), never from SQL math.
+- **Schema changes:** bump the `CinexDatabase` version, add a migration to
+  `ALL_MIGRATIONS`, commit the exported `core/data/schemas/.../<n>.json` and add
+  a case to `MigrationTest`. No destructive fallback.
+- **Seed data:** `core/data/src/main/assets/seed/yorck.json`. Bump `seedVersion`
+  for every change; `seedKey`s are permanent. Seeding only inserts missing items
+  and fills empty fields, it never overwrites or deletes.
 - **Signing:** never commit keystores or passwords (`*.jks` and `*.keystore`
   are gitignored).
 

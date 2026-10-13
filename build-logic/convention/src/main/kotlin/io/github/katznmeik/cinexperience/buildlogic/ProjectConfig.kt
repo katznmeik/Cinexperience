@@ -7,6 +7,8 @@ import org.gradle.api.artifacts.MinimalExternalModuleDependency
 import org.gradle.api.artifacts.VersionCatalog
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.testing.Test
+import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.withType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -46,5 +48,22 @@ internal fun Project.configureAndroidCommon(extension: CommonExtension) {
 internal fun Project.configureKotlinJvmTarget() {
     tasks.withType<KotlinJvmCompile>().configureEach {
         compilerOptions.jvmTarget.set(KOTLIN_JVM_TARGET)
+    }
+}
+
+/** JVM unit tests on Robolectric (Android framework without an emulator). */
+internal fun Project.configureRobolectricTests() {
+    dependencies {
+        "testImplementation"(libs.library("junit4"))
+        "testImplementation"(libs.library("robolectric"))
+    }
+    tasks.withType<Test>().configureEach {
+        // Robolectric with native graphics needs a bit more heap than the default.
+        maxHeapSize = "2g"
+        // Robolectric's SDK 36 runtime pokes at FileDescriptor internals.
+        jvmArgs(
+            "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+            "--add-opens=java.base/java.io=ALL-UNNAMED",
+        )
     }
 }
