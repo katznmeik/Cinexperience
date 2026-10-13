@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 8)
+**Last updated:** 2026-10-13 (rev. 9)
 
 ---
 
@@ -73,12 +73,18 @@ All data is stored locally in a Room (SQLite) database.
 
 ### 4.3 SeatLayout (grid)
 A rectangular grid of `rows × columns` cells. Each cell is one of:
-- `SEAT` — a bookable seat, with a row label and seat number
+- `SEAT` — a bookable seat, with a row label and seat number. A seat has a
+  **kind**: standard, wheelchair space, companion seat (Begleitsitz) or sofa
+  place. Non-standard kinds are drawn with a small icon (as in the Yorck plans)
+  and can be rated like any other seat.
 - `GAP` — empty space (e.g. short rows, irregular shapes)
 - `AISLE` — walkway (visually distinct from a gap)
 
 Row labels and seat numbers are auto-generated (row 1…n, seat 1…m per row,
 skipping gaps/aisles) and can be edited to match the cinema's real labels.
+Seats are numbered **left to right from 1, facing the screen**. Wheelchair
+spaces are not counted in the numbering; they are labelled e.g.
+"Row 1 · Wheelchair 2". Companion and sofa places are counted like seats.
 
 **Split rows:** a row interrupted by an aisle forms separate *blocks*
 (e.g. left / centre / right). Per row, the user chooses whether seat numbering
@@ -248,8 +254,13 @@ Save is always allowed — nothing besides hall is required.
 The app ships with a seed list of Yorck cinemas and their halls
 (`core/data/src/main/assets/seed/yorck.json`). Seat layouts are preloaded for
 every hall the owner supplies a Yorck-app screenshot for; all other halls are
-drawn in the app. Hall names are generic ("Saal 1", "Saal 2", …) and can be
-renamed in the app.
+drawn in the app. Hall names are generic ("Saal 1", "Saal 2", …) unless the real
+name is known (delphi LUX "Luxbox"), and can be renamed in the app.
+
+**Preloaded layouts (seed version 2):** all seven delphi LUX halls, transcribed
+from the owner's Yorck-app screenshots, including wheelchair/companion/sofa
+places; screen width and distance are estimated from the plans' "Leinwand" bar
+and can be adjusted in the editor.
 
 Verified in M1 (13 cinemas, 36 halls; Yorck states 14 cinemas, the 14th is unknown):
 
@@ -259,7 +270,7 @@ Verified in M1 (13 cinemas, 36 halls; Yorck states 14 cinemas, the 14th is unkno
 | Capitol Dahlem | Thielallee 36 | 1 |
 | Cinema Paris | Kurfürstendamm 211 | 1 |
 | Delphi Filmpalast | Kantstraße 12a | 1 |
-| delphi LUX | Kantstraße 10 | 7 |
+| delphi LUX | Kantstraße 10 | 7 (Saal 1–6, Luxbox) |
 | Filmtheater am Friedrichshain | Bötzowstraße 1–5 | 5 |
 | International | Karl-Marx-Allee 33 | 1 |
 | Kant Kino | Kantstraße 54 | 5 |
