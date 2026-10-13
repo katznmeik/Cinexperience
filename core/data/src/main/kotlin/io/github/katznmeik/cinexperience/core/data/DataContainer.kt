@@ -3,6 +3,8 @@ package io.github.katznmeik.cinexperience.core.data
 import android.content.Context
 import android.util.Log
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
+import io.github.katznmeik.cinexperience.core.data.files.FileReferenceImageStore
+import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomCinemaRepository
@@ -18,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
 
 /**
  * The data layer's entry point for the app's manual DI container.
@@ -70,7 +73,33 @@ class DataContainer(
         RoomSeatOverrideRepository(database).also { seeding.start() }
     }
 
-    private companion object {
-        const val TAG = "CinexData"
+    /** Reference screenshots of the layout editor (spec §6.5), in app-private storage. */
+    val referenceImageStore: ReferenceImageStore by lazy { FileReferenceImageStore(appContext, ioDispatcher) }
+
+    /**
+     * Deletes reference screenshots that no hall points to, e.g. left behind when
+     * the app was closed while an editor had an unsaved screenshot. Run once at app
+     * start; only files older than [ORPHAN_MIN_AGE_MS] are deleted, so an editor
+     * that imports a screenshot meanwhile is safe. Failures are logged, not thrown.
+     * Returns the number of deleted files.
+     */
+    suspend fun sweepOrphanReferenceImages(now: Long = System.currentTimeMillis()): Int =
+        withContext(ioDispatcher) {
+            try {
+                val referenced = database.hallDao().referenceImagePaths().toSet()
+                referenceImageStore.deleteOrphans(referenced, modifiedBefore = now - ORPHAN_MIN_AGE_MS)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Sweeping reference images failed", e)
+                0
+            }
+        }
+
+    companion object {
+        private const val TAG = "CinexData"
+
+        /** Minimum age of an unreferenced reference screenshot before the sweep deletes it. */
+        const val ORPHAN_MIN_AGE_MS: Long = 60 * 60 * 1000L
     }
 }
