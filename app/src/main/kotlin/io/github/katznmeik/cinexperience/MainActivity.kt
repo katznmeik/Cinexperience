@@ -17,9 +17,10 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        val container = (application as CinexApplication).container
         setContent {
             CinexTheme {
-                CinexApp()
+                CinexApp(container)
             }
         }
     }

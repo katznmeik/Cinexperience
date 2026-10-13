@@ -19,11 +19,14 @@ import androidx.navigation.compose.rememberNavController
 import io.github.katznmeik.cinexperience.core.ui.component.CinexNavigationBar
 import io.github.katznmeik.cinexperience.core.ui.component.CinexNavigationBarItem
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
+import io.github.katznmeik.cinexperience.di.AppContainer
 import io.github.katznmeik.cinexperience.feature.backup.settingsScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.CinemasRoute
 import io.github.katznmeik.cinexperience.feature.cinemas.cinemaDetailScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.cinemasScreen
+import io.github.katznmeik.cinexperience.feature.cinemas.manageCinemasScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.navigateToCinemaDetail
+import io.github.katznmeik.cinexperience.feature.cinemas.navigateToManageCinemas
 import io.github.katznmeik.cinexperience.feature.rankings.rankingsScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.hallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.layoutEditorScreen
@@ -37,13 +40,16 @@ import io.github.katznmeik.cinexperience.feature.visits.visitEditScreen
 /**
  * Root composable: bottom navigation (shown on the three tab screens only, as in
  * the mockups) and the navigation graph that wires the feature modules together.
- * Feature modules never depend on each other; cross-feature navigation happens here.
+ * Feature modules never depend on each other; cross-feature navigation happens here,
+ * and the repositories from the manual DI [container] are handed to the features,
+ * whose ViewModel factories use them.
  * Back uses navigateUp (never pops the start destination); the feature modules also
  * wrap every navigation callback in dropUnlessResumed, so double taps during a
  * transition are ignored.
  */
 @Composable
 fun CinexApp(
+    container: AppContainer,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
 ) {
@@ -78,14 +84,18 @@ fun CinexApp(
         ) {
             // Cinemas tab
             cinemasScreen(
+                cinemaRepository = container.cinemaRepository,
                 onOpenCinema = navController::navigateToCinemaDetail,
                 onAddVisit = navController::navigateToVisitEdit,
             )
             cinemaDetailScreen(
+                cinemaRepository = container.cinemaRepository,
+                hallRepository = container.hallRepository,
                 onBack = navController::navigateUp,
                 onOpenHall = navController::navigateToHallDetail,
             )
             hallDetailScreen(
+                hallRepository = container.hallRepository,
                 onBack = navController::navigateUp,
                 onEditLayout = navController::navigateToLayoutEditor,
                 onAddVisit = navController::navigateToVisitEdit,
@@ -97,7 +107,18 @@ fun CinexApp(
             rankingsScreen()
 
             // Settings tab
-            settingsScreen(onOpenAllVisits = navController::navigateToAllVisits)
+            settingsScreen(
+                cinemaRepository = container.cinemaRepository,
+                appVersion = container.appVersion,
+                onOpenManage = navController::navigateToManageCinemas,
+                onOpenAllVisits = navController::navigateToAllVisits,
+            )
+            manageCinemasScreen(
+                cinemaRepository = container.cinemaRepository,
+                hallRepository = container.hallRepository,
+                onBack = navController::navigateUp,
+                onOpenCinema = navController::navigateToCinemaDetail,
+            )
             allVisitsScreen(onBack = navController::navigateUp)
         }
     }
