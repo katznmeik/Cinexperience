@@ -81,7 +81,7 @@ private fun CinemaFormDialog(dialog: EditDialog.CinemaForm, actions: EditDialogA
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                if (dialog.delete != null) {
+                if (dialog.canDelete) {
                     TextButton(onClick = actions::onDeleteCinema) { Text("Delete cinema") }
                 }
             }

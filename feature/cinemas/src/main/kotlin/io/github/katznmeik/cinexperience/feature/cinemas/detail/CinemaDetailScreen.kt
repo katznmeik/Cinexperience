@@ -62,10 +62,11 @@ internal fun CinemaDetailEntry(
     viewModel: CinemaDetailViewModel,
     onBack: () -> Unit,
     onOpenHall: (Long) -> Unit,
+    onCinemaDeleted: (message: String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(state.closed) {
-        if (state.closed) onBack()
+    LaunchedEffect(state.deletedMessage) {
+        state.deletedMessage?.let(onCinemaDeleted)
     }
     val actions = remember(viewModel) { viewModel.dialogActions() }
     CinemaDetailScreen(

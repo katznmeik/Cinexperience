@@ -52,6 +52,8 @@ internal fun ManageCinemasEntry(
     viewModel: ManageCinemasViewModel,
     onBack: () -> Unit,
     onOpenCinema: (Long) -> Unit,
+    message: String?,
+    onMessageShown: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val actions = remember(viewModel) {
@@ -76,6 +78,8 @@ internal fun ManageCinemasEntry(
         onDeleteHall = viewModel::deleteHall,
         dialogActions = actions,
         onMessageShown = viewModel::messageShown,
+        incomingMessage = message,
+        onIncomingMessageShown = onMessageShown,
     )
 }
 
@@ -94,8 +98,16 @@ internal fun ManageCinemasScreen(
     dialogActions: EditDialogActions,
     onMessageShown: () -> Unit,
     modifier: Modifier = Modifier,
+    incomingMessage: String? = null,
+    onIncomingMessageShown: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(incomingMessage) {
+        incomingMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            onIncomingMessageShown()
+        }
+    }
     LaunchedEffect(state.message) {
         state.message?.let {
             snackbarHostState.showSnackbar(it)

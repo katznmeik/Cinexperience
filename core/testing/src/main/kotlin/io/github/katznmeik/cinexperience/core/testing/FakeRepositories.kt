@@ -3,6 +3,7 @@ package io.github.katznmeik.cinexperience.core.testing
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.DeleteResult
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
+import io.github.katznmeik.cinexperience.core.data.repository.NameOrder
 import io.github.katznmeik.cinexperience.core.data.repository.SaveVisitResult
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
@@ -42,7 +43,7 @@ data class FakeStore(
 /**
  * In-memory implementation of the core:data repositories for ViewModel tests and
  * screenshot tests. Scores come from the core:model functions, like in the real
- * repositories; lists are sorted by name (case-insensitive).
+ * repositories; lists are sorted with the same natural [NameOrder] as Room.
  *
  * Set [failure] to make every write throw it, and [observeFailure] to make every
  * flow fail (to test error handling).
@@ -80,11 +81,11 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         val hallSummaries = cinemaHalls.map { hall ->
             val hallScores = scores.halls.getValue(hall.id)
             HallSummary(hall, hallScores.overall, hallScores.visitCount, favourites[hall.id])
-        }.sortedBy { it.hall.name.lowercase() }
+        }.sortedWith(compareBy(NameOrder) { it.hall.name })
         return CinemaDetail(cinema, scores, hallSummaries)
     }
 
-    private val FakeStore.sortedCinemas: List<Cinema> get() = cinemas.sortedBy { it.name.lowercase() }
+    private val FakeStore.sortedCinemas: List<Cinema> get() = cinemas.sortedWith(compareBy(NameOrder) { it.name })
 
     // CinemaRepository
 

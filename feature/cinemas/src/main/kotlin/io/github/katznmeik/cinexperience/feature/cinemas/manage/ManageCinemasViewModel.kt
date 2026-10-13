@@ -70,7 +70,7 @@ class ManageCinemasViewModel(
 
     fun onNotesChange(notes: String) = editor.onNotesChange(notes)
 
-    fun deleteFromForm() = editor.deleteFromForm()
+    fun deleteFromForm() = editor.deleteFromForm { id -> uiState.value.cinemas.firstOrNull { it.cinema.id == id } }
 
     fun confirmDialog() = editor.confirm()
 

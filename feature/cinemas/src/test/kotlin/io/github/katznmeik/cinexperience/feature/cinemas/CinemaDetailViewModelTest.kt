@@ -127,7 +127,7 @@ class CinemaDetailViewModelTest {
         val vm = viewModel()
         vm.editCinema()
         val form = vm.uiState.value.dialog as EditDialog.CinemaForm
-        assertNull(form.delete)
+        assertFalse(form.canDelete)
         assertEquals("Kantstraße 10, 10623 Berlin", form.address)
 
         vm.onNameChange("Delphi Lux")
@@ -159,17 +159,36 @@ class CinemaDetailViewModelTest {
         val vm = viewModel(cinemaId)
 
         vm.editCinema()
-        val form = vm.uiState.value.dialog as EditDialog.CinemaForm
-        assertEquals(EditDialog.ConfirmDeleteCinema(cinemaId, "Sommerkino", 1, 1), form.delete)
+        assertTrue((vm.uiState.value.dialog as EditDialog.CinemaForm).canDelete)
+        // Counts are taken when "Delete cinema" is pressed, not when the form opened.
+        repository.saveVisit(Visit(hallId = hallId, date = LocalDate.of(2026, 8, 1)))
         vm.deleteFromForm()
-        assertEquals(form.delete, vm.uiState.value.dialog)
+        assertEquals(EditDialog.ConfirmDeleteCinema(cinemaId, "Sommerkino", 1, 2), vm.uiState.value.dialog)
 
         vm.confirmDialog()
-        assertTrue(vm.uiState.value.closed)
+        assertEquals(EditMessages.deleted("Sommerkino"), vm.uiState.value.deletedMessage)
+        // The screen closes with the last loaded content instead of "not found",
+        // and the message goes to the screen below rather than this one's snackbar.
+        assertTrue(vm.uiState.value.content is CinemaDetailContent.Loaded)
+        assertNull(vm.uiState.value.message)
         val store = repository.store.value
         assertTrue(store.cinemas.none { it.id == cinemaId })
         assertTrue(store.halls.none { it.id == hallId })
         assertTrue(store.visits.none { it.hallId == hallId })
+    }
+
+    @Test
+    fun failedCinemaDeleteKeepsTheScreenOpen() = runTest {
+        val cinemaId = repository.createCinema("Sommerkino")
+        val vm = viewModel(cinemaId)
+        vm.editCinema()
+        vm.deleteFromForm()
+        repository.failure = IllegalStateException("io")
+        vm.confirmDialog()
+
+        assertNull(vm.uiState.value.deletedMessage)
+        assertEquals(EditMessages.DELETE_FAILED, vm.uiState.value.message)
+        assertTrue(vm.uiState.value.content is CinemaDetailContent.Loaded)
     }
 
     @Test

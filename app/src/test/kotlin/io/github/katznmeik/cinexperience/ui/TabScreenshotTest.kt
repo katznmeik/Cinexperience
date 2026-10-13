@@ -2,16 +2,22 @@ package io.github.katznmeik.cinexperience.ui
 
 import android.content.Context
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.di.AppContainer
+import io.github.katznmeik.cinexperience.feature.cinemas.closeDeletedCinema
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,8 +50,8 @@ class TabScreenshotTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private fun showApp() {
-        val container = FakeAppContainer(FakeCinexRepository(SampleData.freshInstallStore()))
+    private fun showApp(repository: FakeCinexRepository = FakeCinexRepository(SampleData.freshInstallStore())) {
+        val container = FakeAppContainer(repository)
         composeRule.setContent {
             CinexTheme { CinexApp(container) }
         }
@@ -86,5 +92,32 @@ class TabScreenshotTest {
         composeRule.onNodeWithText("Seat map coming in M4").assertExists()
         composeRule.onNodeWithText("Kant Kino").assertExists()
         capture("hall_detail_placeholder")
+    }
+
+    /**
+     * The detail screen hands its "Deleted …" message to the screen below. (The
+     * dialogs themselves are covered by the ViewModel tests: Robolectric never
+     * reports idle while an AlertDialog is shown.)
+     */
+    @Test
+    fun deletedCinemaMessageIsShownOnTheList() {
+        val repository = FakeCinexRepository(SampleData.freshInstallStore())
+        val id = runBlocking { repository.createCinema("Atelier") }
+        val container = FakeAppContainer(repository)
+        lateinit var navController: NavHostController
+        composeRule.setContent {
+            navController = rememberNavController()
+            CinexTheme { CinexApp(container, navController = navController) }
+        }
+
+        composeRule.onNodeWithText("ATELIER").performClick()
+        composeRule.onNodeWithContentDescription("Edit cinema").assertExists()
+        composeRule.runOnIdle {
+            runBlocking { repository.deleteCinema(id) }
+            navController.closeDeletedCinema("Deleted Atelier")
+        }
+
+        composeRule.waitUntil { composeRule.onAllNodesWithText("Deleted Atelier").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText("13 venues · 0 visits").assertExists()
     }
 }

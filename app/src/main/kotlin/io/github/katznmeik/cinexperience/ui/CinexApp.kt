@@ -24,6 +24,7 @@ import io.github.katznmeik.cinexperience.feature.backup.settingsScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.CinemasRoute
 import io.github.katznmeik.cinexperience.feature.cinemas.cinemaDetailScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.cinemasScreen
+import io.github.katznmeik.cinexperience.feature.cinemas.closeDeletedCinema
 import io.github.katznmeik.cinexperience.feature.cinemas.manageCinemasScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.navigateToCinemaDetail
 import io.github.katznmeik.cinexperience.feature.cinemas.navigateToManageCinemas
@@ -93,6 +94,7 @@ fun CinexApp(
                 hallRepository = container.hallRepository,
                 onBack = navController::navigateUp,
                 onOpenHall = navController::navigateToHallDetail,
+                onCinemaDeleted = navController::closeDeletedCinema,
             )
             hallDetailScreen(
                 hallRepository = container.hallRepository,

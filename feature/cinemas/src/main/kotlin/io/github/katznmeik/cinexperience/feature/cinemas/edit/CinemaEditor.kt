@@ -15,14 +15,14 @@ import kotlinx.coroutines.launch
 
 /** The add / edit / rename / delete dialog currently shown, if any. */
 sealed interface EditDialog {
-    /** Add ([cinemaId] `null`) or edit a cinema. [delete] is set for user-added cinemas only. */
+    /** Add ([cinemaId] `null`) or edit a cinema. [canDelete] only for user-added cinemas. */
     data class CinemaForm(
         val cinemaId: Long?,
         val name: String = "",
         val address: String = "",
         val notes: String = "",
         val nameError: String? = null,
-        val delete: ConfirmDeleteCinema? = null,
+        val canDelete: Boolean = false,
     ) : EditDialog {
         val isNew: Boolean get() = cinemaId == null
     }
@@ -63,6 +63,18 @@ internal object EditMessages {
     fun deleted(name: String) = "Deleted $name"
 }
 
+/** Lets the cinema detail screen close itself around deleting its own cinema. */
+internal interface CinemaDeleteListener {
+    /** The delete is about to run: the cinema will disappear from the data. */
+    fun onDeleting(cinemaId: Long)
+
+    /** The cinema was deleted; [message] confirms it to the user. */
+    fun onDeleted(cinemaId: Long, message: String)
+
+    /** The delete did not happen (failure, not found or preloaded). */
+    fun onDeleteFailed(cinemaId: Long)
+}
+
 /**
  * Dialog state and write actions shared by the cinema detail and the manage screen:
  * add / edit / delete cinemas, add / rename / delete halls (spec §6.2, §6.7).
@@ -74,7 +86,8 @@ internal class CinemaEditor(
     private val scope: CoroutineScope,
     private val cinemaRepository: CinemaRepository,
     private val hallRepository: HallRepository,
-    private val onCinemaDeleted: (Long) -> Unit = {},
+    /** When set, it gets the "Deleted …" message of a deleted cinema instead of [message]. */
+    private val deleteListener: CinemaDeleteListener? = null,
 ) {
     private val _dialog = MutableStateFlow<EditDialog?>(null)
     val dialog: StateFlow<EditDialog?> = _dialog.asStateFlow()
@@ -95,7 +108,7 @@ internal class CinemaEditor(
             name = cinema.name,
             address = cinema.address.orEmpty(),
             notes = cinema.notes.orEmpty(),
-            delete = if (cinema.isPreloaded) null else detail.deleteConfirmation(),
+            canDelete = !cinema.isPreloaded,
         )
     }
 
@@ -116,9 +129,21 @@ internal class CinemaEditor(
         }
     }
 
-    /** "Delete cinema" inside the edit form of a user-added cinema: asks to confirm. */
-    fun deleteFromForm() {
-        (_dialog.value as? EditDialog.CinemaForm)?.delete?.let { _dialog.value = it }
+    /**
+     * "Delete cinema" inside the edit form of a user-added cinema: asks to confirm,
+     * with the hall and visit counts of [current] (the cinema's data right now).
+     */
+    fun deleteFromForm(current: (cinemaId: Long) -> CinemaDetail?) {
+        val form = _dialog.value as? EditDialog.CinemaForm ?: return
+        val cinemaId = form.cinemaId ?: return
+        if (!form.canDelete) return
+        val detail = current(cinemaId)
+        if (detail == null) {
+            _dialog.value = null
+            _message.value = EditMessages.GONE
+        } else {
+            requestDeleteCinema(detail)
+        }
     }
 
     fun requestDeleteHall(hall: HallSummary) {
@@ -184,10 +209,18 @@ internal class CinemaEditor(
                     }
                 }
             }
-            is EditDialog.ConfirmDeleteCinema -> runWrite(EditMessages.DELETE_FAILED) {
-                val result = cinemaRepository.deleteCinema(d.cinemaId)
-                _message.value = result.message(d.name, EditMessages.PRELOADED_CINEMA)
-                if (result == DeleteResult.DELETED) onCinemaDeleted(d.cinemaId)
+            is EditDialog.ConfirmDeleteCinema -> {
+                deleteListener?.onDeleting(d.cinemaId)
+                runWrite(EditMessages.DELETE_FAILED, onFailure = { deleteListener?.onDeleteFailed(d.cinemaId) }) {
+                    val result = cinemaRepository.deleteCinema(d.cinemaId)
+                    val message = result.message(d.name, EditMessages.PRELOADED_CINEMA)
+                    if (result == DeleteResult.DELETED && deleteListener != null) {
+                        deleteListener.onDeleted(d.cinemaId, message)
+                    } else {
+                        if (result != DeleteResult.DELETED) deleteListener?.onDeleteFailed(d.cinemaId)
+                        _message.value = message
+                    }
+                }
             }
             is EditDialog.ConfirmDeleteHall -> runWrite(EditMessages.DELETE_FAILED) {
                 _message.value = hallRepository.deleteHall(d.hallId).message(d.name, EditMessages.PRELOADED_HALL)
@@ -196,7 +229,7 @@ internal class CinemaEditor(
     }
 
     /** Closes the dialog and runs [block]; any failure becomes [failureMessage]. */
-    private fun runWrite(failureMessage: String, block: suspend () -> Unit) {
+    private fun runWrite(failureMessage: String, onFailure: () -> Unit = {}, block: suspend () -> Unit) {
         _dialog.value = null
         scope.launch {
             try {
@@ -204,6 +237,7 @@ internal class CinemaEditor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onFailure()
                 _message.value = failureMessage
             }
         }

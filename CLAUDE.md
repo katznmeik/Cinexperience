@@ -21,7 +21,7 @@ is required.
 ```sh
 ./gradlew testDebugUnitTest recordRoborazziDebug assembleDebug   # local pre-push check
 ./gradlew :core:model:test                                       # pure JVM unit tests
-./gradlew recordRoborazziDebug    # PNGs -> app/build/outputs/roborazzi/
+./gradlew recordRoborazziDebug    # PNGs -> app/ and feature/*/build/outputs/roborazzi/
 ./gradlew assembleRelease         # needs CINEX_* env vars, else debug-signed + warning
 ```
 

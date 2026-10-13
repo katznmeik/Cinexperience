@@ -21,6 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,7 +67,7 @@ fun TopBarIconButton(
     }
 }
 
-/** Small outlined pill button from the mockups, e.g. "+ Add hall". */
+/** Small outlined pill button from the mockups, e.g. "+ Add hall": 36 dp tall, 48 dp touch target. */
 @Composable
 fun OutlinedPillButton(
     text: String,
@@ -76,7 +77,9 @@ fun OutlinedPillButton(
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.height(36.dp),
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .height(36.dp),
         shape = RoundedCornerShape(18.dp),
         border = BorderStroke(1.dp, CinexTheme.colors.outline),
         contentPadding = PaddingValues(horizontal = 12.dp),
@@ -89,7 +92,10 @@ fun OutlinedPillButton(
     }
 }
 
-/** Single-choice chip (e.g. sort mode): filled light when selected, outlined otherwise. */
+/**
+ * Single-choice chip (e.g. sort mode): filled light when selected, outlined otherwise.
+ * Drawn 36 dp tall with a 48 dp touch target.
+ */
 @Composable
 fun ChoiceChip(
     text: String,
@@ -99,6 +105,7 @@ fun ChoiceChip(
 ) {
     val shape = RoundedCornerShape(18.dp)
     val base = modifier
+        .minimumInteractiveComponentSize()
         .height(36.dp)
         .clip(shape)
         .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
