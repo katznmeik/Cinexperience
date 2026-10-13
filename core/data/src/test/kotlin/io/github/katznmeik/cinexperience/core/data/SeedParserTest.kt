@@ -54,11 +54,14 @@ class SeedParserTest {
             """
             {"seedVersion": 1, "cinemas": [{"seedKey": "a", "name": "A", "halls": [
               {"seedKey": "a/1", "name": "Saal 1", "screenWidth": 8, "screenDistance": 2.5,
-               "layout": {"formatVersion": 1, "rows": [{"cells": "SS|SS"}]}}
+               "layout": {"formatVersion": 1, "rows": [{"cells": "SS|SS"}]}},
+              {"seedKey": "a/2", "name": "Saal 2",
+               "layout": {"formatVersion": 2, "rows": [{"cells": "WC|SF"}]}}
             ]}]}
             """,
         )
         assertEquals(8f, seed.cinemas[0].halls[0].screenWidth)
+        assertEquals("WC|SF", seed.cinemas[0].halls[1].layout!!.rows[0].cells)
     }
 
     @Test

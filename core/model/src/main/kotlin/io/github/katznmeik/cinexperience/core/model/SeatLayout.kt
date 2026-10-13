@@ -55,11 +55,39 @@ enum class CellType {
     }
 }
 
+/**
+ * What kind of place a `SEAT` cell is. Yorck hall plans mark wheelchair spaces,
+ * companion seats and sofa places; they are real, rateable seats. The kind is a
+ * property of the seat, not a cell type: changing it keeps the seat's [SeatId].
+ *
+ * @property patternChar the seat's character in a [LayoutPattern].
+ */
+enum class SeatKind(val patternChar: Char) {
+    STANDARD('S'),
+
+    /** A wheelchair space. Not counted in the row's seat numbering (see [labels]). */
+    WHEELCHAIR('W'),
+
+    /** A companion seat (German "Begleitsitz"), numbered like a standard seat. */
+    COMPANION('C'),
+
+    /** A sofa place, numbered like a standard seat. */
+    SOFA('F'),
+    ;
+
+    /** Whether the seat gets a seat number; wheelchair spaces are counted separately. */
+    val isNumbered: Boolean get() = this != WHEELCHAIR
+
+    companion object {
+        fun fromPatternChar(char: Char): SeatKind? = entries.firstOrNull { it.patternChar == char }
+    }
+}
+
 /** One cell of the layout grid. Only [Seat] cells carry an identity. */
 sealed interface LayoutCell {
     val type: CellType
 
-    data class Seat(val id: SeatId) : LayoutCell {
+    data class Seat(val id: SeatId, val kind: SeatKind = SeatKind.STANDARD) : LayoutCell {
         override val type: CellType get() = CellType.SEAT
     }
 
@@ -196,15 +224,24 @@ data class SeatLayout(
      * Turns one non-seat cell into a seat with the given, currently unused [id]
      * (used by [LayoutEditSession] to give a seat its original id back).
      */
-    fun withSeat(row: Int, column: Int, id: SeatId): SeatLayout {
+    fun withSeat(row: Int, column: Int, id: SeatId, kind: SeatKind = SeatKind.STANDARD): SeatLayout {
         require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
         require(id !in seatPositions) { "$id is already used in this layout" }
-        val newRows = rows.toMutableList()
-        newRows[row] = rows[row].copy(
-            cells = rows[row].cells.toMutableList().also { it[column] = LayoutCell.Seat(id) },
-        )
-        return SeatLayout(newRows, maxOf(nextSeatId, id.value + 1))
+        return SeatLayout(replaceCell(row, column, LayoutCell.Seat(id, kind)), maxOf(nextSeatId, id.value + 1))
     }
+
+    /** Changes the [SeatKind] of the seat at ([row], [column]); the seat keeps its id. */
+    fun withSeatKind(row: Int, column: Int, kind: SeatKind): SeatLayout {
+        val seat = cell(row, column)
+        require(seat is LayoutCell.Seat) { "Cell ($row, $column) is not a seat" }
+        if (seat.kind == kind) return this
+        return copy(rows = replaceCell(row, column, seat.copy(kind = kind)))
+    }
+
+    private fun replaceCell(row: Int, column: Int, cell: LayoutCell): List<LayoutRow> =
+        rows.toMutableList().also { newRows ->
+            newRows[row] = rows[row].copy(cells = rows[row].cells.toMutableList().also { it[column] = cell })
+        }
 
     /**
      * The same layout with every seat id (and [nextSeatId]) increased by [delta] ≥ 0.
@@ -214,7 +251,7 @@ data class SeatLayout(
         require(delta >= 0) { "delta must not be negative" }
         if (delta == 0) return this
         val newRows = rows.map { row ->
-            row.copy(cells = row.cells.map { if (it is LayoutCell.Seat) LayoutCell.Seat(SeatId(it.id.value + delta)) else it })
+            row.copy(cells = row.cells.map { if (it is LayoutCell.Seat) it.copy(id = SeatId(it.id.value + delta)) else it })
         }
         return SeatLayout(newRows, nextSeatId + delta)
     }
@@ -320,7 +357,9 @@ private class IdAllocator(var next: Int) {
 
 /**
  * Compact text form of one row's cells, used by the stored layout JSON and the
- * seed asset: `S` = seat, `.` = gap, `|` = aisle. Example: `".SSS|SSSS|SSS."`.
+ * seed asset: `S` = standard seat, `W` = wheelchair space, `C` = companion seat,
+ * `F` = sofa place (see [SeatKind.patternChar]), `.` = gap, `|` = aisle.
+ * Example: `".SSS|SSSS|SWC."`.
  */
 object LayoutPattern {
     const val SEAT: Char = 'S'
@@ -331,7 +370,7 @@ object LayoutPattern {
         cells.forEach {
             append(
                 when (it) {
-                    is LayoutCell.Seat -> SEAT
+                    is LayoutCell.Seat -> it.kind.patternChar
                     LayoutCell.Gap -> GAP
                     LayoutCell.Aisle -> AISLE
                 },
@@ -339,7 +378,8 @@ object LayoutPattern {
         }
     }
 
-    fun seatCount(pattern: String): Int = pattern.count { it == SEAT }
+    /** Number of seats of any [SeatKind] in [pattern]. */
+    fun seatCount(pattern: String): Int = pattern.count { SeatKind.fromPatternChar(it) != null }
 
     /** Decodes [pattern], giving its seats the [seatIds] in left-to-right order. */
     fun decode(pattern: String, seatIds: List<SeatId>): List<LayoutCell> {
@@ -349,10 +389,13 @@ object LayoutPattern {
         val ids = seatIds.iterator()
         return pattern.map { char ->
             when (char) {
-                SEAT -> LayoutCell.Seat(ids.next())
                 GAP -> LayoutCell.Gap
                 AISLE -> LayoutCell.Aisle
-                else -> throw IllegalArgumentException("Unknown cell '$char' in pattern '$pattern'")
+                else -> {
+                    val kind = SeatKind.fromPatternChar(char)
+                        ?: throw IllegalArgumentException("Unknown cell '$char' in pattern '$pattern'")
+                    LayoutCell.Seat(ids.next(), kind)
+                }
             }
         }
     }
