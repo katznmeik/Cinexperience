@@ -40,8 +40,9 @@ Look at the screenshot PNGs after every UI change.
 | `app` | application | `MainActivity`, `CinexApp` (NavHost + bottom bar), manual DI `AppContainer`, screenshot tests |
 | `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic (no Android) |
 | `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data |
+| `core:testing` | Android lib (tests only) | in-memory fake repositories, illustrative screenshot fixtures, `MainDispatcherRule` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components |
-| `feature:cinemas` | feature | cinema list (start tab), cinema detail |
+| `feature:cinemas` | feature | cinema list (start tab), cinema detail, manage cinemas & halls |
 | `feature:seatmap` | feature | hall detail with seat map, layout editor |
 | `feature:visits` | feature | add/edit visit, all visits |
 | `feature:rankings` | feature | rankings tab |
@@ -63,7 +64,10 @@ Don't duplicate config in module build files.
   routes, `NavGraphBuilder.xxxScreen(...)` and `NavController.navigateToXxx()`.
   Features never depend on each other; `app/.../ui/CinexApp.kt` wires them
   together with callbacks.
-- **DI:** manual (`app/.../di/AppContainer.kt`), no Hilt.
+- **DI:** manual (`app/.../di/AppContainer.kt`), no Hilt. `CinexApp` hands the
+  repositories to the features' `xxxScreen(...)` functions; each ViewModel has a
+  `factory(...)` and exposes a `StateFlow` UI state. Repository failures become
+  user-facing messages, never crashes.
 - **Data:** no invented sample data in the app.
 - **Seats** are identified by a stable `SeatId` stored in the layout (see
   `core/model/.../SeatLayout.kt`), never by grid position or label. Ids are never

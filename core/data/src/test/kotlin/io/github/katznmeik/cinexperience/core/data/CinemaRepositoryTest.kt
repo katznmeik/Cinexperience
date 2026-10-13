@@ -105,10 +105,9 @@ internal class CinemaRepositoryTest : DatabaseTest() {
         listOf("Rollberg", "delphi LUX", "Babylon", "Kino 10", "Kino 2", "Delphi Filmpalast").forEach {
             cinemas.createCinema(it)
         }
-        assertEquals(
-            listOf("Babylon", "Delphi Filmpalast", "delphi LUX", "Kino 2", "Kino 10", "Rollberg"),
-            cinemas.observeCinemas().first().map { it.cinema.name },
-        )
+        val expected = listOf("Babylon", "Delphi Filmpalast", "delphi LUX", "Kino 2", "Kino 10", "Rollberg")
+        assertEquals(expected, cinemas.observeCinemas().first().map { it.cinema.name })
+        assertEquals(expected, cinemas.observeCinemaDetails().first().map { it.cinema.name })
     }
 
     @Test
@@ -133,8 +132,10 @@ internal class CinemaRepositoryTest : DatabaseTest() {
         // Hall 1 overall 3.0, hall 2 overall 5.0, atmosphere 5.0 → (5 + 3 + 5) / 3.
         assertEquals(13.0 / 3, summary.overallScore!!, 1e-9)
         assertEquals(3, summary.visitCount)
+        assertEquals(3, summary.hallCount)
 
         val detail = cinemas.observeCinemaDetail(cinemaId).first()!!
+        assertEquals(listOf(detail), cinemas.observeCinemaDetails().first())
         assertEquals(5.0, detail.scores[CinemaCategory.ATMOSPHERE]!!.average, 0.0)
         assertEquals(1, detail.scores[CinemaCategory.ATMOSPHERE]!!.count)
         assertNull(detail.scores[CinemaCategory.POPCORN])
@@ -157,6 +158,7 @@ internal class CinemaRepositoryTest : DatabaseTest() {
         val summary = cinemas.observeCinemas().first().single()
         assertNull(summary.overallScore)
         assertEquals(0, summary.visitCount)
+        assertEquals(1, summary.hallCount)
         assertTrue(cinemas.observeCinemaDetail(id).first()!!.scores.categories.isEmpty())
     }
 

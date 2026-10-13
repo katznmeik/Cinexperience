@@ -30,6 +30,12 @@ interface CinemaRepository {
     /** All cinemas with overall score and visit count, sorted by name (spec §6.1). */
     fun observeCinemas(): Flow<List<CinemaSummary>>
 
+    /**
+     * Every cinema with its halls, sorted by name (cinemas) and natural name (halls),
+     * for "Manage cinemas & halls" and the data counts in Settings (spec §6.7).
+     */
+    fun observeCinemaDetails(): Flow<List<CinemaDetail>>
+
     /** Cinema header scores and its halls sorted by name (spec §6.2); `null` if it doesn't exist. */
     fun observeCinemaDetail(cinemaId: Long): Flow<CinemaDetail?>
 

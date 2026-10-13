@@ -65,6 +65,11 @@ internal class RoomCinemaRepository(
             .map { rows -> rows.map { it.toSummary() }.sortedWith(compareBy(NameOrder) { it.cinema.name }) }
             .prepared(awaitReady, dispatcher)
 
+    override fun observeCinemaDetails(): Flow<List<CinemaDetail>> =
+        dao.observeAllWithHalls()
+            .map { rows -> rows.map { it.toDetail() }.sortedWith(compareBy(NameOrder) { it.cinema.name }) }
+            .prepared(awaitReady, dispatcher)
+
     override fun observeCinemaDetail(cinemaId: Long): Flow<CinemaDetail?> =
         dao.observeWithHalls(cinemaId)
             .map { it?.toDetail() }
@@ -108,7 +113,7 @@ internal class RoomCinemaRepository(
 
     private fun CinemaWithHalls.toSummary(): CinemaSummary {
         val scores = cinemaScores(halls.associate { row -> row.hall.id to row.visits.map { it.toModel() } })
-        return CinemaSummary(cinema.toModel(), scores.overall, scores.visitCount)
+        return CinemaSummary(cinema.toModel(), scores.overall, scores.visitCount, halls.size)
     }
 
     private fun CinemaWithHalls.toDetail(): CinemaDetail {
