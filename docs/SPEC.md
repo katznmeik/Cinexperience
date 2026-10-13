@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 6)
+**Last updated:** 2026-10-13 (rev. 7)
 
 ---
 
@@ -56,6 +56,7 @@ All data is stored locally in a Room (SQLite) database.
 | address | String? | |
 | notes | String? | free text |
 | isPreloaded | Boolean | shipped with the app vs. user-added |
+| seedKey | String? | stable key of a preloaded cinema (seed updates) |
 
 ### 4.2 Hall
 | Field | Type | Notes |
@@ -66,7 +67,8 @@ All data is stored locally in a Room (SQLite) database.
 | layout | SeatLayout? | null until drawn by the user |
 | screenWidth | Float? | screen width, in seat-widths (grid columns); adjustable |
 | screenDistance | Float? | gap between screen and first row, in row-depths; adjustable |
-| referenceImageUri | String? | screenshot of the hall plan from the Yorck app (see §6.5) |
+| referenceImagePath | String? | screenshot of the hall plan from the Yorck app (see §6.5); app-private relative path |
+| isPreloaded, seedKey | | as for Cinema |
 | notes | String? | |
 
 ### 4.3 SeatLayout (grid)
@@ -86,6 +88,11 @@ starting number of each block. A row can also be shifted by half a seat
 
 The screen is always drawn at the top, with the width and distance from §4.2.
 
+**Seat identity:** every seat cell carries a stable `seatId` that is never
+reused. Visits and overrides refer to seats by this id, so they survive
+relabelling, renumbering and inserting rows; labels ("G 10") are derived from
+the layout when displayed. A seat that is deleted and redrawn gets a new id.
+
 ### 4.4 Visit
 | Field | Type | Notes |
 |---|---|---|
@@ -93,12 +100,12 @@ The screen is always drawn at the top, with the width and distance from §4.2.
 | hallId | Long | FK → Hall |
 | date | LocalDate | defaults to today |
 | filmTitle | String? | |
-| seatRef | (row, seat)? | the seat sat in; picked on the seat map |
+| seatId | Int? | the seat sat in (§4.3 seat identity); picked on the seat map |
 | screeningFormat | Enum? | OV, OmU (OV + German subs), German dub, 3D, 70mm, Other |
 | hallRatings | 6 × Int? (1–5) | sound, picture, screen size, seat comfort, legroom, seating steepness |
 | seatRating | Int? (1–5) | "How was this seat?" |
 | note | String? | free text |
-| photoUri | String? | photo stored in app-private storage |
+| photoPath | String? | photo stored in app-private storage (relative path) |
 
 **All ratings are optional.**
 
@@ -115,7 +122,7 @@ ratings. Shown as an optional section in the "Add visit" form.
 ### 4.6 SeatOverride
 | Field | Type | Notes |
 |---|---|---|
-| hallId, row, seat | | identifies the seat |
+| hallId, seatId | | identifies the seat |
 | colour | GREEN / YELLOW / RED / null | manual override; null = automatic |
 | isFavourite | Boolean | max. one favourite per hall |
 
@@ -239,15 +246,37 @@ Save is always allowed — nothing besides hall is required.
 ## 9. Preloaded data
 
 The app ships with a seed list of Yorck cinemas and their halls
-(names + addresses). Seat layouts are preloaded for every hall the owner
-supplies a Yorck-app screenshot for; all other halls are drawn in the app. The list below is **preliminary and must
-be verified against yorck.de in milestone M1** — the chain changes venues over time.
+(`core/data/src/main/assets/seed/yorck.json`). Seat layouts are preloaded for
+every hall the owner supplies a Yorck-app screenshot for; all other halls are
+drawn in the app. Hall names are generic ("Saal 1", "Saal 2", …) and can be
+renamed in the app.
 
-Babylon (Kreuzberg), Capitol Dahlem, Cinema Paris, Delphi Filmpalast,
-Delphi LUX, Filmtheater am Friedrichshain, International, Kant Kino,
-Neues Off, Passage, Rollberg, Yorck.
+Verified in M1 (13 cinemas, 36 halls; Yorck states 14 cinemas, the 14th is unknown):
 
-Users can add, rename or delete cinemas and halls at any time.
+| Cinema | Address | Halls |
+|---|---|---|
+| Babylon Kreuzberg | Dresdener Straße 126 | 2 |
+| Capitol Dahlem | Thielallee 36 | 1 |
+| Cinema Paris | Kurfürstendamm 211 | 1 |
+| Delphi Filmpalast | Kantstraße 12a | 1 |
+| delphi LUX | Kantstraße 10 | 7 |
+| Filmtheater am Friedrichshain | Bötzowstraße 1–5 | 5 |
+| International | Karl-Marx-Allee 33 | 1 |
+| Kant Kino | Kantstraße 54 | 5 |
+| Neues Off | Hermannstraße 20 | 1 |
+| Odeon | Hauptstraße 116 | 1 |
+| Passage | Karl-Marx-Straße 131 | 4 |
+| Rollberg | Rollbergstraße 70 | 5 |
+| Yorck | Yorckstraße 86 | 2 ("Yorck", "New Yorck") |
+
+**Seed updates:** the seed file has a `seedVersion`; each cinema and hall has a
+stable `seedKey`. When a newer seed version ships, missing cinemas/halls are
+added and still-empty fields (address, layout, screen geometry) are filled in;
+names, notes and anything the user has set are never overwritten, and nothing
+is deleted.
+
+Users can add, rename or delete cinemas and halls at any time (preloaded ones
+can be renamed but not deleted).
 
 ## 10. Technical approach
 
