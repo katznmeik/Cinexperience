@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 5)
+**Last updated:** 2026-10-13 (rev. 6)
 
 ---
 
@@ -39,7 +39,8 @@ cinema, which hall and which seat to book next time.
 
 - **User:** the owner only.
 - **Device:** Samsung Galaxy S25, One UI 8.5, Android 16.
-- **Supported Android versions:** minSdk 34 (Android 14), targetSdk 36 (Android 16).
+- **Supported Android versions:** minSdk 34 (Android 14), targetSdk 36 (Android 16);
+  compiled against API 37 (required by current AndroidX libraries; no runtime effect).
 - **Orientation:** portrait.
 - **Connectivity:** fully offline. No network permission needed in v1.
 
@@ -256,7 +257,7 @@ Users can add, rename or delete cinemas and halls at any time.
 | UI | Jetpack Compose, Material 3 |
 | Architecture | Single-activity, MVVM, unidirectional data flow |
 | Persistence | Room + Kotlin Flow |
-| DI | Hilt (or manual DI if kept small) |
+| DI | Manual DI (small app container) |
 | Navigation | Navigation Compose |
 | Images | Coil; photos copied into app-private storage |
 | Serialization | kotlinx.serialization (backup JSON) |
@@ -306,8 +307,8 @@ complexity:
 | `core:model` | Domain classes, rating & seat-colour logic | Medium — fully unit-tested |
 | `core:data` | Room DB, repositories, seed data | Medium |
 | `core:ui` | Theme, shared components (star rating, cards) | Low |
-| `feature:seatmap` | Seat map canvas, layout editor, screenshot overlay | **High** |
-| `feature:cinemas` | Cinema list/detail, hall detail | Low–medium |
+| `feature:seatmap` | Hall detail, seat map canvas, layout editor, screenshot overlay | **High** |
+| `feature:cinemas` | Cinema list & detail | Low–medium |
 | `feature:visits` | Add/edit visit form, photo handling | Medium |
 | `feature:rankings` | Rankings screen | Low |
 | `feature:backup` | Export / import, schema migration | Medium |
