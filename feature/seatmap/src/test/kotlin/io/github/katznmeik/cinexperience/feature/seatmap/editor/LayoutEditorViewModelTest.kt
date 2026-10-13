@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.seatmap.editor
 
+import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.model.CellPosition
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.Cinema
@@ -17,6 +18,7 @@ import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.FakeStore
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -431,11 +433,64 @@ class LayoutEditorViewModelTest {
         val vm = viewModel()
         assertTrue(vm.state.replacesUnreadableLayout)
         vm.save()
-        assertEquals(EditorDialog.ConfirmSave(emptyList(), replacesUnreadableLayout = true), vm.state.dialog)
+        // The visit in seat 12 loses its seat: its count is part of the warning.
+        val dialog = EditorDialog.ConfirmSave(emptyList(), replacesUnreadableLayout = true, unreadableSeatsWithData = 1)
+        assertEquals(dialog, vm.state.dialog)
+        assertTrue(confirmSaveText(dialog).contains("1 of its seats has visits or seat settings"))
+        assertTrue(
+            confirmSaveText(dialog.copy(unreadableSeatsWithData = 3)).contains("3 of its seats have visits or seat settings"),
+        )
         vm.confirmSave()
         assertTrue(vm.state.isClosed)
         assertFalse(storedHall().layoutUnreadable)
         assertEquals(160, storedHall().layout!!.seatCount)
+    }
+
+    @Test
+    fun anUnreadableLayoutWithoutSeatDataWarnsWithoutCount() {
+        repository.store.value = repository.store.value.copy(
+            halls = listOf(hall.copy(layout = null, layoutUnreadable = true, nextSeatId = 13)),
+            visits = listOf(visitInSeat12.copy(seatId = null)),
+        )
+        val vm = viewModel()
+        vm.save()
+        assertEquals(EditorDialog.ConfirmSave(emptyList(), replacesUnreadableLayout = true, unreadableSeatsWithData = 0), vm.state.dialog)
+        assertFalse(confirmSaveText(vm.state.dialog as EditorDialog.ConfirmSave).contains("visits"))
+    }
+
+    /** A save waiting on a slow repository can't be undercut by Discard or Back. */
+    @Test
+    fun discardIsIgnoredWhileASaveIsRunning() {
+        val slow = SlowHallRepository(repository)
+        val vm = LayoutEditorViewModel(HALL, slow, images)
+        vm.onReferenceImagePicked("content://picker/1")
+        val picked = vm.draft.referenceImagePath!!
+        vm.save()
+        assertTrue(vm.state.isSaving)
+
+        vm.requestDiscard()
+        vm.discard()
+        vm.onReferenceImagePicked("content://picker/2") // no new imports mid-save either
+        assertNull(vm.state.dialog)
+        assertFalse(vm.state.isClosed)
+        assertTrue(picked in images.files)
+        assertEquals(1, images.importedSources.size)
+
+        slow.gate.complete(Unit)
+        assertTrue(vm.state.isClosed)
+        assertFalse(vm.state.isSaving)
+        assertEquals(picked, storedHall().referenceImagePath)
+        assertTrue(picked in images.files) // the saved screenshot still exists
+    }
+
+    /** Delegates to the fake but suspends [updateHall] until [gate] completes. */
+    private class SlowHallRepository(private val delegate: FakeCinexRepository) : HallRepository by delegate {
+        val gate = CompletableDeferred<Unit>()
+
+        override suspend fun updateHall(hall: Hall): Boolean {
+            gate.await()
+            return delegate.updateHall(hall)
+        }
     }
 
     @Test
