@@ -82,7 +82,29 @@ Don't duplicate config in module build files.
   a case to `MigrationTest`. No destructive fallback.
 - **Seed data:** `core/data/src/main/assets/seed/yorck.json`. Bump `seedVersion`
   for every change; `seedKey`s are permanent. Seeding only inserts missing items
-  and fills empty fields, it never overwrites or deletes.
+  and fills empty fields, it never overwrites or deletes (a renamed seed hall
+  only gets the new name on fresh installs).
+- **Seed layouts** (`"layout"` of a seed hall, see `LayoutJson`): one object per
+  grid row, closest to the screen first, e.g.
+  `{ "label": "1", "cells": "W.W|SSSSSSSSS|W.W" }`. Cell characters: `S` seat,
+  `W` wheelchair space (not counted in seat numbers), `C` companion seat
+  (Begleitsitz), `F` sofa place, `.` gap, `|` aisle (splits a row into blocks).
+  All rows have the same width: columns run from the leftmost to the rightmost
+  seat position of the hall. Give every seat row an explicit `label` (Yorck
+  numbers rows 1..n from the screen); a wider gap between two rows is an empty
+  spacer row of gaps without a label. Omit `seatIds`: seed ids are assigned
+  row-major from 1. Use `"formatVersion": 2` when a layout has `W`, `C` or `F`.
+  `screenWidth` is in seat widths, `screenDistance` in row depths between the
+  screen and row 1 (0.5 steps; the screen is always centred over the grid).
+- **Adding transcribed halls:** measure the Yorck-app screenshot (seat box
+  centres → columns by the seat pitch, rows by the row pitch; check each icon),
+  mark an empty column between two blocks as `|` in the rows where both blocks
+  exist and other empty cells as `.`, set screen width = lower edge of the drawn
+  screen ÷ seat pitch and distance = gap to row 1 ÷ row pitch. Add the layout
+  to the hall's seed entry, bump `seedVersion`, add a case like
+  `DelphiLuxSeedTest` (seat counts per row and kind, spot-checked labels) and a
+  render like `DelphiLuxSeedScreenshotTest`, and compare the PNG with the
+  screenshot row by row. Don't commit the screenshots.
 - **Signing:** never commit keystores or passwords (`*.jks` and `*.keystore`
   are gitignored).
 
