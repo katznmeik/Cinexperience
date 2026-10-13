@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 10)
+**Last updated:** 2026-10-13 (rev. 11)
 
 ---
 
@@ -84,7 +84,7 @@ Row labels and seat numbers are auto-generated (row 1…n, seat 1…m per row,
 skipping gaps/aisles) and can be edited to match the cinema's real labels.
 Seats are numbered **left to right from 1, facing the screen**. Wheelchair
 spaces are not counted in the numbering; they are labelled e.g.
-"Row 1 · Wheelchair 2". Companion and sofa places are counted like seats.
+"Row 1, Wheelchair 2". Companion and sofa places are counted like seats.
 
 **Split rows:** a row interrupted by an aisle forms separate *blocks*
 (e.g. left / centre / right). Per row, the user chooses whether seat numbering
