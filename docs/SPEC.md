@@ -309,9 +309,11 @@ no seat was ever selected): seat positions, seat types (wheelchair, companion,
 sofa, permanently blocked seats count as normal seats), row labels and seat
 numbers exactly as Yorck has them. Halls with a stalls and a balcony area
 ("Parkett"/"Rang") show the balcony rows behind the stalls with Yorck's labels
-(e.g. "R1"). Screen width and distance come from the drawn screen and can be
-adjusted; the screen offset (§4.2) can't be read from the plans, starts centred
-and is set in the editor. The delphi LUX layouts that were transcribed from the
+(e.g. "R1"). yorck.de doesn't show the real screen (its data always makes the
+screen exactly as wide as the seating), so a new hall's screen starts as wide as
+its seating, 1.5 rows in front of the first row and centred; the delphi LUX
+halls keep the width and distance measured from the Yorck app. Width, distance
+and offset (§4.2) are set in the editor. The delphi LUX layouts that were transcribed from the
 owner's Yorck-app screenshots in M2 are replaced by the ones from yorck.de.
 
 Verified in M8 against yorck.de (14 cinemas, 38 halls; where yorck.de names a hall differently, its name is in brackets):
