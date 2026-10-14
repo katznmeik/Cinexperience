@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.cinex.android.library)
     alias(libs.plugins.cinex.android.compose)
+    // Robolectric for the self-tests of the accessibility checks.
+    alias(libs.plugins.cinex.android.roborazzi)
 }
 
 // Test helpers shared by the feature and app modules (testImplementation only):

@@ -53,7 +53,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import io.github.katznmeik.cinexperience.core.model.CellPosition
 import io.github.katznmeik.cinexperience.core.model.LayoutCell
@@ -253,9 +252,19 @@ internal fun EditorCanvas(
     val density = LocalDensity.current
     val colors = CinexTheme.colors
     val textMeasurer = rememberTextMeasurer()
-    val labelStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp, color = colors.textMuted)
+    // Text drawn in the grid (row labels, screen distance) is sized in dp, not sp: it has
+    // to fit the rows, and it grows with zoom instead of with the system font size.
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(
+        fontSize = with(density) { 11.dp.toSp() },
+        lineHeight = with(density) { 13.dp.toSp() },
+        color = colors.textMuted,
+    )
     val selectedLabelStyle = labelStyle.copy(color = colors.onPrimary, fontWeight = FontWeight.SemiBold)
-    val distanceStyle = MaterialTheme.typography.labelSmall.copy(color = colors.text.copy(alpha = 0.8f))
+    val distanceStyle = MaterialTheme.typography.labelSmall.copy(
+        fontSize = with(density) { 11.dp.toSp() },
+        lineHeight = with(density) { 14.dp.toSp() },
+        color = colors.text.copy(alpha = 0.8f),
+    )
 
     val labelWidth = remember(labels.rowLabels, density) {
         rowLabelWidth(textMeasurer, labels.rowLabels, labelStyle, minWidth = with(density) { 18.dp.toPx() }) +

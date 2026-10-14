@@ -766,15 +766,16 @@ private fun StepperCard(spec: StepperSpec, modifier: Modifier = Modifier) {
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(CinexTheme.colors.surface)
-            .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            // No end or vertical padding: the buttons' 48 dp touch areas already leave
+            // 6 dp around their 36 dp boxes, so the labels keep their width.
+            .padding(start = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
             Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal), color = CinexTheme.colors.textMuted)
             Text(spec.value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = CinexTheme.colors.text)
         }
         StepButton("−", "Decrease ${label.lowercase()}", spec.canMinus, spec.onMinus)
-        Spacer(Modifier.width(2.dp))
         StepButton("+", "Increase ${label.lowercase()}", spec.canPlus, spec.onPlus)
     }
 }

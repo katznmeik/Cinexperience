@@ -66,14 +66,10 @@ fun SemanticsNodeInteractionsProvider.assertAccessible(requireHeading: Boolean =
         val spoken = node.spokenTexts()
         val name = spoken.joinToString(" / ").ifEmpty { "<unlabelled node ${node.id}>" }
         if (spoken.none { it.isNotBlank() }) problems += "Clickable element without a label: $name at ${node.boundsInRoot}"
-        // The element's whole layout (incl. minimumInteractiveComponentSize), not Compose's
-        // extended touch bounds, which are only a fallback for taps that hit nothing else.
-        val layout = node.layoutInfo
-        val density = layout.density
-        val minPx = with(density) { MIN_TOUCH_TARGET.toPx() } - 0.5f
-        if (layout.width < minPx || layout.height < minPx) {
-            val width = with(density) { layout.width.toDp() }
-            val height = with(density) { layout.height.toDp() }
+        if (!node.hasMinimumTouchTarget()) {
+            val density = node.layoutInfo.density
+            val width = with(density) { node.size.width.toDp() }
+            val height = with(density) { node.size.height.toDp() }
             problems += "Touch target smaller than $MIN_TOUCH_TARGET: \"$name\" is $width × $height"
         }
     }
@@ -88,6 +84,23 @@ fun SemanticsNodeInteractionsProvider.assertAccessible(requireHeading: Boolean =
     }
     if (problems.isNotEmpty()) throw AssertionError("Accessibility problems:\n" + problems.distinct().joinToString("\n") { " - $it" })
 }
+
+/**
+ * Whether the clickable element itself (the bounds of its semantics, not padding
+ * around it) is at least [MIN_TOUCH_TARGET], or Material's
+ * `minimumInteractiveComponentSize()` reserves 48 dp around it. Compose's
+ * `touchBoundsInRoot` can't tell: it extends every small pointer-input node to 48 dp.
+ */
+internal fun SemanticsNode.hasMinimumTouchTarget(): Boolean {
+    val layout = layoutInfo
+    val minPx = with(layout.density) { MIN_TOUCH_TARGET.toPx() } - 0.5f
+    if (size.width >= minPx && size.height >= minPx) return true
+    val enlargedByMaterial = layout.getModifierInfo().any { it.modifier::class.qualifiedName == MINIMUM_INTERACTIVE_MODIFIER }
+    return enlargedByMaterial && layout.width >= minPx && layout.height >= minPx
+}
+
+/** Element class of `Modifier.minimumInteractiveComponentSize()` (Material 3). */
+private const val MINIMUM_INTERACTIVE_MODIFIER = "androidx.compose.material3.MinimumInteractiveModifier"
 
 private fun hasAnyLabel() = androidx.compose.ui.test.SemanticsMatcher("has text or content description") { node ->
     node.spokenTexts().isNotEmpty()
