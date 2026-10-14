@@ -8,12 +8,76 @@ Yorck Kinos.
 
 The full product specification is in [`docs/SPEC.md`](docs/SPEC.md).
 
-## Status
+## Features (v1.0)
 
-M0 (project setup) is done: modules, theme, navigation skeleton with placeholder
-screens, CI, signing. Features arrive in later milestones (spec §12).
+- **Cinemas:** all Yorck cinemas and their halls are preloaded. Sort by score,
+  name or most visited; add, rename or delete your own cinemas and halls.
+- **Seat maps:** draw each hall's layout in a grid editor, tracing a screenshot
+  of the Yorck app's seat plan (split and staggered rows, wheelchair, companion
+  and sofa seats, screen size and distance). The delphi LUX halls come drawn.
+- **Visits:** date, film, screening format, your seat (tap it on the map or
+  choose row and number), seat rating, six hall ratings, cinema ratings, a note
+  and a photo.
+- **Hall detail:** the seat map coloured by your ratings (great, OK, avoid,
+  no data; avoid seats carry a ×), a favourite seat with a star, the viewing
+  angle of each seat, scores per category and the visit history.
+- **Rankings:** halls or cinemas, overall or by any category.
+- **Backup:** export everything (including photos) to one `.zip` file and import
+  it again, with a safety copy of the data it replaces.
+- Works with TalkBack and large font sizes.
 
-## Build
+## Install and update
+
+Every version is published as a GitHub Release with the APK
+`cinexperience-<version>.apk` attached (Releases, on the right of the repository
+page). All releases are signed with the same key.
+
+**Before updating** (once you have real data): open Settings → **Export backup**
+and save the file somewhere outside the phone (e.g. Google Drive). Updating keeps
+your data, the backup is only a precaution.
+
+On the Galaxy S25 (One UI 8.5, Android 16):
+
+1. Temporarily turn off **Auto Blocker**: Settings → Security and privacy →
+   Auto Blocker. Otherwise apps from outside the Galaxy Store and Play Store are
+   blocked.
+2. Open the latest release in the phone's browser and tap
+   `cinexperience-<version>.apk` to download it.
+3. Open the downloaded file (from the notification or My Files → Downloads).
+   If asked, allow **Install unknown apps** for the browser or My Files.
+4. If **Play Protect** warns about an unknown app, tap More details →
+   **Install anyway**. (It may offer to scan the app; that is fine.)
+5. Tap **Install**, or **Update** if the app is already installed.
+6. Turn Auto Blocker back on.
+
+**Updating keeps all data** (visits, ratings, layouts, photos) because every
+release is signed with the same key, so Android installs it as an update over the
+existing app. Never uninstall the app to "update": uninstalling deletes its data.
+If Android ever says the app can't be installed because of a conflict with the
+existing package, the APK was signed with a different key (e.g. a debug build
+from a CI run): don't uninstall, use the APK from the GitHub Release instead.
+
+The app needs Android 14 or newer.
+
+## Restore a backup
+
+1. Settings → **Import backup** and pick the backup `.zip` file
+   (`cinexperience-backup-<date>.zip`).
+2. The whole file is checked first. If it is fine, the app shows when it was
+   exported and what it contains; nothing has changed yet.
+3. Tap **Replace**: all current data is replaced by the backup in one step. If
+   anything goes wrong, the current data stays as it was.
+
+Right before an import, the app saves the current data as a **safety copy** (the
+latest two are kept). To undo an import, use Settings → **Restore safety copy**.
+
+On a new phone: install the app as above, then import the backup. Android's own
+Auto Backup also restores the database (not the photos) when you set up a new
+phone with the same Google account.
+
+## Development
+
+### Build
 
 Requirements: JDK 21 and the Android SDK (compileSdk 37, build-tools 36.1.0).
 Android Studio installs the SDK for you. On Linux or cloud machines without it, run:
@@ -32,20 +96,53 @@ project on that machine**. To skip it, run the script with
 Then:
 
 ```sh
-./gradlew testDebugUnitTest         # unit tests
-./gradlew recordRoborazziDebug      # screenshots -> app/build/outputs/roborazzi/*.png
+./gradlew testDebugUnitTest         # unit, UI and accessibility tests
+./gradlew recordRoborazziDebug      # screenshots -> <module>/build/outputs/roborazzi/*.png
+./gradlew lintDebug                 # Android Lint: CI fails on errors (see below)
 ./gradlew assembleDebug             # debug APK -> app/build/outputs/apk/debug/
 ./gradlew assembleRelease           # release APK (see Signing)
 ```
 
-## Install the APK
+Lint reports no errors. It reports 16 warnings that are kept on purpose: the
+portrait lock (2) and targetSdk 36 (1), both set by the spec; 2 dependency-update
+hints; the framework `ExifInterface` (2, fine on minSdk 34); and 9 "use the KTX
+extension" style hints. There is no lint baseline.
 
-Every push to a `claude/**` branch and every pull request runs GitHub Actions. The
-run's artifacts contain the APK (`cinexperience-<sha>.apk`), the screenshots and
-the test reports. To install it on the PC emulator or on the Galaxy S25, follow
-spec §14.2 and §14.3.
+R8 / minification is off in v1 (the APK is small and only sideloaded); turning it
+on later needs keep rules for kotlinx.serialization and Room checked on a device.
 
-## Signing
+### CI builds
+
+Every push to a `claude/**` branch and every pull request runs GitHub Actions
+(`.github/workflows/android.yml`): tests, screenshots, lint and an APK (when the
+signing secrets exist, a release-signed APK whose certificate is checked like in a
+release). The run's
+artifacts contain the APK (`cinexperience-<sha>.apk`), the screenshots and the
+test reports. These APKs are for testing on the PC emulator or the phone (spec
+§14.2, §14.3); releases come from the release workflow below.
+
+### Versions and releases
+
+The version lives in one place, `cinexVersionName` in `gradle.properties`
+(`MAJOR.MINOR.PATCH`). The `versionCode` is derived from it:
+`MAJOR * 10000 + MINOR * 100 + PATCH` (1.0.0 → 10000, 1.2.3 → 10203), so each new
+version installs as an update.
+
+To publish a version: raise `cinexVersionName`, merge it into the integration
+branch, then push a tag `v<version>` on that commit:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+`.github/workflows/release.yml` then checks that the tag matches the version,
+runs the tests and lint, builds the release APK signed with the fixed key (it
+fails if a signing secret is missing), checks with `scripts/verify-release-apk.sh`
+that the APK verifies and its only signer is the release certificate, and creates
+the GitHub Release with `cinexperience-<version>.apk` and short notes.
+
+### Signing
 
 All release builds are signed with one fixed key (spec §14.4), so each new APK
 installs as an update and keeps your data. The key is never committed. CI reads
@@ -61,7 +158,19 @@ it from these repository secrets:
 To build a signed release locally, set `CINEX_KEYSTORE_PATH` (path to the
 `.jks`), `CINEX_KEYSTORE_PASSWORD`, `CINEX_KEY_ALIAS` and `CINEX_KEY_PASSWORD`.
 If they are missing, `assembleRelease` falls back to the debug key and prints a
-warning.
+warning. Keep a copy of the keystore and its passwords outside GitHub: without
+them no future version can update the installed app.
+
+The SHA-256 of the release key's certificate is committed in
+`signing/release-cert.sha256` (public information, not a secret). CI and the
+release workflow refuse an APK signed with any other certificate, because it
+would not install over the existing app. Check a local build with
+`scripts/verify-release-apk.sh app/build/outputs/apk/release/app-release.apk`
+(set `CINEX_RELEASE_CERT_SHA256` to test a build signed with another key). The
+key should never change; if it ever has to, every installed copy must be
+uninstalled (losing its data unless restored from a backup) and the new
+certificate's SHA-256 (`apksigner verify --print-certs`, "certificate SHA-256
+digest") goes into that file.
 
 ## Licences
 

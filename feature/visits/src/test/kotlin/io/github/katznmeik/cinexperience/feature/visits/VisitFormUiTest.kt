@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.SavedStateHandle
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.Visit
@@ -49,7 +50,7 @@ class VisitFormUiTest {
     fun logAVisitWithSeatAndRating() {
         val repository = FakeCinexRepository(SampleData.storeWithSplitHall())
         val photos = FakeVisitPhotoStore()
-        val vm = VisitEditViewModel(VisitEditMode.Add(SampleData.DELPHI_LUX_SAAL_1), repository, repository, photos) { LocalDate.of(2026, 10, 14) }
+        val vm = VisitEditViewModel(VisitEditMode.Add(SampleData.DELPHI_LUX_SAAL_1), repository, repository, photos, SavedStateHandle()) { LocalDate.of(2026, 10, 14) }
         var closed = false
         composeRule.setContent {
             CinexTheme { VisitEditEntry(vm, photos, onClose = { closed = true }) }
@@ -84,7 +85,7 @@ class VisitFormUiTest {
         val visit = Visit(id = 900, hallId = SampleData.DELPHI_LUX_SAAL_1, date = LocalDate.of(2026, 9, 1), seatId = SeatId(9_999))
         val repository = FakeCinexRepository(SampleData.storeWithSplitHall().let { it.copy(visits = it.visits + visit) })
         val photos = FakeVisitPhotoStore()
-        val vm = VisitEditViewModel(VisitEditMode.Edit(900), repository, repository, photos)
+        val vm = VisitEditViewModel(VisitEditMode.Edit(900), repository, repository, photos, SavedStateHandle())
         composeRule.setContent {
             CinexTheme { VisitEditEntry(vm, photos, onClose = {}) }
         }

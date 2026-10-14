@@ -42,10 +42,21 @@ if (requireReleaseSigning && !hasReleaseSigning) {
     )
 }
 
+// Versioning: `cinexVersionName` in gradle.properties is the one place to change
+// (MAJOR.MINOR.PATCH). versionCode is derived from it, MAJOR * 10000 + MINOR * 100 + PATCH
+// (1.0.0 → 10000, 1.2.3 → 10203), so every new version installs as an update.
+val appVersionName: String = providers.gradleProperty("cinexVersionName").get()
+val appVersionCode: Int = appVersionName.split(".").let { parts ->
+    require(parts.size == 3 && parts.all { part -> part.toIntOrNull() in 0..99 }) {
+        "cinexVersionName must be MAJOR.MINOR.PATCH with parts 0–99, was '$appVersionName'"
+    }
+    parts[0].toInt() * 10_000 + parts[1].toInt() * 100 + parts[2].toInt()
+}
+
 android {
     defaultConfig {
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
 
     signingConfigs {
@@ -88,6 +99,7 @@ dependencies {
     implementation(projects.feature.backup)
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.navigation.compose)

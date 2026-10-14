@@ -7,4 +7,6 @@ plugins {
 
 dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
+
+    testImplementation(projects.core.testing)
 }

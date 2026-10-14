@@ -17,9 +17,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,8 +59,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -266,7 +271,7 @@ private fun EditorTopBar(hallName: String, canSave: Boolean, canDiscard: Boolean
                 text = "${hallName.uppercase()} · LAYOUT",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold, fontSize = 18.sp),
                 color = CinexTheme.colors.text,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
@@ -278,7 +283,9 @@ private fun EditorTopBar(hallName: String, canSave: Boolean, canDiscard: Boolean
                 onClick = actions::onSave,
                 enabled = canSave,
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(40.dp),
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .heightIn(min = 40.dp),
                 contentPadding = ButtonDefaults.ContentPadding,
             ) {
                 Text("Save", style = MaterialTheme.typography.labelLarge)
@@ -347,15 +354,19 @@ private fun ReadyContent(
 
 /** The canvas grows with the fitted grid up to about half the screen height. */
 @Composable
-private fun canvasMaxHeight(): Dp = (LocalConfiguration.current.screenHeightDp * 0.5f).dp.coerceIn(300.dp, 560.dp)
+private fun canvasMaxHeight(): Dp {
+    val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+    return (windowHeight * 0.5f).coerceIn(300.dp, 560.dp)
+}
 
+/** Paint tools on the left, undo / redo / reference on the right; wraps with large text. */
 @Composable
 private fun ToolRow(state: LayoutEditorUiState, actions: LayoutEditorActions) {
-    Row(
+    FlowRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 12.dp, top = 6.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        itemVerticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         val painting = !state.referenceMode
@@ -371,17 +382,33 @@ private fun ToolRow(state: LayoutEditorUiState, actions: LayoutEditorActions) {
             )
         }
         Spacer(Modifier.weight(1f))
-        IconButton(onClick = actions::onUndo, enabled = state.canUndo, modifier = Modifier.size(40.dp)) {
-            Icon(CinexIcons.Undo, contentDescription = "Undo", tint = CinexTheme.colors.text, modifier = Modifier
-                .size(20.dp)
-                .alpha(if (state.canUndo) 1f else 0.35f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = actions::onUndo, enabled = state.canUndo) {
+                Icon(
+                    CinexIcons.Undo,
+                    contentDescription = "Undo",
+                    tint = CinexTheme.colors.text,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .alpha(if (state.canUndo) 1f else 0.35f),
+                )
+            }
+            IconButton(onClick = actions::onRedo, enabled = state.canRedo) {
+                Icon(
+                    CinexIcons.Redo,
+                    contentDescription = "Redo",
+                    tint = CinexTheme.colors.text,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .alpha(if (state.canRedo) 1f else 0.35f),
+                )
+            }
+            ReferenceToggle(
+                selected = state.referenceMode,
+                hasImage = state.draft?.referenceImagePath != null,
+                onClick = actions::onToggleReferenceMode,
+            )
         }
-        IconButton(onClick = actions::onRedo, enabled = state.canRedo, modifier = Modifier.size(40.dp)) {
-            Icon(CinexIcons.Redo, contentDescription = "Redo", tint = CinexTheme.colors.text, modifier = Modifier
-                .size(20.dp)
-                .alpha(if (state.canRedo) 1f else 0.35f))
-        }
-        ReferenceToggle(selected = state.referenceMode, hasImage = state.draft?.referenceImagePath != null, onClick = actions::onToggleReferenceMode)
     }
 }
 
@@ -392,7 +419,7 @@ private fun ReferenceToggle(selected: Boolean, hasImage: Boolean, onClick: () ->
     val content = if (selected) colors.onPrimary else colors.text
     val base = Modifier
         .minimumInteractiveComponentSize()
-        .height(36.dp)
+        .heightIn(min = 36.dp)
         .clip(SegmentChipShape)
         .toggleable(value = selected, role = Role.Switch, onValueChange = { onClick() })
         .semantics { contentDescription = "Reference screenshot" }
@@ -503,18 +530,20 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PanelTitle(row.title, Modifier.weight(1f))
             Row(
-                modifier = Modifier.toggleable(
-                    value = row.halfSeatOffset,
-                    role = Role.Checkbox,
-                    onValueChange = actions::onHalfSeatOffset,
-                ),
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .toggleable(
+                        value = row.halfSeatOffset,
+                        role = Role.Checkbox,
+                        onValueChange = actions::onHalfSeatOffset,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("½ seat offset", style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.text)
                 Checkbox(checked = row.halfSeatOffset, onCheckedChange = null, modifier = Modifier.padding(start = 8.dp))
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FieldLabel("Numbering", Modifier.padding(end = 4.dp))
             ChoiceChip(
                 text = "Continuous",
@@ -530,7 +559,7 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FieldLabel("Label", Modifier.width(64.dp))
+            FieldLabel("Label", Modifier.widthIn(min = 64.dp))
             SmallTextField(
                 value = state.labelInput,
                 onValueChange = actions::onRowLabel,
@@ -547,7 +576,7 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
         }
         if (row.blocks.isNotEmpty()) {
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FieldLabel("Starts at", Modifier.width(64.dp).padding(top = 9.dp))
+                FieldLabel("Starts at", Modifier.widthIn(min = 64.dp).padding(top = 15.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     row.blocks.forEach { block ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -594,20 +623,31 @@ private fun SmallTextField(
         keyboardOptions = keyboardOptions,
         modifier = Modifier
             .width(width)
-            .height(36.dp)
+            // Drawn 36 dp tall (taller with large text), touched 48 dp.
+            .heightIn(min = 48.dp)
             .semantics { contentDescription = description },
         decorationBox = { inner ->
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .border(1.dp, colors.outline, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (value.isEmpty()) {
-                    Text(placeholder, style = MaterialTheme.typography.bodyMedium, color = colors.textMuted, textAlign = TextAlign.Center)
+            Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 36.dp)
+                        .border(1.dp, colors.fieldOutline, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            placeholder,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.textMuted,
+                            textAlign = TextAlign.Center,
+                            // Not read out: the description says what to enter.
+                            modifier = Modifier.clearAndSetSemantics {},
+                        )
+                    }
+                    inner()
                 }
-                inner()
             }
         },
     )
@@ -662,77 +702,81 @@ private fun ReferencePanel(state: LayoutEditorUiState, hasImage: Boolean, action
 
 @Composable
 private fun Steppers(draft: LayoutDraft, actions: LayoutEditorActions) {
+    val steppers = listOf(
+        StepperSpec(
+            label = "Rows",
+            value = draft.rowCount.toString(),
+            onMinus = { actions.onRowCount(-1) },
+            onPlus = { actions.onRowCount(1) },
+            canMinus = draft.rowCount > 1,
+            canPlus = draft.rowCount < LayoutDraft.MAX_ROWS,
+        ),
+        StepperSpec(
+            label = "Columns",
+            value = draft.columnCount.toString(),
+            onMinus = { actions.onColumnCount(-1) },
+            onPlus = { actions.onColumnCount(1) },
+            canMinus = draft.columnCount > 1,
+            canPlus = draft.columnCount < LayoutDraft.MAX_COLUMNS,
+        ),
+        StepperSpec(
+            label = "Screen width",
+            value = ScreenRules.widthText(draft.screenWidth),
+            onMinus = { actions.onScreenWidthStep(-ScreenRules.STEP) },
+            onPlus = { actions.onScreenWidthStep(ScreenRules.STEP) },
+            canMinus = draft.screenWidth > ScreenRules.MIN_WIDTH,
+            canPlus = draft.screenWidth < ScreenRules.maxWidth(draft.columnCount),
+        ),
+        StepperSpec(
+            label = "Screen distance",
+            value = ScreenRules.distanceText(draft.screenDistance),
+            onMinus = { actions.onScreenDistanceStep(-ScreenRules.STEP) },
+            onPlus = { actions.onScreenDistanceStep(ScreenRules.STEP) },
+            canMinus = draft.screenDistance > ScreenRules.MIN_DISTANCE,
+            canPlus = draft.screenDistance < ScreenRules.MAX_DISTANCE,
+        ),
+    )
+    // Two per row; one per row with large text, so the labels aren't broken mid-word.
+    val perRow = if (LocalDensity.current.fontScale > 1.3f) 1 else 2
     Column(
         modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StepperCard(
-                label = "Rows",
-                value = draft.rowCount.toString(),
-                onMinus = { actions.onRowCount(-1) },
-                onPlus = { actions.onRowCount(1) },
-                canMinus = draft.rowCount > 1,
-                canPlus = draft.rowCount < LayoutDraft.MAX_ROWS,
-                modifier = Modifier.weight(1f),
-            )
-            StepperCard(
-                label = "Columns",
-                value = draft.columnCount.toString(),
-                onMinus = { actions.onColumnCount(-1) },
-                onPlus = { actions.onColumnCount(1) },
-                canMinus = draft.columnCount > 1,
-                canPlus = draft.columnCount < LayoutDraft.MAX_COLUMNS,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StepperCard(
-                label = "Screen width",
-                value = ScreenRules.widthText(draft.screenWidth),
-                onMinus = { actions.onScreenWidthStep(-ScreenRules.STEP) },
-                onPlus = { actions.onScreenWidthStep(ScreenRules.STEP) },
-                canMinus = draft.screenWidth > ScreenRules.MIN_WIDTH,
-                canPlus = draft.screenWidth < ScreenRules.maxWidth(draft.columnCount),
-                modifier = Modifier.weight(1f),
-            )
-            StepperCard(
-                label = "Screen distance",
-                value = ScreenRules.distanceText(draft.screenDistance),
-                onMinus = { actions.onScreenDistanceStep(-ScreenRules.STEP) },
-                onPlus = { actions.onScreenDistanceStep(ScreenRules.STEP) },
-                canMinus = draft.screenDistance > ScreenRules.MIN_DISTANCE,
-                canPlus = draft.screenDistance < ScreenRules.MAX_DISTANCE,
-                modifier = Modifier.weight(1f),
-            )
+        steppers.chunked(perRow).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { StepperCard(it, Modifier.weight(1f)) }
+            }
         }
     }
 }
 
+private class StepperSpec(
+    val label: String,
+    val value: String,
+    val onMinus: () -> Unit,
+    val onPlus: () -> Unit,
+    val canMinus: Boolean,
+    val canPlus: Boolean,
+)
+
 @Composable
-private fun StepperCard(
-    label: String,
-    value: String,
-    onMinus: () -> Unit,
-    onPlus: () -> Unit,
-    canMinus: Boolean,
-    canPlus: Boolean,
-    modifier: Modifier = Modifier,
-) {
+private fun StepperCard(spec: StepperSpec, modifier: Modifier = Modifier) {
+    val label = spec.label
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(CinexTheme.colors.surface)
-            .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            // No end or vertical padding: the buttons' 48 dp touch areas already leave
+            // 6 dp around their 36 dp boxes, so the labels keep their width.
+            .padding(start = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
             Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal), color = CinexTheme.colors.textMuted)
-            Text(value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = CinexTheme.colors.text)
+            Text(spec.value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = CinexTheme.colors.text)
         }
-        StepButton("−", "Decrease ${label.lowercase()}", canMinus, onMinus)
-        Spacer(Modifier.width(2.dp))
-        StepButton("+", "Increase ${label.lowercase()}", canPlus, onPlus)
+        StepButton("−", "Decrease ${label.lowercase()}", spec.canMinus, spec.onMinus)
+        StepButton("+", "Increase ${label.lowercase()}", spec.canPlus, spec.onPlus)
     }
 }
 
@@ -740,7 +784,9 @@ private fun StepperCard(
 private fun StepButton(symbol: String, description: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(36.dp)
+            // Drawn 36 dp, touched 48 dp.
+            .minimumInteractiveComponentSize()
+            .sizeIn(minWidth = 36.dp, minHeight = 36.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(CinexTheme.colors.divider)
             .alpha(if (enabled) 1f else 0.4f)
@@ -748,7 +794,13 @@ private fun StepButton(symbol: String, description: String, enabled: Boolean, on
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(symbol, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), color = CinexTheme.colors.text)
+        Text(
+            symbol,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = CinexTheme.colors.text,
+            // The description says it ("Increase rows"); "+" alone would be read as well.
+            modifier = Modifier.clearAndSetSemantics {},
+        )
     }
 }
 

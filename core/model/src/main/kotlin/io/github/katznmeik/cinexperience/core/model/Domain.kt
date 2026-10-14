@@ -85,7 +85,7 @@ enum class ScreeningFormat(val storageKey: String, val displayName: String) {
  * @property seatId the seat sat in, see [SeatId]; may point to a seat that was
  *   later removed from the layout (then it has no label any more).
  * @property cinemaRatings the cinema-level ratings (§4.5), stored per visit.
- * @property photoPath app-private relative path of the photo (handled in M3).
+ * @property photoPath app-private relative path of the photo (see VisitPhotoStore).
  */
 data class Visit(
     val id: Long = 0,

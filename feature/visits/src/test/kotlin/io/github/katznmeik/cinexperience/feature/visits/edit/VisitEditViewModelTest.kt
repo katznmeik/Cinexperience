@@ -37,7 +37,7 @@ class VisitEditViewModelTest {
     /** Row 7, seat 6 of the split hall (Delphi LUX Saal 1). */
     private val seatG6 = SampleLayouts.splitHall.rows[6].seatIds[9]
 
-    private fun viewModel(mode: VisitEditMode) = VisitEditViewModel(mode, repository, repository, photos, today = { today })
+    private fun viewModel(mode: VisitEditMode) = VisitEditViewModel(mode, repository, repository, photos, SavedStateHandle(), today = { today })
 
     private fun add(hallId: Long? = SampleData.DELPHI_LUX_SAAL_1) = viewModel(VisitEditMode.Add(hallId))
 

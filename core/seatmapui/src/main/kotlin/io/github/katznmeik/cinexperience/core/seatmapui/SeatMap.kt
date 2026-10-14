@@ -250,6 +250,7 @@ private class SeatMapDrawing(
 ) {
     private val dp = density.density
     private val seatPaths: Map<SeatTone, Path>
+    private val noDataRims = Path()
     private val decorated = ArrayList<Triple<Rect, SeatKind, SeatVisual>>()
     private val rowLabels: List<TextLayoutResult?> = labels.rowLabels.map { it?.let { label -> measurer.measure(label, labelStyle) } }
     private val caption = measurer.measure("SCREEN", captionStyle)
@@ -264,6 +265,7 @@ private class SeatMapDrawing(
                 val visual = visuals[cell.id] ?: SeatVisual.Neutral
                 val rect = geometry.cellRect(row, column)
                 paths.getOrPut(visual.tone) { Path() }.addRoundRect(seatRoundRect(rect))
+                if (visual.tone == SeatTone.NO_DATA) noDataRims.addRoundRect(seatRoundRect(rect.noDataRim(dp)))
                 if (cell.kind != SeatKind.STANDARD || visual.isFavourite || visual.tone == SeatTone.AVOID) {
                     decorated += Triple(rect, cell.kind, visual)
                 }
@@ -286,6 +288,7 @@ private class SeatMapDrawing(
         }
 
         seatPaths.forEach { (tone, path) -> drawPath(path, colors.seat.colorOf(tone)) }
+        drawPath(noDataRims, colors.seat.noDataOutline, style = Stroke(width = NO_DATA_RIM_WIDTH * dp))
         decorated.forEach { (rect, kind, visual) -> drawSeatMarks(rect, kind, visual, colors) }
 
         selected?.let { id ->

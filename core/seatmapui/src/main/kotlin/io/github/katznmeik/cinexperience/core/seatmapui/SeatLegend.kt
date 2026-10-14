@@ -12,8 +12,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
@@ -67,6 +68,13 @@ fun SeatSwatch(visual: SeatVisual, modifier: Modifier = Modifier) {
             Path().apply { addRoundRect(seatRoundRect(rect)) },
             colors.seat.colorOf(visual.tone),
         )
+        if (visual.tone == SeatTone.NO_DATA) {
+            drawPath(
+                Path().apply { addRoundRect(seatRoundRect(rect.noDataRim(density))) },
+                colors.seat.noDataOutline,
+                style = Stroke(width = NO_DATA_RIM_WIDTH * density),
+            )
+        }
         drawSeatMarks(rect, SeatKind.STANDARD, visual, colors)
     }
 }

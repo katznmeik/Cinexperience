@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Concept 2, "Favourite seat": one rounded seat with a star cut out of it.
+     Adaptive icon foreground (108 dp); the mark stays inside the 66 dp safe zone.
+     Single colour, so it also works as the monochrome (themed icon) layer. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/cinex_text"
+        android:fillType="evenOdd"
+        android:pathData="M43.14,36h21.71a8.14,8.14 0,0 1 8.14,8.14v14.29a13.57,13.57 0,0 1 -13.57,13.57h-10.86a13.57,13.57 0,0 1 -13.57,-13.57v-14.29a8.14,8.14 0,0 1 8.14,-8.14zM54,41.7L56.88,49.24L64.94,49.65L58.66,54.71L60.76,62.5L54,58.1L47.24,62.5L49.34,54.71L43.06,49.65L51.12,49.24z" />
+</vector>

@@ -25,7 +25,9 @@ import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.testing.SampleLayouts
+import io.github.katznmeik.cinexperience.core.ui.theme.CinexColors
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
+import io.github.katznmeik.cinexperience.core.ui.theme.DarkCinexColors
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailUiState
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailViewModel
@@ -58,11 +60,16 @@ class SeatMapScreenshotTest {
 
     private var repository = FakeCinexRepository(SampleData.storeWithSplitHall())
 
-    private fun capture(name: String, fontScale: Float? = null, content: @Composable () -> Unit) {
+    private fun capture(
+        name: String,
+        fontScale: Float? = null,
+        colors: CinexColors = DarkCinexColors,
+        content: @Composable () -> Unit,
+    ) {
         composeRule.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
-                CinexTheme {
+                CinexTheme(colors) {
                     Box(Modifier.fillMaxSize().background(CinexTheme.colors.background)) { content() }
                 }
             }
@@ -78,14 +85,14 @@ class SeatMapScreenshotTest {
     }
 
     @Composable
-    private fun hallDetail(state: HallDetailUiState) {
+    private fun HallDetail(state: HallDetailUiState) {
         HallDetailScreen(state, onBack = {}, onEditLayout = {}, onAddVisit = {}, onOpenVisit = {}, onSeatClick = {}, onSeatChosen = {})
     }
 
     @Test
     fun hallDetail() {
         val state = hallState(SampleData.DELPHI_LUX_SAAL_1)
-        capture("hall_detail") { hallDetail(state) }
+        capture("hall_detail") { HallDetail(state) }
     }
 
     @Test
@@ -93,7 +100,7 @@ class SeatMapScreenshotTest {
         val seat = SampleLayouts.splitHall.rows[6].seatIds[9] // row 7, centre block
         val state = hallState(SampleData.DELPHI_LUX_SAAL_1) { it.onSeatClick(seat) }
         check((state as HallDetailUiState.Loaded).selectedSeat?.label == SeatLabel("7", 6))
-        capture("hall_detail_selected_seat") { hallDetail(state) }
+        capture("hall_detail_selected_seat") { HallDetail(state) }
     }
 
     /** The visit history below the map, on a tall screen so it is fully visible. */
@@ -114,7 +121,7 @@ class SeatMapScreenshotTest {
         )
         repository.store.value = repository.store.value.copy(visits = visits)
         val state = hallState(SampleData.DELPHI_LUX_SAAL_1)
-        capture("hall_detail_visit_history") { hallDetail(state) }
+        capture("hall_detail_visit_history") { HallDetail(state) }
     }
 
     /**
@@ -126,7 +133,7 @@ class SeatMapScreenshotTest {
     fun hallDetailRatedTall() {
         repository = FakeCinexRepository(RatedHallFixture.store())
         val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.favourite) }
-        capture("hall_detail_rated_tall") { hallDetail(state) }
+        capture("hall_detail_rated_tall") { HallDetail(state) }
     }
 
     /** The same at phone size: what is visible without scrolling. */
@@ -134,7 +141,27 @@ class SeatMapScreenshotTest {
     fun hallDetailRated() {
         repository = FakeCinexRepository(RatedHallFixture.store())
         val state = hallState(RatedHallFixture.HALL)
-        capture("hall_detail_rated") { hallDetail(state) }
+        capture("hall_detail_rated") { HallDetail(state) }
+    }
+
+    /**
+     * Contrast fix for the owner to judge (M7): the rated hall with "no data" seats as
+     * before (dark fill only, 1.5:1 against the card) and as now (with the lighter rim,
+     * 3.6:1). Same map and legend in both.
+     */
+    @Test
+    fun noDataSeatContrastBeforeAndAfter() {
+        repository = FakeCinexRepository(RatedHallFixture.store())
+        val state = hallState(RatedHallFixture.HALL)
+        val before = DarkCinexColors.copy(seat = DarkCinexColors.seat.copy(noDataOutline = DarkCinexColors.seat.noData))
+        capture("seat_contrast_before", colors = before) { HallDetail(state) }
+    }
+
+    @Test
+    fun noDataSeatContrastAfter() {
+        repository = FakeCinexRepository(RatedHallFixture.store())
+        val state = hallState(RatedHallFixture.HALL)
+        capture("seat_contrast_after") { HallDetail(state) }
     }
 
     /** A seat set to "avoid" manually: the Avoid button is marked active. */
@@ -143,7 +170,7 @@ class SeatMapScreenshotTest {
     fun hallDetailManualOverride() {
         repository = FakeCinexRepository(RatedHallFixture.store())
         val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.manualAvoid) }
-        capture("hall_detail_manual_override") { hallDetail(state) }
+        capture("hall_detail_manual_override") { HallDetail(state) }
     }
 
     /** Large font sizes: the colour buttons wrap into two rows, labels and scores stay whole. */
@@ -152,7 +179,7 @@ class SeatMapScreenshotTest {
     fun hallDetailFontScale150() {
         repository = FakeCinexRepository(RatedHallFixture.store())
         val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.manualAvoid) }
-        capture("hall_detail_font_150", fontScale = 1.5f) { hallDetail(state) }
+        capture("hall_detail_font_150", fontScale = 1.5f) { HallDetail(state) }
     }
 
     @Test
@@ -160,7 +187,7 @@ class SeatMapScreenshotTest {
     fun hallDetailFontScale200() {
         repository = FakeCinexRepository(RatedHallFixture.store())
         val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.favourite) }
-        capture("hall_detail_font_200", fontScale = 2f) { hallDetail(state) }
+        capture("hall_detail_font_200", fontScale = 2f) { HallDetail(state) }
     }
 
     /** A drawn hall without any visits: grey map, "–" scores. */
@@ -171,13 +198,13 @@ class SeatMapScreenshotTest {
             s.copy(visits = s.visits.filter { it.hallId != SampleData.DELPHI_LUX_SAAL_1 })
         }
         val state = hallState(SampleData.DELPHI_LUX_SAAL_1) { it.onSeatClick(RatedHallFixture.noData) }
-        capture("hall_detail_no_ratings") { hallDetail(state) }
+        capture("hall_detail_no_ratings") { HallDetail(state) }
     }
 
     @Test
     fun hallDetailEmpty() {
         val state = hallState(SampleData.DELPHI_LUX_SAAL_6)
-        capture("hall_detail_empty") { hallDetail(state) }
+        capture("hall_detail_empty") { HallDetail(state) }
     }
 
     @Test
@@ -188,7 +215,7 @@ class SeatMapScreenshotTest {
             },
         )
         val state = hallState(SampleData.DELPHI_LUX_SAAL_6)
-        capture("hall_detail_unreadable") { hallDetail(state) }
+        capture("hall_detail_unreadable") { HallDetail(state) }
     }
 
     private val noActions = object : LayoutEditorActions {}

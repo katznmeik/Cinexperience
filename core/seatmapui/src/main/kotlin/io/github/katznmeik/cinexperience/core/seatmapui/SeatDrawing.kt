@@ -28,6 +28,12 @@ fun seatRoundRect(rect: Rect): RoundRect {
     return RoundRect(rect, topLeft = top, topRight = top, bottomRight = bottom, bottomLeft = bottom)
 }
 
+/** Width in dp of the light rim of "no data" seats (`CinexTheme.colors.seat.noDataOutline`). */
+const val NO_DATA_RIM_WIDTH: Float = 1f
+
+/** The rim's centre line: inset by half its width, so the seat keeps its size. [dp] is px per dp. */
+fun Rect.noDataRim(dp: Float): Rect = deflate(NO_DATA_RIM_WIDTH * dp / 2f)
+
 /** Viewport size of the glyph path data (see [SeatKindGlyphs]). */
 private const val GLYPH_VIEWPORT = 24f
 

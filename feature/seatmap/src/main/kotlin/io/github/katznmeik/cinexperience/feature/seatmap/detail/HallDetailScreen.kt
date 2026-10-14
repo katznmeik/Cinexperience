@@ -241,7 +241,7 @@ private fun ColumnScope.LoadedContent(
 private fun EditLayoutAction(onClick: () -> Unit) {
     Row(
         modifier = Modifier
-            .height(44.dp)
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp),
@@ -665,14 +665,14 @@ private fun VisitHistoryRow(visit: HallVisitRow, onClick: () -> Unit) {
                 text = visit.filmTitle ?: "Untitled",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = if (visit.filmTitle == null) CinexTheme.colors.textMuted else CinexTheme.colors.text,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 visit.detailText(),
                 style = MaterialTheme.typography.bodySmall,
                 color = CinexTheme.colors.textMuted,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }

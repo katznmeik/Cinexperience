@@ -45,11 +45,11 @@ private fun CinexColors.toMaterialColorScheme() = darkColorScheme(
 
 /**
  * The app theme. Dark only (spec §7): there is deliberately no light variant and
- * no dynamic colour.
+ * no dynamic colour. [colors] is only overridden by screenshot tests that compare
+ * a token change with the previous value; the app always uses [DarkCinexColors].
  */
 @Composable
-fun CinexTheme(content: @Composable () -> Unit) {
-    val colors = DarkCinexColors
+fun CinexTheme(colors: CinexColors = DarkCinexColors, content: @Composable () -> Unit) {
     CompositionLocalProvider(
         LocalCinexColors provides colors,
         LocalCinexTextStyles provides DefaultCinexTextStyles,
