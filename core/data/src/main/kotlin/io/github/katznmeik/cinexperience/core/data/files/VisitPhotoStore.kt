@@ -129,11 +129,7 @@ internal class FileVisitPhotoStore(
             inSampleSize = sampleSize(max(bounds.outWidth, bounds.outHeight), VisitPhotoStore.MAX_DIMENSION)
         }
         val decoded = open(uri).use { BitmapFactory.decodeStream(it, null, options) } ?: throw IOException("Couldn't decode the photo")
-        val orientation = try {
-            open(uri).use { ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }
-        } catch (e: IOException) {
-            ExifInterface.ORIENTATION_NORMAL // no readable EXIF data (e.g. a PNG): keep as is
-        }
+        val orientation = readOrientation { open(uri) }
         val longer = max(decoded.width, decoded.height)
         val scale = if (longer > VisitPhotoStore.MAX_DIMENSION) VisitPhotoStore.MAX_DIMENSION.toFloat() / longer else 1f
         val matrix = orientationMatrix(orientation).apply { preScale(scale, scale) }
@@ -235,6 +231,17 @@ internal class FileVisitPhotoStore(
             var sample = 1
             while (longer / (sample * 2) >= target) sample *= 2
             return sample
+        }
+
+        /**
+         * The EXIF orientation of the image from [open]. Missing or unreadable EXIF
+         * data (e.g. a PNG, a damaged header) never fails an import: it counts as
+         * [ExifInterface.ORIENTATION_NORMAL].
+         */
+        internal fun readOrientation(open: () -> InputStream): Int = try {
+            open().use { ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }
+        } catch (e: Exception) {
+            ExifInterface.ORIENTATION_NORMAL
         }
 
         /** The transform that turns an image with this EXIF [orientation] upright. */

@@ -107,6 +107,17 @@ class VisitPhotoStoreTest {
     }
 
     @Test
+    fun unreadableExifDataCountsAsUpright() {
+        val failing = object : java.io.InputStream() {
+            override fun read(): Int = throw IllegalStateException("damaged EXIF block")
+        }
+        assertEquals(ExifInterface.ORIENTATION_NORMAL, FileVisitPhotoStore.readOrientation { failing })
+        assertEquals(ExifInterface.ORIENTATION_NORMAL, FileVisitPhotoStore.readOrientation { throw SecurityException("no grant") })
+        val rotated = jpegFile(30, 20, ExifInterface.ORIENTATION_ROTATE_90)
+        assertEquals(ExifInterface.ORIENTATION_ROTATE_90, FileVisitPhotoStore.readOrientation { rotated.inputStream() })
+    }
+
+    @Test
     fun rotatedLargePhotosAreDownscaledToo() = runTest {
         val path = store.importPhoto(Uri.fromFile(jpegFile(3000, 1000, ExifInterface.ORIENTATION_ROTATE_90)).toString())
         val loaded = store.loadPhoto(path)!!
