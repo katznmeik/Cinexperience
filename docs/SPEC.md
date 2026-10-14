@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 12)
+**Last updated:** 2026-10-13 (rev. 13)
 
 ---
 
@@ -168,10 +168,11 @@ Bottom navigation with three tabs: **Cinemas**, **Rankings**, **Settings**.
 - Actions: edit cinema, add hall.
 
 ### 6.3 Hall detail
-- **Seat map** (zoomable/pannable) coloured per §5. Tap a seat →
-  bottom sheet: average seat rating, visits in that seat, approximate
-  viewing angle to the screen (derived from screen width/distance), set colour
-  override, set/unset favourite.
+- **Seat map** (zoomable/pannable) coloured per §5, with a legend (Great · OK ·
+  Avoid · No data · Favourite). Tap a seat → an inline **seat card** below the map:
+  average seat rating, visits in that seat, approximate viewing angle to the
+  screen (derived from screen width/distance), colour override (Auto / Great /
+  OK / Avoid), mark/remove favourite.
 - **Score breakdown:** six categories with bars and rating counts.
 - **Visit history:** newest first; tap to open/edit a visit.
 - Button **"Add visit"** (hall pre-selected).
