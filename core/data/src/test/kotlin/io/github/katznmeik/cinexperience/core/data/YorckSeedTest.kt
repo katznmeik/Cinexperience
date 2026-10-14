@@ -13,6 +13,7 @@ import io.github.katznmeik.cinexperience.core.model.labels
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -269,19 +270,22 @@ class YorckSeedTest {
     }
 
     @Test
-    fun twoAreaHallsShowTheBalconyBehindTheStallsAfterASpacerRow() {
-        for (key in listOf("capitol-dahlem/saal-1", "cinema-paris/saal-1", "delphi-filmpalast/saal-1")) {
+    fun twoAreaHallsShowTheBalconyBehindTheStallsWithYorcksGap() {
+        // The balcony keeps the gap yorck.de draws above it, in spacer rows.
+        val gaps = mapOf("capitol-dahlem/saal-1" to 2, "cinema-paris/saal-1" to 1, "delphi-filmpalast/saal-1" to 2)
+        for ((key, gap) in gaps) {
             val labels = layout(key).labels().rowLabels
             val first = labels.indexOf("R1")
-            assertTrue(key, first > 0)
-            assertNull(key, labels[first - 1])
+            assertTrue(key, first > gap)
+            assertEquals(key, List(gap) { null }, labels.subList(first - gap, first))
+            assertNotNull(key, labels[first - gap - 1])
             // Every row before it belongs to the stalls, every seat row after it to the balcony.
             assertTrue(key, labels.take(first).filterNotNull().none { it.startsWith("R") })
             assertTrue(key, labels.drop(first).filterNotNull().all { it.startsWith("R") })
         }
-        // Kant Kino Saal 1 has letter rows: the stalls O (at the screen) to A, the balcony T to P.
+        // Kant Kino Saal 1 has letter rows: the stalls O (at the screen) to A, four spacer rows, the balcony T to P.
         assertEquals(
-            ("ONMLKJIHGFEDCBA".map { "$it" }) + null + "TSRQP".map { "$it" },
+            ("ONMLKJIHGFEDCBA".map { "$it" }) + List(4) { null } + "TSRQP".map { "$it" },
             layout("kant-kino/saal-1").labels().rowLabels,
         )
     }

@@ -11,7 +11,7 @@ What comes from where:
   OriginalStatus 3 = wheelchair space (W), 7 = companion seat (C), 5 = permanently blocked
   (a normal seat), SeatStyle 1/3 = the halves of a sofa (F).
 - The grid comes from the drawn page: seat pitch, columns and rows, spacer rows for wide
-  vertical gaps within an area, exactly one spacer row before a second area (balcony).
+  vertical gaps; a second area (balcony) keeps the gap yorck.de draws above it (at least one spacer row).
 - Aisles (`|`): within a section (seat rows between spacer rows), a column that is empty in
   every row and lies between seats in at least two rows is an aisle; in each row, the empty
   run between two seats that contains such a column becomes `|`. Every other empty cell is a
@@ -136,12 +136,11 @@ def grid(rows):
     for i, r in enumerate(rows):
         if i:
             prev = rows[i - 1]
-            if prev['area'] != r['area']:
-                out.append(None)  # the balcony follows the stalls after one spacer row
-            else:
-                gap = (r['y'] - prev['y']) / pitch_y
-                assert gap > 0.5, f'rows {prev["label"]} and {r["label"]} overlap'
-                out += [None] * max(0, round(gap) - 1)
+            gap = (r['y'] - prev['y']) / pitch_y
+            assert gap > 0.5, f'rows {prev["label"]} and {r["label"]} overlap'
+            # A balcony keeps the gap yorck.de draws above it, at least one spacer row.
+            spacers = round(gap) - 1
+            out += [None] * (max(1, spacers) if prev['area'] != r['area'] else max(0, spacers))
         out.append(r)
     return out
 

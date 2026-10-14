@@ -263,7 +263,7 @@ Don't duplicate config in module build files.
   outside the crawl folder). `scripts/seed/yorck_seatplan_to_layout.py <crawl>
   <seed> <fixture>` rewrites the seed's layouts (labels, numbers and kinds from
   the plan; columns, spacer rows and aisles from the drawn seats; a balcony
-  after one spacer row; existing gaps/aisles kept where the seats are
+  keeps the gap yorck.de draws above it; existing gaps/aisles kept where the seats are
   unchanged; halls without a screen get columns × 1.5) and
   `core/data/src/test/resources/seed/yorck-seat-numbers.json` (Yorck's row
   label, seat text and kind of every seat). A new hall needs a seed entry and a

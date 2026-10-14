@@ -1,5 +1,5 @@
 {
-  "seedVersion": 3,
+  "seedVersion": 4,
   "cinemas": [
     {
       "seedKey": "babylon-kreuzberg",
@@ -126,6 +126,7 @@
               { "label": "15", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
               { "label": "16", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
               { "cells": "........." },
+              { "cells": "........." },
               { "label": "R1", "cells": ".SSSSSSS.", "direction": "RIGHT_TO_LEFT" },
               { "label": "R2", "cells": ".SSSSSSS.", "direction": "RIGHT_TO_LEFT" },
               { "label": "R3", "cells": "..SSSSSS.", "direction": "RIGHT_TO_LEFT" },
@@ -213,6 +214,7 @@
               { "label": "23", "cells": "..SSSSSSSSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
               { "label": "24", "cells": "...SSSSSSSSSSSSSSSSSSS...", "direction": "RIGHT_TO_LEFT" },
               { "label": "25", "cells": "SSSSSSSSSSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "cells": "........................." },
               { "cells": "........................." },
               { "label": "R1", "cells": "..........SSSSSSS........", "direction": "RIGHT_TO_LEFT" },
               { "label": "R2", "cells": "SSS...SSSSSSSSSSSSSS..SSS", "direction": "RIGHT_TO_LEFT" },
@@ -554,6 +556,9 @@
               { "label": "C", "cells": "SSSSSSSSSSSFFSS" },
               { "label": "B", "cells": ".SSSSSSSSSSSSSS" },
               { "label": "A", "cells": ".SSSSSSSSSSSSSS" },
+              { "cells": "..............." },
+              { "cells": "..............." },
+              { "cells": "..............." },
               { "cells": "..............." },
               { "label": "T", "cells": "...S.SS.SS.SS.S" },
               { "label": "S", "cells": "...SS.SS.SS.SS." },
