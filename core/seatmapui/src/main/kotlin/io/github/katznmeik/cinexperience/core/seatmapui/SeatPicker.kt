@@ -93,6 +93,9 @@ fun List<SeatRowChoice>.findSeat(rowLabel: String, number: Int, kind: SeatKind =
  * [SeatMap]. Plain chips (no dialog), each announced with the seat's full label.
  * Split rows show their blocks separately (numbers may restart per block). When
  * [selectedSeatId] changes (e.g. tapped on the map), the shown row follows it.
+ *
+ * @param seatVisuals the map's seat states; when not empty, each chip also
+ *   announces its seat's state ("Row 7, Seat 10, great, favourite").
  */
 @Composable
 fun SeatPicker(
@@ -100,6 +103,7 @@ fun SeatPicker(
     selectedSeatId: SeatId?,
     onSeatSelected: (SeatId) -> Unit,
     modifier: Modifier = Modifier,
+    seatVisuals: Map<SeatId, SeatVisual> = emptyMap(),
 ) {
     if (choices.isEmpty()) return
     val initialRow = remember(choices, selectedSeatId) {
@@ -130,7 +134,11 @@ fun SeatPicker(
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 block.forEach { seat ->
-                    val description = row.descriptionOf(seat)
+                    val description = if (seatVisuals.isEmpty()) {
+                        row.descriptionOf(seat)
+                    } else {
+                        "${row.descriptionOf(seat)}, ${(seatVisuals[seat.seatId] ?: SeatVisual.Neutral).stateText}"
+                    }
                     ChoiceChip(
                         text = seat.shortText,
                         selected = seat.seatId == selectedSeatId,

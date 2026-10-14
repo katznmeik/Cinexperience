@@ -74,6 +74,9 @@ object CinexIcons {
     /** "×": close a form. */
     val Close: ImageVector by lazy { strokeIcon("Close", "M6 6l12 12M18 6L6 18") }
 
+    /** "✓": marks the active choice of a button row (e.g. a seat's colour override). */
+    val Check: ImageVector by lazy { strokeIcon("Check", "M5 12.5l4.5 4.5L19 7.5", strokeWidth = 2.6f) }
+
     /** Small "▾" of dropdown-like fields. */
     val ChevronDown: ImageVector by lazy { strokeIcon("ChevronDown", "M6 9l6 6 6-6") }
 

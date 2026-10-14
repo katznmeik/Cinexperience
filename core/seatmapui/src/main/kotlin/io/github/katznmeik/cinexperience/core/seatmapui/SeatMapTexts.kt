@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.core.seatmapui
 
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
+import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.ViewingAngle
 import io.github.katznmeik.cinexperience.core.ui.text.countText
@@ -22,6 +23,22 @@ fun seatMapDescription(hallName: String, labels: LayoutLabels): String {
     val including = if (special.isEmpty()) "" else ", including ${special.joinToString(", ")}"
     return "Seat map of $hallName: ${countText(rows, "row")}, ${countText(labels.seats.size, "seat")}$including. " +
         "Screen at the top."
+}
+
+/**
+ * Screen-reader summary of the seat colours, e.g. "Seat colours: 12 great,
+ * 8 OK, 3 avoid, 160 no data. Favourite: Row 7, Seat 8." Tones without seats are
+ * left out; seats missing from [visuals] count as no data.
+ */
+fun seatStatesDescription(visuals: Map<SeatId, SeatVisual>, labels: LayoutLabels): String {
+    val counts = labels.seats.keys.groupingBy { (visuals[it] ?: SeatVisual.Neutral).tone }.eachCount()
+    val tones = listOf(SeatTone.GREAT, SeatTone.OK, SeatTone.AVOID, SeatTone.NO_DATA)
+        .mapNotNull { tone -> counts[tone]?.let { "$it ${SeatVisual(tone).stateText}" } }
+    val favourite = labels.seats.keys.firstOrNull { visuals[it]?.isFavourite == true }?.let { labels.labelOf(it) }
+    return buildString {
+        if (tones.isNotEmpty()) append("Seat colours: ${tones.joinToString(", ")}.")
+        if (favourite != null) append(" Favourite: ${favourite.description}.")
+    }.trim()
 }
 
 /** "≈ 38° viewing angle" from the horizontal field of view. */
