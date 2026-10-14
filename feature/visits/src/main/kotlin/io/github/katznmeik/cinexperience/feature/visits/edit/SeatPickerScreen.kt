@@ -90,6 +90,14 @@ internal fun SeatPickerScreen(state: VisitEditUiState, picker: SeatPickerState, 
                 color = CinexTheme.colors.textMuted,
                 modifier = Modifier.padding(horizontal = 8.dp),
             )
+            if (state.seatMissing && !state.layoutUnreadable) {
+                Text(
+                    text = "Your saved seat is no longer in this hall's layout. Pick a seat, or choose \"No seat\" to remove it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CinexTheme.colors.text,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                )
+            }
             Column(
                 Modifier
                     .fillMaxWidth()

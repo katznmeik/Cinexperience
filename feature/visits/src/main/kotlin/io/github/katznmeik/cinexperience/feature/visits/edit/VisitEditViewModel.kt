@@ -1,8 +1,10 @@
 package io.github.katznmeik.cinexperience.feature.visits.edit
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
@@ -43,13 +45,16 @@ sealed interface VisitEditMode {
  * session are; deleting the visit deletes its photo. Files left behind (e.g. the
  * system closed the app mid-edit) are removed by the startup sweep.
  *
- * The form survives configuration changes; it is not restored after process death.
+ * The form, the photos added in this session and a pending camera capture are kept
+ * in [savedState], so the edit also survives process death (e.g. while the camera
+ * app is in front).
  */
 class VisitEditViewModel(
     private val mode: VisitEditMode,
     private val cinemaRepository: CinemaRepository,
     private val visitRepository: VisitRepository,
     private val photoStore: VisitPhotoStore,
+    private val savedState: SavedStateHandle = SavedStateHandle(),
     today: () -> LocalDate = LocalDate::now,
 ) : ViewModel() {
 
@@ -79,8 +84,41 @@ class VisitEditViewModel(
     private var cinemasLoaded = false
 
     init {
-        if (mode is VisitEditMode.Edit) viewModelScope.launch { loadVisit(mode.visitId) }
+        val draft = VisitDraft.decodeOrNull(savedState.get<String>(DRAFT_KEY))
+        if (draft != null) {
+            restore(draft)
+        } else if (mode is VisitEditMode.Edit) {
+            viewModelScope.launch { loadVisit(mode.visitId) }
+        }
         viewModelScope.launch { observeCinemas() }
+    }
+
+    private fun restore(draft: VisitDraft) {
+        baseline = draft.baseline.toForm()
+        visitId = draft.visitId
+        sessionPhotos += draft.sessionPhotos
+        pendingCapture = draft.pendingCapture
+        visitLoaded = true
+        _uiState.update {
+            it.copy(form = draft.form.toForm(), isEdit = draft.isEdit, isPhotoBusy = draft.pendingCapture != null).derived()
+        }
+    }
+
+    /** Keeps the edit in [savedState] (see the class comment). */
+    private fun persist() {
+        if (!visitLoaded) return
+        savedState[DRAFT_KEY] = if (state.isClosed) {
+            null
+        } else {
+            VisitDraft(
+                form = FormDraft.of(state.form),
+                baseline = FormDraft.of(baseline),
+                visitId = visitId,
+                isEdit = state.isEdit,
+                sessionPhotos = sessionPhotos.toList(),
+                pendingCapture = pendingCapture,
+            ).encode()
+        }
     }
 
     private suspend fun loadVisit(id: Long) {
@@ -100,6 +138,7 @@ class VisitEditViewModel(
         baseline = form
         visitLoaded = true
         _uiState.update { it.copy(form = form).derived() }
+        persist()
     }
 
     private suspend fun observeCinemas() {
@@ -210,6 +249,7 @@ class VisitEditViewModel(
                 val uri = photoStore.createCaptureUri()
                 pendingCapture = uri
                 _uiState.update { it.copy(cameraRequest = uri) }
+                persist()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -228,6 +268,7 @@ class VisitEditViewModel(
         val capture = pendingCapture
         pendingCapture = null
         _uiState.update { it.copy(cameraRequest = null, isPhotoBusy = false, message = NO_CAMERA) }
+        persist()
         if (capture != null) viewModelScope.launch { deleteCaptureQuietly(capture) }
     }
 
@@ -239,6 +280,7 @@ class VisitEditViewModel(
             if (success) importPhoto(capture)
             deleteCaptureQuietly(capture)
             _uiState.update { it.copy(isPhotoBusy = false, cameraRequest = null) }
+            persist()
         }
     }
 
@@ -259,6 +301,7 @@ class VisitEditViewModel(
             }
             sessionPhotos += path
             editForm { it.copy(photoPath = path) }
+            persist()
         } catch (e: CancellationException) {
             throw e
         } catch (e: IOException) {
@@ -287,6 +330,8 @@ class VisitEditViewModel(
             val kept = form.photoPath
             val replaced = baseline.photoPath?.takeIf { it != kept }
             deleteSessionPhotos(keep = kept)
+            // The kept photo now belongs to the saved visit: a later discard must not delete it.
+            sessionPhotos.clear()
             replaced?.let { deleteQuietly(it) }
             visitId = result.visitId
             if (result.seatCleared) {
@@ -296,9 +341,11 @@ class VisitEditViewModel(
                 _uiState.update {
                     it.copy(isSaving = false, isEdit = true, form = saved, message = SEAT_CLEARED_ON_SAVE).derived()
                 }
+                persist()
             } else {
                 baseline = form
                 _uiState.update { it.copy(isSaving = false, isClosed = true).derived() }
+                persist()
             }
         }
     }
@@ -318,6 +365,7 @@ class VisitEditViewModel(
     fun discard() {
         if (state.isSaving || state.isClosed) return
         _uiState.update { it.copy(dialog = null, isClosed = true) }
+        persist()
         pendingCapture?.let { capture ->
             pendingCapture = null
             viewModelScope.launch { deleteCaptureQuietly(capture) }
@@ -346,6 +394,7 @@ class VisitEditViewModel(
             deleteSessionPhotos(keep = null)
             baseline.photoPath?.let { deleteQuietly(it) }
             _uiState.update { it.copy(isSaving = false, isClosed = true) }
+            persist()
         }
     }
 
@@ -360,6 +409,7 @@ class VisitEditViewModel(
     private suspend fun deleteSessionPhotos(keep: String?) {
         val obsolete = sessionPhotos.filter { it != keep }
         sessionPhotos.retainAll(setOfNotNull(keep))
+        persist()
         obsolete.forEach { deleteQuietly(it) }
     }
 
@@ -391,6 +441,7 @@ class VisitEditViewModel(
             val edited = it.copy(form = transform(it.form)).derived()
             if (seatClearedMessage && edited.form.seatId == null) edited.copy(message = SEAT_CLEARED) else edited
         }
+        persist()
     }
 
     /** This state with everything derived from the form and the cinema list. */
@@ -434,6 +485,9 @@ class VisitEditViewModel(
     }
 
     companion object {
+        /** Key of the [VisitDraft] in the saved state. */
+        internal const val DRAFT_KEY = "visitEdit.draft"
+
         const val MAX_FILM_LENGTH = 200
         const val MAX_NOTE_LENGTH = 4000
 
@@ -458,7 +512,7 @@ class VisitEditViewModel(
             visitRepository: VisitRepository,
             photoStore: VisitPhotoStore,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { VisitEditViewModel(mode, cinemaRepository, visitRepository, photoStore) }
+            initializer { VisitEditViewModel(mode, cinemaRepository, visitRepository, photoStore, createSavedStateHandle()) }
         }
     }
 }

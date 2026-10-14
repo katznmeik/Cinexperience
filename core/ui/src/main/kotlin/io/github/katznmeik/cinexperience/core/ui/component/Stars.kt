@@ -25,7 +25,7 @@ const val MAX_STARS: Int = 5
  * Five tappable stars for an optional 1–5 rating: filled light up to [rating],
  * outlined muted after it. Tapping a star calls [onRate] with its value; the
  * caller clears the rating when the already selected star is tapped again (all
- * ratings are optional). Each star has a [touchSize] touch target and is
+ * ratings are optional). Each star has a [touchSize] (at least 48 dp) touch target and is
  * announced as "[label]: n stars".
  */
 @Composable
@@ -35,7 +35,7 @@ fun StarRatingInput(
     label: String,
     modifier: Modifier = Modifier,
     starSize: Dp = 24.dp,
-    touchSize: Dp = 40.dp,
+    touchSize: Dp = 48.dp,
 ) {
     Row(modifier.selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
         for (value in 1..MAX_STARS) {

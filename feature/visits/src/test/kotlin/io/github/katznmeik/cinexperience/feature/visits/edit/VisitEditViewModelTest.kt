@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.visits.edit
 
+import androidx.lifecycle.SavedStateHandle
 import io.github.katznmeik.cinexperience.core.model.CinemaCategory
 import io.github.katznmeik.cinexperience.core.model.HallCategory
 import io.github.katznmeik.cinexperience.core.model.Rating
@@ -499,6 +500,80 @@ class VisitEditViewModelTest {
         assertTrue(vm.state.isClosed)
         assertEquals("Second try", stored(saved.id)!!.filmTitle)
         assertEquals(SampleData.visits.size + 1, repository.store.value.visits.size)
+    }
+
+    /** Regression: the photo of a visit saved without its seat must survive a later discard. */
+    @Test
+    fun aPhotoSavedWhileTheFormStaysOpenIsNotDeletedOnDiscard() {
+        val vm = add()
+        vm.pickSeat(seatG6)
+        vm.onGalleryPhotoPicked("content://media/picked/1")
+        repository.store.value = repository.store.value.copy(
+            halls = repository.store.value.halls.map {
+                if (it.id == SampleData.DELPHI_LUX_SAAL_1) it.copy(layout = SeatLayout.fromPatterns("SSSS", firstSeatId = 500)) else it
+            },
+        )
+        vm.save()
+        assertFalse(vm.state.isClosed) // seat cleared: the form stays open
+        val saved = repository.store.value.visits.last()
+        assertEquals("photos/visit-1.jpg", saved.photoPath)
+
+        vm.toggleFormat(ScreeningFormat.OV)
+        vm.requestClose()
+        vm.discard()
+
+        assertTrue(photos.deleted.isEmpty())
+        assertEquals(setOf("photos/visit-1.jpg"), photos.files)
+        assertEquals("photos/visit-1.jpg", stored(saved.id)!!.photoPath)
+    }
+
+    @Test
+    fun theEditSurvivesProcessDeathDuringTheCameraHandOff() {
+        val handle = SavedStateHandle()
+        val first = VisitEditViewModel(VisitEditMode.Add(SampleData.DELPHI_LUX_SAAL_1), repository, repository, photos, handle) { today }
+        first.setFilmTitle("Anora")
+        first.pickSeat(seatG6)
+        first.rateHall(HallCategory.SOUND, 4)
+        first.toggleFormat(ScreeningFormat.OMU)
+        first.onGalleryPhotoPicked("content://media/picked/1")
+        first.requestCamera()
+        val capture = requireValue(first.state.cameraRequest)
+        first.onCameraLaunched()
+
+        // The process dies while the camera app is open; a new ViewModel gets the saved state.
+        val restored = VisitEditViewModel(VisitEditMode.Add(SampleData.DELPHI_LUX_SAAL_1), repository, repository, photos, handle) { today }
+        with(restored.state) {
+            assertEquals(VisitEditStatus.Ready, status)
+            assertEquals("Anora", form.filmTitle)
+            assertEquals(seatG6, form.seatId)
+            assertEquals(Rating(4), form.hallRatings.sound)
+            assertEquals(ScreeningFormat.OMU, form.format)
+            assertTrue(hasUnsavedChanges)
+        }
+        restored.onCameraResult(success = true)
+        assertEquals(listOf("content://media/picked/1", capture), photos.importedSources)
+        assertFalse(capture in photos.captures)
+        val cameraPhoto = requireValue(restored.state.form.photoPath)
+
+        // Both photos of the lost session are still known: discarding deletes them.
+        restored.requestClose()
+        restored.discard()
+        assertEquals(setOf("photos/visit-1.jpg", cameraPhoto), photos.deleted.toSet())
+        assertNull(handle.get<String>(VisitEditViewModel.DRAFT_KEY)) // nothing to restore any more
+    }
+
+    @Test
+    fun aRestoredEditKeepsItsBaselineAndVisit() {
+        val id = storedVisit()
+        val handle = SavedStateHandle()
+        VisitEditViewModel(VisitEditMode.Edit(id), repository, repository, photos, handle) { today }.setNote("Changed")
+        val restored = VisitEditViewModel(VisitEditMode.Edit(id), repository, repository, photos, handle) { today }
+        assertTrue(restored.state.isEdit)
+        assertEquals("Changed", restored.state.form.note)
+        assertTrue(restored.state.hasUnsavedChanges)
+        restored.save()
+        assertEquals("Changed", stored(id)!!.note)
+        assertEquals(1, repository.store.value.visits.count { it.id == id })
     }
 
     @Test

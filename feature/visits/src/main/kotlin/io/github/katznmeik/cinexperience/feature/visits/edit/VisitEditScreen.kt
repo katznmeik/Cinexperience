@@ -213,6 +213,10 @@ internal fun VisitEditEntry(
     VisitEditScreen(state, photo, actions)
 }
 
+/** Shown with a saved seat that was since removed from the hall's layout. */
+internal const val SEAT_MISSING_HINT =
+    "Your saved seat is no longer in this hall's layout. It is kept unless you pick another seat or remove it."
+
 /** Decoded size of the photo thumbnail (px); the tile is 96 dp. */
 private const val THUMBNAIL_DECODE_SIZE = 512
 
@@ -607,16 +611,20 @@ private fun SeatCard(state: VisitEditUiState, actions: VisitEditActions) {
         state.seatPickerUnavailable?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
         }
+        if (state.seatMissing && !state.layoutUnreadable) {
+            Text(SEAT_MISSING_HINT, style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
+        }
         if (form.seatId != null) {
-            Text(
-                "Remove seat",
-                style = MaterialTheme.typography.labelMedium,
-                color = CinexTheme.colors.textMuted,
+            Box(
                 modifier = Modifier
+                    .heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .clickable(role = Role.Button, onClick = actions::onClearSeat)
-                    .padding(vertical = 6.dp),
-            )
+                    .padding(end = 12.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text("Remove seat", style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.textMuted)
+            }
         }
         RowDivider()
         Text("How was this seat?", style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text)
