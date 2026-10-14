@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 11)
+**Last updated:** 2026-10-13 (rev. 12)
 
 ---
 
@@ -352,6 +352,7 @@ complexity:
 | `core:model` | Domain classes, rating & seat-colour logic | Medium — fully unit-tested |
 | `core:data` | Room DB, repositories, seed data | Medium |
 | `core:ui` | Theme, shared components (star rating, cards) | Low |
+| `core:seatmapui` | Reusable seat map (drawing, zoom/pan, hit-testing, accessible seat picker), shared by hall detail and the visit form | High |
 | `feature:seatmap` | Hall detail, seat map canvas, layout editor, screenshot overlay | **High** |
 | `feature:cinemas` | Cinema list & detail | Low–medium |
 | `feature:visits` | Add/edit visit form, photo handling | Medium |
