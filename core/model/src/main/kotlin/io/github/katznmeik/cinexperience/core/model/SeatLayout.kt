@@ -164,7 +164,8 @@ enum class NumberingDirection {
 /**
  * One grid row.
  *
- * @property label custom row label (e.g. "C", "R1"); `null` means auto-numbered.
+ * @property label custom row label (e.g. "C", "R1"); `null` means auto-numbered;
+ *   [NO_NAME] ("-", Yorck's convention) means the row has no name ([hasNoName]).
  * @property blockStartNumbers optional start number per block; a `null` or missing
  *   entry means "automatic". The index is the block counted from the left as
  *   stored, whatever the [numberingDirection]; the value is the number of that
@@ -188,6 +189,14 @@ data class LayoutRow(
             "Block start numbers must not be negative: $blockStartNumbers"
         }
     }
+
+    /**
+     * The row has no name (spec §4.3, e.g. each double sofa of Kant Kino Saal 3):
+     * its stored [label] is [NO_NAME]. Its seats are shown by seat alone ("Seat 12"),
+     * the map draws no row label beside it, and it still counts as a seat row for
+     * the automatic numbering of the rows after it.
+     */
+    val hasNoName: Boolean get() = label == NO_NAME
 
     val seatIds: List<SeatId> get() = cells.mapNotNull { (it as? LayoutCell.Seat)?.id }
 
@@ -218,6 +227,11 @@ data class LayoutRow(
             }
             return blocks
         }
+
+    companion object {
+        /** The stored [label] of a row without a name: "-", as in Yorck's booking data. */
+        const val NO_NAME = "-"
+    }
 }
 
 /** A cell position in the grid; row 0 is the row closest to the screen. */

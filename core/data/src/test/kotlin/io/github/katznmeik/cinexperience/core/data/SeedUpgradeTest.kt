@@ -7,8 +7,10 @@ import io.github.katznmeik.cinexperience.core.data.json.SeedJson
 import io.github.katznmeik.cinexperience.core.data.seed.SeedParser
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
 import io.github.katznmeik.cinexperience.core.model.Hall
+import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.model.labels
@@ -21,16 +23,28 @@ import java.io.File
 import java.time.LocalDate
 
 /**
- * Seeding the shipped seed (version 3: all 38 halls with layouts from yorck.de,
- * Blauer Stern added) on a fresh install and on installs seeded with the older
- * seed versions, kept as test fixtures: version 1 (halls without layouts) and
- * version 2 (the delphi LUX layouts transcribed from Yorck-app screenshots).
+ * Seeding the shipped seed (version 5: all 38 halls with layouts from yorck.de,
+ * Blauer Stern added, Kant Kino Saal 3 as double sofas) on a fresh install and on
+ * installs seeded with older seed versions: version 1 (halls without layouts) and
+ * version 2 (the delphi LUX layouts transcribed from Yorck-app screenshots), kept
+ * as test fixtures, and version 4 (Kant Kino Saal 3 as normal seats), derived from
+ * the shipped seed.
  */
 internal class SeedUpgradeTest : DatabaseTest() {
 
     private val v1 = File("src/test/resources/seed/yorck-v1.json").readText()
     private val v2 = File("src/test/resources/seed/yorck-v2.json").readText()
     private val current = File("src/main/assets/${DatabaseConfig.SEED_ASSET_PATH}").readText()
+
+    /**
+     * Version 4: the shipped seed with Kant Kino Saal 3's 22 places as normal seats, as
+     * yorck.de lists them. That was its only difference: version 5 changed nothing else.
+     * Saal 3's rows are the seed's only rows labelled "-" (rows without a name).
+     */
+    private val v4 = current
+        .replace("\"seedVersion\": 5,", "\"seedVersion\": 4,")
+        .lines()
+        .joinToString("\n") { line -> if ("\"label\": \"-\"" in line) line.replace("FF", "SS") else line }
     private val currentSeed: SeedJson = SeedParser.parse(current)
 
     /** The shipped seed's layouts by hall seed key, with ids from 1. */
@@ -225,6 +239,54 @@ internal class SeedUpgradeTest : DatabaseTest() {
         // The unused hall next to it is updated.
         assertTrue(halls.getHall(unused.id)!!.layout!!.hasSameStructureAs(seedLayouts.getValue("delphi-lux/saal-5")))
     }
+
+    @Test
+    fun version4InstallGetsKantKinoSaal3AsDoubleSofas() = runTest {
+        assertTrue(seed(v4))
+        val before = allHalls()
+        val saal3 = before.getValue("kant-kino/saal-3")
+        val sofas = seedLayouts.getValue("kant-kino/saal-3")
+        // Version 4: the same seats, numbers and unnamed rows, as normal seats.
+        assertTrue(saal3.layout!!.hasSameStructureAs(sofas.withKind(SeatKind.STANDARD)))
+        assertEquals(23, saal3.nextSeatId)
+
+        assertTrue(seed(current))
+
+        val after = allHalls()
+        assertEquals(before.mapValues { it.value.id }, after.mapValues { it.value.id })
+        // The untouched, unused hall gets the sofas (spec §9), with ids above the old ones.
+        val saal3After = after.getValue("kant-kino/saal-3")
+        assertEquals(sofas.withIdsShiftedBy(22), saal3After.layout)
+        assertEquals(45, saal3After.nextSeatId)
+        assertEquals(sofas.labels().seats.values.map { it.label }, saal3After.layout!!.labels().seats.values.map { it.label })
+        assertTrue(saal3After.layout!!.labels().seats.values.all { it.label.row == null && it.label.kind == SeatKind.SOFA })
+        assertEquals(5f, saal3After.screenWidth)
+        assertEquals(1.5f, saal3After.screenDistance)
+        assertEquals(saal3.name, saal3After.name)
+        // Nothing else changes.
+        (after - "kant-kino/saal-3").forEach { (key, hall) -> assertEquals(key, before.getValue(key), hall) }
+        assertFalse(seed(current))
+    }
+
+    @Test
+    fun aUsedKantKinoSaal3KeepsItsSeats() = runTest {
+        assertTrue(seed(v4))
+        val saal3 = allHalls().getValue("kant-kino/saal-3")
+        visits.save(Visit(hallId = saal3.id, date = LocalDate.of(2026, 10, 2), seatId = saal3.layout!!.rows[0].seatIds[1]))
+
+        assertTrue(seed(current))
+
+        assertEquals(saal3.layout, halls.getHall(saal3.id)!!.layout)
+        assertEquals(23, halls.getHall(saal3.id)!!.nextSeatId)
+    }
+
+    /** This layout with every seat of [kind]. */
+    private fun SeatLayout.withKind(kind: SeatKind): SeatLayout =
+        rows.indices.fold(this) { acc, row ->
+            acc.rows[row].cells.indices.fold(acc) { inner, column ->
+                if (inner.rows[row].cells[column] is LayoutCell.Seat) inner.withSeatKind(row, column, kind) else inner
+            }
+        }
 
     @Test
     fun seedingTwiceChangesNothing() = runTest {

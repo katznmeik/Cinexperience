@@ -10,8 +10,10 @@ import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import io.github.katznmeik.cinexperience.core.model.SeatState
 import io.github.katznmeik.cinexperience.core.model.ViewingAngle
 import io.github.katznmeik.cinexperience.core.model.labels
+import io.github.katznmeik.cinexperience.core.testing.SampleLayouts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SeatChoicesTest {
@@ -73,6 +75,78 @@ class SeatChoicesTest {
         assertEquals(SeatId(8), choices.findSeat("2", "4"))
         assertNull(choices.findSeat("B", "1"))
         assertNull(choices.findSeat("2", "5"))
+    }
+
+    /** Kant Kino Saal 3: 11 double sofas, each a row without a name, numbered 1–22 across the room. */
+    private val kantSaal3 = SampleLayouts.kantKinoSaal3
+
+    @Test
+    fun rowsWithoutANameAreOneGroupBySeatNumber() {
+        val choices = seatChoices(kantSaal3)
+        val group = choices.single()
+        assertTrue(group.isUnnamed)
+        assertNull(group.label)
+        assertEquals(0, group.rowIndex)
+        assertEquals("Seats", group.chipText)
+        assertEquals("Seats without a row", group.chipDescription)
+        assertEquals((1..22).map { "$it" }, group.seats.map { it.shortText })
+        assertEquals(1, group.blocks.size)
+        assertNull(group.blockCaption(0))
+        assertEquals("Seat 12, sofa", group.descriptionOf(group.seats[11]))
+        // Seat 12 is the right place of the front sofa, seat 1 the left place of the back one.
+        assertEquals(SampleLayouts.kantKinoSaal3Seat12, group.seats[11].seatId)
+        assertEquals(kantSaal3.rows[10].seatIds[0], group.seats[0].seatId)
+    }
+
+    @Test
+    fun aHallMixingNamedAndUnnamedRowsKeepsTheNamedRows() {
+        // Rows 1 and 2, then two unnamed sofas (5 6, 7 8 … numbered on), a spacer, row 4.
+        val mixed = SeatLayout.fromPatterns("SSS", "SSS", "FF.", ".FF", "...", "SSS", firstSeatId = 1)
+            .updateRow(2) { it.copy(label = "-", blockStartNumbers = listOf(3)) }
+            .updateRow(3) { it.copy(label = "-") }
+        val choices = seatChoices(mixed)
+        assertEquals(listOf("1", "2", null, "5"), choices.map { it.label })
+        assertEquals(listOf("1", "2", "Seats", "5"), choices.map { it.chipText })
+        assertEquals(listOf(0, 1, 2, 5), choices.map { it.rowIndex })
+        // By number: the second sofa's 1 2 before the first one's 3 4.
+        assertEquals(listOf("1", "2", "3", "4"), choices[2].seats.map { it.shortText })
+        assertEquals(listOf(9, 10, 7, 8).map(::SeatId), choices[2].seats.map { it.seatId })
+        assertEquals("Seat 3, sofa", choices[2].descriptionOf(choices[2].seats[2]))
+        assertEquals("Row 5, Seat 1", choices[3].descriptionOf(choices[3].seats[0]))
+        // Finding a seat: by row, or without one ("-", blank or null) among the unnamed rows.
+        assertEquals(SeatId(9), choices.findSeat(null, "1"))
+        assertEquals(SeatId(9), choices.findSeat(" - ", "1"))
+        assertEquals(SeatId(8), choices.findSeat("", "4"))
+        assertEquals(SeatId(1), choices.findSeat("1", "1"))
+        assertEquals(SeatId(12), choices.findSeat("5", "2"))
+        assertNull(choices.findSeat(null, "5"))
+        assertNull(choices.findSeat("3", "1")) // the unnamed rows are not "row 3"
+        assertNull(seatChoices(layout).findSeat(null, "1")) // a hall without unnamed rows
+    }
+
+    @Test
+    fun findSeatInKantKinoSaal3() {
+        val choices = seatChoices(kantSaal3)
+        assertEquals(SampleLayouts.kantKinoSaal3Seat12, choices.findSeat(null, "12"))
+        assertEquals(SampleLayouts.kantKinoSaal3Seat12, choices.findSeat("-", " 12 "))
+        assertNull(choices.findSeat(null, "23"))
+    }
+
+    @Test
+    fun descriptionsLeaveOutRowsWithoutAName() {
+        assertEquals(
+            "Seat map of Saal 3: 11 rows, 22 seats, including 22 sofa places. Screen at the top.",
+            seatMapDescription("Saal 3", kantSaal3.labels()),
+        )
+        val visuals = mapOf(SampleLayouts.kantKinoSaal3Seat12 to SeatVisual(SeatTone.GREAT, isFavourite = true))
+        assertEquals(
+            "Seat colours: 1 great, 21 no data. Favourite: Seat 12, sofa.",
+            seatStatesDescription(visuals, kantSaal3.labels()),
+        )
+        assertEquals(
+            "Seat 12, sofa, great, favourite",
+            seatDescription(kantSaal3.labels().labelOf(SampleLayouts.kantKinoSaal3Seat12)!!, visuals.values.single()),
+        )
     }
 
     @Test

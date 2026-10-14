@@ -2,7 +2,6 @@ package io.github.katznmeik.cinexperience.feature.visits
 
 import io.github.katznmeik.cinexperience.core.model.HallCategory
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
-import io.github.katznmeik.cinexperience.core.model.SeatLabel
 
 /** Chip text of a screening format in the visit form (mockup: "German" for the German dub). */
 internal val ScreeningFormat.chipText: String
@@ -17,9 +16,6 @@ internal val HallCategory.formLabel: String
         HallCategory.STEEPNESS -> "Steepness"
         else -> displayName
     }
-
-/** "Row 7 · Seat 10", "Row 8 · Seat R" (every kind of place has a seat number or fixed label). */
-internal val SeatLabel.shortText: String get() = displayText.replace(", ", " · ")
 
 /** Title shown for a visit without film title. */
 internal const val UNTITLED = "Untitled"

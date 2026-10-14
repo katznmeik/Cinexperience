@@ -138,6 +138,22 @@ class VisitsScreenshotTest {
         capture("seat_picker_yorck_numbering") { VisitEditScreen(state, photo = null, actions = noActions) }
     }
 
+    /**
+     * Kant Kino Saal 3 ([SampleLayouts.kantKinoSaal3]): rows without a name, so the picker
+     * has no row step and lists the 22 sofa places by number; seat 12 is selected
+     * ("SEAT 12"), and the map shows no row labels.
+     */
+    @Test
+    @Config(qualifiers = "w412dp-h1500dp-port-night-xxhdpi")
+    fun seatPickerKantKinoSaal3() {
+        val vm = form(VisitEditMode.Add(SampleData.KANT_KINO_SAAL_3), store = SampleData.storeWithKantKinoSaal3()) {
+            openSeatPicker()
+            tapPickerSeat(SampleLayouts.kantKinoSaal3Seat12)
+        }
+        val state = vm.uiState.value
+        capture("seat_picker_kant_kino_saal_3") { VisitEditScreen(state, photo = null, actions = noActions) }
+    }
+
     @Test
     fun allVisits() {
         val state = allVisitsState(VisitFixtures.store())

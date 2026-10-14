@@ -5,6 +5,7 @@ import io.github.katznmeik.cinexperience.core.data.json.SeedHallJson
 import io.github.katznmeik.cinexperience.core.data.seed.SeedParser
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.LayoutCell
+import io.github.katznmeik.cinexperience.core.model.LayoutRow
 import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
@@ -27,6 +28,11 @@ import java.io.File
  * per hall, Yorck's rows nearest the screen first, each with its row label and
  * its places left to right as drawn, with seat text and kind. Every seat of every
  * hall must get exactly that label from [labels].
+ *
+ * One documented exception ([kindCorrections], spec §9): Kant Kino Saal 3 is 11
+ * double sofas, which Yorck's data lists as normal seats; the seed has them as sofa
+ * places (the generator's `KIND_OVERRIDES`). The fixture keeps Yorck's kinds; the
+ * numbers and row labels are still checked exactly.
  */
 class YorckSeedTest {
 
@@ -49,13 +55,32 @@ class YorckSeedTest {
 
     private val kindCodes = mapOf(SeatKind.STANDARD to 'S', SeatKind.WHEELCHAIR to 'W', SeatKind.COMPANION to 'C', SeatKind.SOFA to 'F')
 
-    /** The layout's seat rows as Yorck's fixture states them: label, seat texts and kinds left to right. */
+    /**
+     * Halls whose seed kinds deliberately differ from Yorck's (spec §9): every place
+     * Yorck lists as a normal seat ('S') is this kind in the seed. Nothing else may differ.
+     */
+    private val kindCorrections = mapOf("kant-kino/saal-3" to 'F')
+
+    /** Yorck's fixture rows of [key] with the [kindCorrections] applied: what the seed must hold. */
+    private fun expectedRows(key: String): List<YorckRow> {
+        val rows = yorck.getValue(key)
+        val corrected = kindCorrections[key] ?: return rows
+        return rows.map { it.copy(kinds = it.kinds.replace('S', corrected)) }
+    }
+
+    /**
+     * The layout's seat rows as Yorck's fixture states them: label, seat texts and kinds
+     * left to right. A row without a name has Yorck's label "-" (and no label in the app).
+     */
     private fun SeatLayout.asYorckRows(): List<YorckRow> {
         val labels = labels()
         return rows.indices.filter { rows[it].seatIds.isNotEmpty() }.map { index ->
             val seats = rows[index].seatIds.map { labels.seats.getValue(it).label }
+            val unnamed = rows[index].hasNoName
+            assertEquals(unnamed, labels.rowLabels[index] == null)
+            assertTrue(seats.all { (it.row == null) == unnamed })
             YorckRow(
-                row = labels.rowLabels[index]!!,
+                row = if (unnamed) LayoutRow.NO_NAME else labels.rowLabels[index]!!,
                 seats = seats.map { it.seat },
                 kinds = seats.map { kindCodes.getValue(it.kind) }.joinToString(""),
             )
@@ -125,7 +150,8 @@ class YorckSeedTest {
     @Test
     fun everySeatOfEveryHallIsLabelledAsAtYorck() {
         val differences = mutableListOf<String>()
-        for ((key, expected) in yorck) {
+        for (key in yorck.keys) {
+            val expected = expectedRows(key)
             val actual = layout(key).asYorckRows()
             if (actual.size != expected.size) differences += "$key: ${actual.size} seat rows, Yorck has ${expected.size}"
             expected.zip(actual).forEachIndexed { index, (yorckRow, seedRow) ->
@@ -151,7 +177,13 @@ class YorckSeedTest {
                 companion = seats.count { it.kind == SeatKind.COMPANION },
                 sofa = seats.count { it.kind == SeatKind.SOFA },
             )
-            assertEquals(key, counts, seed)
+            val expectedKinds = expectedRows(key).joinToString("") { it.kinds }
+            val expected = counts.copy(
+                wheelchair = expectedKinds.count { it == 'W' },
+                companion = expectedKinds.count { it == 'C' },
+                sofa = expectedKinds.count { it == 'F' },
+            )
+            assertEquals(key, expected, seed)
         }
     }
 
@@ -261,12 +293,30 @@ class YorckSeedTest {
 
     @Test
     fun kantKinoSaal3NumbersItsElevenPairsAcrossTheHall() {
-        val rows = layout("kant-kino/saal-3").asYorckRows()
+        val layout = layout("kant-kino/saal-3")
+        val rows = layout.asYorckRows()
         assertEquals(List(11) { "-" }, rows.map { it.row })
         assertEquals(listOf("11", "12"), rows.first().seats)
         assertEquals(listOf("14", "13"), rows[1].seats)
         assertEquals(listOf("1", "2"), rows.last().seats)
         assertEquals((1..22).map { "$it" }.toSet(), rows.flatMap { it.seats }.toSet())
+        // Rows without a name: no row labels, seats shown by seat alone.
+        assertTrue(layout.rows.all { it.hasNoName })
+        assertEquals(List(11) { null }, layout.labels().rowLabels)
+        assertEquals(SeatLabel(null, 12, SeatKind.SOFA), layout.labels().labelOf(layout.rows[0].seatIds[1]))
+        assertEquals("Seat 12, sofa", layout.labels().labelOf(layout.rows[0].seatIds[1])!!.description)
+    }
+
+    @Test
+    fun kantKinoSaal3IsDoubleSofasWhereYorckHasNormalSeats() {
+        // Yorck's data: 22 normal seats. The seed: 22 sofa places, the only kind correction.
+        assertEquals("S".repeat(22), yorck.getValue("kant-kino/saal-3").joinToString("") { it.kinds })
+        assertEquals("F".repeat(22), layout("kant-kino/saal-3").asYorckRows().joinToString("") { it.kinds })
+        assertEquals(setOf("kant-kino/saal-3"), kindCorrections.keys)
+        // Every other hall has exactly Yorck's kinds.
+        for (key in yorck.keys - kindCorrections.keys) {
+            assertEquals(key, yorck.getValue(key).map { it.kinds }, layout(key).asYorckRows().map { it.kinds })
+        }
     }
 
     @Test

@@ -21,6 +21,8 @@ What comes from where:
   doesn't get its number automatically; a jump inside a row (a missing seat number) turns
   the empty cells between the two seats into `|` so the next block can carry its start;
   non-numeric seat labels ("R") become `seatLabels`.
+- Kind overrides (`KIND_OVERRIDES`): where Yorck's data has the wrong kind for a whole hall,
+  the seed's layout gets the documented kind instead; the fixture keeps Yorck's kinds.
 - Screen: a hall that has no screen size in the seed gets screenWidth = columns and
   screenDistance = 1.5 (yorck.de always draws the screen as wide as the seating, so its
   drawing says nothing about the real screen). Existing values are kept.
@@ -61,6 +63,16 @@ HALLS = {
     **{('rollberg', str(n)): f'rollberg/saal-{n}' for n in range(1, 6)},
     ('yorck', 'Yorck'): 'yorck/yorck',
     ('yorck', 'New Yorck'): 'yorck/new-yorck',
+}
+
+# seedKey -> the kind of every place in that hall's seed layout, where Yorck's data is wrong
+# (spec §9). Only the layout changes; the fixture keeps Yorck's kinds, and YorckSeedTest
+# names every override as an explicit exception.
+KIND_OVERRIDES = {
+    # Kant Kino Saal 3 is a room of 11 double sofas upholstered like cinema seats along a
+    # centre aisle (kinokompendium.de and kino-zeit.de describe it so); Yorck's data lists
+    # each sofa as an unnamed row of two normal seats. All 22 places are sofa places.
+    'kant-kino/saal-3': 'F',
 }
 
 NEW_SCREEN_DISTANCE = 1.5
@@ -260,10 +272,14 @@ def keep_existing_marks(cells, existing):
     return True
 
 
-def convert(plan_path, existing_layout):
+def convert(plan_path, existing_layout, kind_override=None):
     plan = json.load(open(plan_path, encoding='utf-8'))['SeatLayoutData']
     dom = json.load(open(plan_path.replace('.seatplan.json', '.dom.json'), encoding='utf-8'))
     rows = grid(drawn_rows(plan, dom))
+    if kind_override:
+        for r in rows:
+            for s in (r['seats'] if r else []):
+                s['kind'] = kind_override
     width = max(s['col'] for r in rows if r for s in r['seats']) + 1
     cells = cells_of(rows, width)
     kept = keep_existing_marks(cells, existing_layout)
@@ -317,13 +333,14 @@ def inline(value):
 
 def main():
     crawl, seed_path, fixture_path = sys.argv[1:4]
+    assert set(KIND_OVERRIDES) <= set(HALLS.values()), 'a kind override names an unknown hall'
     seed = json.load(open(seed_path, encoding='utf-8'))
     halls = {h['seedKey']: h for c in seed['cinemas'] for h in c['halls']}
     fixture = {}
     for (cinema, name), key in HALLS.items():
         plan_path = os.path.join(crawl, cinema, f'hall-{name}.seatplan.json')
         hall = halls[key]
-        layout, width, yorck_rows, kept = convert(plan_path, hall.get('layout'))
+        layout, width, yorck_rows, kept = convert(plan_path, hall.get('layout'), KIND_OVERRIDES.get(key))
         rebuilt = {'seedKey': hall['seedKey'], 'name': hall['name'],
                    'screenWidth': hall.get('screenWidth', float(width)),
                    'screenDistance': hall.get('screenDistance', NEW_SCREEN_DISTANCE)}
@@ -336,7 +353,8 @@ def main():
         fixture[key] = [{'row': r['label'], 'seats': r['seats'], 'kinds': r['kinds']} for r in yorck_rows]
         seats = sum(len(r['seats']) for r in yorck_rows)
         print(f'{key:40s} {seats:4d} places, {len(yorck_rows):2d} rows, {width:2d} columns, '
-              f'format {layout["formatVersion"]}{", kept existing gaps/aisles" if kept else ""}')
+              f'format {layout["formatVersion"]}{", kept existing gaps/aisles" if kept else ""}'
+              f'{", all places " + KIND_OVERRIDES[key] if key in KIND_OVERRIDES else ""}')
     missing = [k for k, h in halls.items() if 'layout' not in h]
     assert not missing, f'halls without a layout: {missing}'
     with open(seed_path, 'w', encoding='utf-8') as f:

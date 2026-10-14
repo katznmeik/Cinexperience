@@ -171,6 +171,52 @@ class LayoutEditorViewModelTest {
     }
 
     @Test
+    fun typingADashMakesARowUnnamed() {
+        val vm = viewModel()
+        vm.selectRow(1)
+        assertEquals("automatic", vm.state.row!!.labelKindText)
+        vm.setRowLabel(" - ")
+        assertEquals("-", vm.draft.layout.rows[1].label)
+        assertTrue(vm.draft.layout.rows[1].hasNoName)
+        with(vm.state.row!!) {
+            assertTrue(hasNoName)
+            assertNull(label) // no label beside it on the map
+            assertEquals("-", customLabel)
+            assertEquals("Unnamed row · 1 block", title)
+            assertEquals("no name", labelKindText)
+        }
+        // Its seats read "Seat 1"; the automatic row after it is still row 3.
+        assertEquals(SeatLabel(null, 1), vm.state.labels!!.labelOf(SeatId(5)))
+        assertEquals(listOf("1", null, "3"), vm.state.labels!!.rowLabels)
+
+        // Selecting the row again shows "-" in the label field.
+        vm.selectRow(1)
+        vm.selectRow(1)
+        assertEquals("-", vm.state.labelInput)
+
+        // Another label names it again.
+        vm.setRowLabel("B")
+        assertEquals("Row B · 1 block", vm.state.row!!.title)
+        assertEquals("custom", vm.state.row!!.labelKindText)
+    }
+
+    @Test
+    fun theRemovedSeatWarningLeavesOutRowsWithoutAName() {
+        val unnamed = viewModel()
+        unnamed.selectRow(2)
+        unnamed.setRowLabel("-")
+        unnamed.save()
+        assertTrue(storedHall().layout!!.rows[2].hasNoName)
+
+        val vm = viewModel()
+        vm.changeRowCount(-1) // removes seat 12 ("Seat 4" of the unnamed row), which has a visit
+        vm.save()
+        val dialog = vm.state.dialog as EditorDialog.ConfirmSave
+        assertEquals(listOf(SeatLabel(null, 4)), dialog.removedSeats)
+        assertTrue(confirmSaveText(dialog).contains("• Seat 4\n"))
+    }
+
+    @Test
     fun rowsAndColumnsAreAddedAndRemoved() {
         val vm = viewModel()
         vm.selectTool(CellType.GAP)

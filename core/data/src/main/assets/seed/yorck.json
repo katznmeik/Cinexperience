@@ -1,5 +1,5 @@
 {
-  "seedVersion": 4,
+  "seedVersion": 5,
   "cinemas": [
     {
       "seedKey": "babylon-kreuzberg",
@@ -595,17 +595,17 @@
           "layout": {
             "formatVersion": 3,
             "rows": [
-              { "label": "-", "cells": "...SS", "blockStarts": [11] },
-              { "label": "-", "cells": "SS...", "direction": "RIGHT_TO_LEFT", "blockStarts": [13] },
-              { "label": "-", "cells": "...SS", "blockStarts": [9] },
-              { "label": "-", "cells": "SS...", "direction": "RIGHT_TO_LEFT", "blockStarts": [15] },
-              { "label": "-", "cells": "...SS", "blockStarts": [7] },
-              { "label": "-", "cells": "SS...", "direction": "RIGHT_TO_LEFT", "blockStarts": [17] },
-              { "label": "-", "cells": "...SS", "blockStarts": [5] },
-              { "label": "-", "cells": "SS...", "direction": "RIGHT_TO_LEFT", "blockStarts": [19] },
-              { "label": "-", "cells": "...SS", "blockStarts": [3] },
-              { "label": "-", "cells": "SS...", "direction": "RIGHT_TO_LEFT", "blockStarts": [21] },
-              { "label": "-", "cells": "...SS" }
+              { "label": "-", "cells": "...FF", "blockStarts": [11] },
+              { "label": "-", "cells": "FF...", "direction": "RIGHT_TO_LEFT", "blockStarts": [13] },
+              { "label": "-", "cells": "...FF", "blockStarts": [9] },
+              { "label": "-", "cells": "FF...", "direction": "RIGHT_TO_LEFT", "blockStarts": [15] },
+              { "label": "-", "cells": "...FF", "blockStarts": [7] },
+              { "label": "-", "cells": "FF...", "direction": "RIGHT_TO_LEFT", "blockStarts": [17] },
+              { "label": "-", "cells": "...FF", "blockStarts": [5] },
+              { "label": "-", "cells": "FF...", "direction": "RIGHT_TO_LEFT", "blockStarts": [19] },
+              { "label": "-", "cells": "...FF", "blockStarts": [3] },
+              { "label": "-", "cells": "FF...", "direction": "RIGHT_TO_LEFT", "blockStarts": [21] },
+              { "label": "-", "cells": "...FF" }
             ]
           }
         },

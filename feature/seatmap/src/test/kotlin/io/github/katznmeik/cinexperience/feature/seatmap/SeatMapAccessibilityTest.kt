@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.testing.ACCESSIBILITY_FONT_SCALES
@@ -111,6 +112,32 @@ class SeatMapAccessibilityTest(private val fontScale: Float) {
             it.onSeatClick(SampleLayouts.yorckRowSixR)
         }
         check("hall_detail_fixed_label") { HallDetail(state) }
+    }
+
+    /**
+     * Kant Kino Saal 3: rows without a name, sofa places. The selected seat card reads
+     * "SEAT 12", the map has no row labels, the seat is announced as "Seat 12, sofa".
+     */
+    @Test
+    fun hallDetailKantKinoSaal3() {
+        val state = hallState(FakeCinexRepository(SampleData.storeWithKantKinoSaal3()), SampleData.KANT_KINO_SAAL_3) {
+            it.onSeatClick(SampleLayouts.kantKinoSaal3Seat12)
+        }
+        check("hall_detail_kant_kino_saal_3") { HallDetail(state) }
+        // The card title ("SEAT 12" on screen) is announced with the seat's state.
+        composeRule.onNodeWithContentDescription("Seat 12, sofa, no data").assertExists()
+    }
+
+    /** An unnamed row selected in the editor: the label field holds "-", the title reads "Unnamed row". */
+    @Test
+    fun layoutEditorUnnamedRow() {
+        val repository = FakeCinexRepository(SampleData.storeWithKantKinoSaal3())
+        val vm = LayoutEditorViewModel(SampleData.KANT_KINO_SAAL_3, repository, FakeReferenceImageStore())
+        vm.selectRow(1)
+        val state = vm.uiState.value
+        check("layout_editor_unnamed_row") { LayoutEditorScreen(state, referenceImage = null, actions = object : LayoutEditorActions {}) }
+        composeRule.onNodeWithContentDescription("Row label, empty for automatic, a dash for no name").assertExists()
+        composeRule.onNodeWithText("no name").assertExists()
     }
 
     /** The selected screen: the screen panel ("Done", width, distance and position steppers) in place of the row panel. */

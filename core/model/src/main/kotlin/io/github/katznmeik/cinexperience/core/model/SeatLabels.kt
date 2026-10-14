@@ -4,20 +4,25 @@ package io.github.katznmeik.cinexperience.core.model
  * The printed label of a seat (spec §4.3): row "7", seat "10", or row "8", seat
  * "R" for a seat with a fixed label ([LayoutCell.Seat.fixedLabel]).
  *
+ * @property row the row's label; `null` for a row without a name
+ *   ([LayoutRow.hasNoName]): the seat is then shown by seat alone ("Seat 12").
  * @property seat the seat's number as text, or its fixed label.
  * @property kind wheelchair spaces, companion seats and sofa places are numbered
  *   like standard seats; the kind is only named in [description].
  */
-data class SeatLabel(val row: String, val seat: String, val kind: SeatKind = SeatKind.STANDARD) {
+data class SeatLabel(val row: String?, val seat: String, val kind: SeatKind = SeatKind.STANDARD) {
     /** The label of a numbered seat. */
-    constructor(row: String, number: Int, kind: SeatKind = SeatKind.STANDARD) : this(row, number.toString(), kind)
+    constructor(row: String?, number: Int, kind: SeatKind = SeatKind.STANDARD) : this(row, number.toString(), kind)
 
-    /** English display form, e.g. "Row 6, Seat 12" or "Row 8, Seat R". */
-    val displayText: String get() = "Row $row, Seat $seat"
+    /** English display form, e.g. "Row 6, Seat 12", "Row 8, Seat R", or "Seat 12" in a row without a name. */
+    val displayText: String get() = if (row == null) "Seat $seat" else "Row $row, Seat $seat"
+
+    /** [displayText] with " · " between row and seat: "Row 7 · Seat 10", "Seat 12". For titles and lists. */
+    val shortText: String get() = if (row == null) "Seat $seat" else "Row $row · Seat $seat"
 
     /**
      * [displayText] that also names a wheelchair space, companion or sofa seat, e.g.
-     * "Row 1, Seat 2, wheelchair space". For accessibility and seat details.
+     * "Row 1, Seat 2, wheelchair space" or "Seat 12, sofa". For accessibility and seat details.
      */
     val description: String
         get() = when (kind) {
@@ -47,8 +52,9 @@ data class SeatInfo(
 /**
  * Derived labels of a whole layout.
  *
- * @property rowLabels one entry per grid row; `null` for a row without seats and
- *   without a custom label (e.g. a cross aisle).
+ * @property rowLabels one entry per grid row, the label drawn beside it; `null` for
+ *   a row without seats and without a custom label (e.g. a cross aisle) and for a
+ *   row without a name ([LayoutRow.hasNoName]). Which rows have seats is in [seats].
  * @property seats every seat of the layout, in row-major order (each row left to right).
  */
 data class LayoutLabels(
@@ -63,7 +69,9 @@ data class LayoutLabels(
  * booking exactly.
  *
  * Rows:
- * - A row's custom [LayoutRow.label] wins.
+ * - A row's custom [LayoutRow.label] wins. A row without a name
+ *   ([LayoutRow.hasNoName], stored label "-") gets no label: its entry in
+ *   [LayoutLabels.rowLabels] and its seats' [SeatLabel.row] are `null`.
  * - Otherwise rows that contain at least one seat (of any [SeatKind]) are
  *   numbered "1", "2", … from the screen backwards. The counter runs over all
  *   seat rows, including those with a custom label, so it always equals the seat
@@ -105,9 +113,12 @@ fun SeatLayout.labels(): LayoutLabels {
     rows.forEachIndexed { rowIndex, row ->
         val blocks = row.blocks
         if (blocks.isNotEmpty()) seatRowCounter++
-        val rowLabel = row.label ?: if (blocks.isNotEmpty()) seatRowCounter.toString() else null
+        val rowLabel = when {
+            row.hasNoName -> null
+            else -> row.label ?: if (blocks.isNotEmpty()) seatRowCounter.toString() else null
+        }
         rowLabels += rowLabel
-        if (rowLabel == null || blocks.isEmpty()) return@forEachIndexed
+        if (blocks.isEmpty()) return@forEachIndexed
 
         // Numbers by column, assigned in numbering order.
         val numbers = arrayOfNulls<Int>(row.cells.size)

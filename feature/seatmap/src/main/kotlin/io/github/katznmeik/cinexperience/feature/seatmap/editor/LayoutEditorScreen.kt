@@ -654,7 +654,8 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
             PanelTitle("Rows")
             Text(
                 "Tap a row label on the left of the canvas to edit that row: label, numbering direction, numbering, " +
-                    "seat offset and block starts. Tap the screen to change its width, distance and position.",
+                    "seat offset and block starts. The label \"-\" means the row has no name: its seats are shown " +
+                    "as \"Seat 12\". Tap the screen to change its width, distance and position.",
                 style = MaterialTheme.typography.bodySmall,
                 color = CinexTheme.colors.textMuted,
             )
@@ -709,12 +710,12 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
                 value = state.labelInput,
                 onValueChange = actions::onRowLabel,
                 placeholder = row.autoLabel ?: "–",
-                description = "Row label, empty for automatic",
+                description = "Row label, empty for automatic, a dash for no name",
                 width = 72.dp,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
             )
             Text(
-                if (row.customLabel == null) "automatic" else "custom",
+                row.labelKindText,
                 style = MaterialTheme.typography.labelSmall,
                 color = CinexTheme.colors.textMuted,
             )

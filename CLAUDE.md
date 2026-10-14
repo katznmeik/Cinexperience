@@ -135,6 +135,19 @@ Don't duplicate config in module build files.
   numbers such a layout the old way. Accepted before v1.0.
   `SeatLabel.seat` is the text ("10" or "R"); texts read "Row 7 · Seat 10" and
   "Row 8 · Seat R", and descriptions name the kind ("…, wheelchair space").
+  Use `SeatLabel.displayText` / `shortText` / `description`, never build
+  "Row …" texts yourself.
+- **Rows without a name** (spec §4.3, e.g. Kant Kino Saal 3, every double sofa
+  its own row): stored label `"-"` (`LayoutRow.NO_NAME`, `hasNoName`; Yorck's
+  convention, kept in seed and JSON). `labels()` gives them no name:
+  `rowLabels[i]` and `SeatLabel.row` are `null`, so texts read "Seat 12" /
+  "Seat 12 · sofa", TalkBack "Seat 12, sofa", and the map draws no side label
+  (numbers stay on the seats). They still count as seat rows for automatic row
+  numbers. Don't confuse them with spacer rows (no seats, `rowLabels` `null`)
+  or automatic rows (stored label `null`). `seatChoices` puts all their seats
+  into one group (`label == null`, chip "Seats", by seat number); a hall with
+  only such rows has no row step. The editor shows "-" (canvas and label
+  field, "Unnamed row"); typing "-" makes a row unnamed.
 - **Scores and seat colours** come from the `core:model` functions
   (`hallScores`, `cinemaScores`, `seatStates`), never from SQL math.
   On the map, `SeatState.toSeatVisual()` gives the `SeatVisual`; colour is never
@@ -266,7 +279,11 @@ Don't duplicate config in module build files.
   keeps the gap yorck.de draws above it; existing gaps/aisles kept where the seats are
   unchanged; halls without a screen get columns × 1.5) and
   `core/data/src/test/resources/seed/yorck-seat-numbers.json` (Yorck's row
-  label, seat text and kind of every seat). A new hall needs a seed entry and a
+  label, seat text and kind of every seat). Where Yorck's kinds are wrong, the
+  tool's `KIND_OVERRIDES` (seedKey → kind of every place, with the reason) sets
+  them in the seed only; the fixture keeps Yorck's kinds and `YorckSeedTest`
+  lists the hall in `kindCorrections` (now: Kant Kino Saal 3, double sofas →
+  `F`). A new hall needs a seed entry and a
   line in the tool's `HALLS` first. Then bump `seedVersion`, run `YorckSeedTest`
   and `YorckSeedScreenshotTest`, and compare the PNGs with the yorck.de
   screenshots. Don't commit crawl data or screenshots.

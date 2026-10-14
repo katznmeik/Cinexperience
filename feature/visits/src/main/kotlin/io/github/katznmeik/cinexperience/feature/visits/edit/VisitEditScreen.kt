@@ -101,7 +101,6 @@ import io.github.katznmeik.cinexperience.core.ui.text.dateText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.visits.chipText
 import io.github.katznmeik.cinexperience.feature.visits.formLabel
-import io.github.katznmeik.cinexperience.feature.visits.shortText
 import kotlinx.coroutines.CancellationException
 import java.time.Instant
 import java.time.LocalDate

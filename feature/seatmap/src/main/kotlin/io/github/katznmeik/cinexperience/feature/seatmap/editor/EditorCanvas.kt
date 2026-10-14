@@ -396,13 +396,17 @@ internal fun EditorCanvas(
     )
     val numberStyle = SeatNumberTexts.style(MaterialTheme.typography.labelSmall)
 
-    // Measured once per row labels (and style), not on every paint stroke.
-    val rowLabelTexts = remember(textMeasurer, labels.rowLabels, labelStyle) {
-        measureRowLabels(textMeasurer, labels.rowLabels, labelStyle)
+    // The editor shows a row without a name as its stored "-" (the hall's map shows no label).
+    val rowLabels = remember(labels.rowLabels, draft.layout) {
+        labels.rowLabels.mapIndexed { row, label -> label ?: draft.layout.rows.getOrNull(row)?.label }
     }
-    val selectedRowLabelTexts = remember(textMeasurer, labels.rowLabels, selectedLabelStyle) {
+    // Measured once per row labels (and style), not on every paint stroke.
+    val rowLabelTexts = remember(textMeasurer, rowLabels, labelStyle) {
+        measureRowLabels(textMeasurer, rowLabels, labelStyle)
+    }
+    val selectedRowLabelTexts = remember(textMeasurer, rowLabels, selectedLabelStyle) {
         // A selected row without a label shows "–".
-        measureRowLabels(textMeasurer, labels.rowLabels.map { it ?: "–" }, selectedLabelStyle)
+        measureRowLabels(textMeasurer, rowLabels.map { it ?: "–" }, selectedLabelStyle)
     }
     val labelWidth = remember(rowLabelTexts, density) {
         rowLabelWidth(rowLabelTexts, minWidth = with(density) { 18.dp.toPx() }) + with(density) { 4.dp.toPx() }

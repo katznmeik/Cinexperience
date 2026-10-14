@@ -239,8 +239,12 @@ data class BlockSummary(
 /** The selected row's settings and derived labels (the editor's row panel). */
 data class RowSummary(
     val index: Int,
-    /** The row's label as shown (custom or automatic); `null` for a row without seats or label. */
+    /**
+     * The row's label as shown on the map (custom or automatic); `null` for a row
+     * without seats or label, and for a row without a name ([hasNoName]).
+     */
     val label: String?,
+    /** The stored label; "-" ([LayoutRow.NO_NAME]) for a row without a name. */
     val customLabel: String?,
     /** What the row would be called without a custom label. */
     val autoLabel: String?,
@@ -254,7 +258,10 @@ data class RowSummary(
     val blocksInNumberingOrder: List<BlockSummary>
         get() = if (numberingDirection == NumberingDirection.RIGHT_TO_LEFT) blocks.asReversed() else blocks
 
-    /** "Row 3 · 3 blocks", "Row 4 · no seats". */
+    /** The row has no name: its label is "-" (spec §4.3); its seats read "Seat 12". */
+    val hasNoName: Boolean get() = customLabel == LayoutRow.NO_NAME
+
+    /** "Row 3 · 3 blocks", "Row 4 · no seats", "Unnamed row · 1 block". */
     val title: String
         get() {
             val blockText = when (blocks.size) {
@@ -262,7 +269,16 @@ data class RowSummary(
                 1 -> "1 block"
                 else -> "${blocks.size} blocks"
             }
-            return "Row ${label ?: "–"} · $blockText"
+            val rowText = if (hasNoName) "Unnamed row" else "Row ${label ?: "–"}"
+            return "$rowText · $blockText"
+        }
+
+    /** Beside the label field: "automatic", "custom", or "no name" for "-". */
+    val labelKindText: String
+        get() = when {
+            customLabel == null -> "automatic"
+            hasNoName -> "no name"
+            else -> "custom"
         }
 }
 

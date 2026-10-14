@@ -16,7 +16,7 @@ class SeedParserTest {
     @Test
     fun shippedSeedAssetIsValid() {
         val seed = SeedParser.parse(asset.readText())
-        assertEquals(4, seed.seedVersion)
+        assertEquals(5, seed.seedVersion)
         assertEquals(14, seed.cinemas.size)
         assertEquals(38, seed.cinemas.sumOf { it.halls.size })
         assertTrue(seed.cinemas.all { it.address != null })

@@ -120,6 +120,51 @@ class SeatMapUiTest {
         composeRule.onNodeWithText("Centre").assertExists()
     }
 
+    /** Kant Kino Saal 3: every row is unnamed, so there is no row step; the seats come by number. */
+    @Test
+    fun seatPickerOffersUnnamedRowsBySeatNumber() {
+        val chosen = mutableListOf<SeatId>()
+        composeRule.setContent {
+            CinexTheme { SeatPicker(seatChoices(SampleLayouts.kantKinoSaal3), selectedSeatId = null, onSeatSelected = { chosen += it }) }
+        }
+        composeRule.onNodeWithText("Row").assertDoesNotExist()
+        composeRule.onNodeWithText("Seats").assertDoesNotExist()
+        composeRule.onNodeWithText("Seat").assertExists()
+        composeRule.onNodeWithContentDescription("Seat 12, sofa").performClick()
+        composeRule.onNodeWithContentDescription("Seat 1, sofa").performClick()
+        assertEquals(listOf(SampleLayouts.kantKinoSaal3Seat12, SampleLayouts.kantKinoSaal3.rows[10].seatIds[0]), chosen)
+    }
+
+    /** Named rows and unnamed ones in one hall: the unnamed seats are one more chip, "Seats", in their place. */
+    @Test
+    fun seatPickerMixesNamedRowsAndUnnamedSeats() {
+        val mixed = SeatLayout.fromPatterns("SSS", "FF.", ".FF", "SSS", firstSeatId = 1)
+            .updateRow(1) { it.copy(label = "-", blockStartNumbers = listOf(3)) }
+            .updateRow(2) { it.copy(label = "-") }
+        val chosen = mutableListOf<SeatId>()
+        var selected by mutableStateOf<SeatId?>(null)
+        composeRule.setContent {
+            CinexTheme { SeatPicker(seatChoices(mixed), selectedSeatId = selected, onSeatSelected = { chosen += it }) }
+        }
+        composeRule.onNodeWithContentDescription("Row 1").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Row 4").assertExists()
+        composeRule.onNodeWithContentDescription("Seats without a row").performClick()
+        composeRule.onNodeWithContentDescription("Seats without a row").assertIsSelected()
+        composeRule.onNodeWithText("Seats without a row").assertExists() // the heading of the seat step
+        composeRule.onNodeWithContentDescription("Seat 3, sofa").performClick()
+        assertEquals(listOf(SeatId(4)), chosen)
+        // A seat tapped on the map in row 4 shows that row again.
+        selected = SeatId(9)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Row 4").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Row 4, Seat 2").assertIsSelected()
+        // And one in an unnamed row shows the group.
+        selected = SeatId(7)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Seats without a row").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Seat 2, sofa").assertIsSelected()
+    }
+
     @Test
     fun seatPickerFollowsASeatSelectedElsewhere() {
         val choices = seatChoices(SampleLayouts.splitHall)

@@ -290,5 +290,53 @@ class SeatLabelsTest {
         assertEquals("Row C, Seat 4", SeatLabel("C", 4).displayText)
         assertEquals("Row R1, Seat 12, sofa", SeatLabel("R1", 12, SeatKind.SOFA).description)
         assertEquals("Row 6, Seat 12, companion seat", SeatLabel("6", 12, SeatKind.COMPANION).description)
+        assertEquals("Row 7 · Seat 10", SeatLabel("7", 10).shortText)
+        assertEquals("Row 8 · Seat R", SeatLabel("8", "R", SeatKind.WHEELCHAIR).shortText)
+    }
+
+    @Test
+    fun rowsWithoutANameAreLeftOutOfTheTexts() {
+        val sofa = SeatLabel(null, 12, SeatKind.SOFA)
+        assertEquals("Seat 12", sofa.displayText)
+        assertEquals("Seat 12", sofa.shortText)
+        assertEquals("Seat 12, sofa", sofa.description)
+        assertEquals("Seat R, wheelchair space", SeatLabel(null, "R", SeatKind.WHEELCHAIR).description)
+        assertEquals("Seat 3", SeatLabel(null, 3).description)
+    }
+
+    @Test
+    fun aRowLabelledDashHasNoName() {
+        // Kant Kino Saal 3: each double sofa is its own unnamed row, numbered across the room.
+        val layout = layoutOf("...FF", "FF...", "...FF")
+            .updateRow(0) { it.copy(label = LayoutRow.NO_NAME, blockStartNumbers = listOf(5)) }
+            .updateRow(1) { it.copy(label = "-", numberingDirection = NumberingDirection.RIGHT_TO_LEFT, blockStartNumbers = listOf(3)) }
+            .updateRow(2) { it.copy(label = "-") }
+        assertEquals(listOf(true, true, true), layout.rows.map { it.hasNoName })
+        val labels = layout.labels()
+        assertEquals(listOf(null, null, null), labels.rowLabels)
+        assertEquals(SeatLabel(null, 5, SeatKind.SOFA), labels.labelOf(SeatId(1)))
+        assertEquals(SeatLabel(null, 4, SeatKind.SOFA), labels.labelOf(SeatId(3)))
+        assertEquals(listOf("4", "3"), layout.texts(1))
+        assertEquals(listOf("1", "2"), layout.texts(2))
+        assertEquals(6, labels.seats.size)
+        assertEquals("Seat 5, sofa", labels.labelOf(SeatId(1))!!.description)
+    }
+
+    @Test
+    fun unnamedSeatRowsSpacerRowsAndAutomaticRowsStayApart() {
+        val layout = layoutOf("SS", "..", "SS", "SS", "..")
+            .updateRow(2) { it.copy(label = "-") } // an unnamed seat row
+            .updateRow(4) { it.copy(label = "-") } // a spacer row marked "-": still no label
+        assertEquals(listOf(false, false, true, false, true), layout.rows.map { it.hasNoName })
+        val labels = layout.labels()
+        // The spacer row has no label; the unnamed row has none either, but still counts as
+        // a seat row: the automatic row after it is row 3.
+        assertEquals(listOf("1", null, null, "3", null), labels.rowLabels)
+        assertEquals(SeatLabel("1", 1), labels.labelOf(SeatId(1)))
+        assertEquals(SeatLabel(null, 2), labels.labelOf(SeatId(4)))
+        assertEquals(SeatLabel("3", 1), labels.labelOf(SeatId(5)))
+        // An automatic row is never unnamed; only "-" is (not "–" or a blank).
+        assertEquals("–", layout.updateRow(0) { it.copy(label = "–") }.labels().rowLabels[0])
+        assertNull(layoutOf("SS").rows[0].label)
     }
 }

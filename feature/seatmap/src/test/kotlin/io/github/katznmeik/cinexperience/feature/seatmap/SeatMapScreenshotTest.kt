@@ -37,6 +37,7 @@ import io.github.katznmeik.cinexperience.core.ui.theme.DarkCinexColors
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailUiState
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailViewModel
+import io.github.katznmeik.cinexperience.feature.seatmap.detail.titleText
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutDraft
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutEditorActions
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutEditorScreen
@@ -316,6 +317,33 @@ class SeatMapScreenshotTest {
         val state = vm.uiState.value
         check(state.row?.blocks?.single()?.rangeText == "R + 1–14")
         capture("layout_editor_fixed_label") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
+    }
+
+    /**
+     * Kant Kino Saal 3 as seeded ([SampleLayouts.kantKinoSaal3]): 11 double sofas, each a
+     * row without a name, so the map has no row labels beside them; every place shows its
+     * sofa symbol and number. Seat 12 is selected: the card reads "SEAT 12", "Sofa".
+     */
+    @Test
+    @Config(qualifiers = "w412dp-h1500dp-port-night-xxhdpi")
+    fun hallDetailKantKinoSaal3() {
+        repository = FakeCinexRepository(SampleData.storeWithKantKinoSaal3())
+        val state = hallState(SampleData.KANT_KINO_SAAL_3) { it.onSeatClick(SampleLayouts.kantKinoSaal3Seat12) }
+        val seat = (state as HallDetailUiState.Loaded).selectedSeat!!
+        check(seat.label == SeatLabel(null, 12, SeatKind.SOFA) && seat.titleText() == "SEAT 12")
+        capture("hall_detail_kant_kino_saal_3") { HallDetail(state) }
+    }
+
+    /** An unnamed row of Kant Kino Saal 3 selected in the editor: "-" on the canvas and in the label field. */
+    @Test
+    @Config(qualifiers = "w412dp-h1300dp-port-night-xxhdpi")
+    fun layoutEditorUnnamedRow() {
+        repository = FakeCinexRepository(SampleData.storeWithKantKinoSaal3())
+        val vm = LayoutEditorViewModel(SampleData.KANT_KINO_SAAL_3, repository, FakeReferenceImageStore())
+        vm.selectRow(1)
+        val state = vm.uiState.value
+        check(state.row?.title == "Unnamed row · 1 block" && state.labelInput == "-")
+        capture("layout_editor_unnamed_row") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
     }
 
     /** The hall detail of a hall whose screen is 3 seats left of centre: the map and the viewing angle follow it. */
