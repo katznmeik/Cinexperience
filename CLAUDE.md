@@ -37,10 +37,16 @@ certificate in `signing/release-cert.sha256`. Without that secret it runs
 
 **Versions and releases:** the version is `cinexVersionName` in `gradle.properties`
 (MAJOR.MINOR.PATCH); `versionCode` is derived from it (MAJOR*10000 + MINOR*100 +
-PATCH). Pushing a tag `v<version>` runs `.github/workflows/release.yml` (tag must
-match the version; tests, lint, signed APK with `CINEX_REQUIRE_RELEASE_SIGNING`,
-release-certificate check, GitHub Release with `cinexperience-<version>.apk`). Agents never
-create tags or releases; the owner does. R8/minify stays off in v1.
+PATCH). `.github/workflows/release.yml` publishes a version (tag must match the
+version; tests, lint, signed APK with `CINEX_REQUIRE_RELEASE_SIGNING`,
+release-certificate check, GitHub Release with `cinexperience-<version>.apk`). It
+runs on a pushed tag `v<version>` or manually (`workflow_dispatch`, input
+`version`, default branch only): a manual run refuses an existing tag and creates
+`v<version>` on the commit it built. Agents release only when the owner
+explicitly asks for that version ("release v1.0"): run the workflow with the
+version on the integration branch (GitHub connector, `run_workflow`), then check
+that the run succeeded and the release has the APK. Agents never push tags and
+never release on their own. R8/minify stays off in v1.
 The build ID (`BuildConfig.BUILD_ID`, first 7 characters of `git rev-parse HEAD`,
 `unknown` without git) is set in `app/build.gradle.kts`, shown in Settings → About
 and matches the CI APK name `cinexperience-<sha>.apk`.
