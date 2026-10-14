@@ -192,6 +192,6 @@ internal class SeederTest : DatabaseTest() {
         assertTrue(list.all { it.visitCount == 0 && it.overallScore == null })
         val lux = list.single { it.cinema.seedKey == "delphi-lux" }
         val detail = cinemas.observeCinemaDetail(lux.cinema.id).first()!!
-        assertEquals((1..7).map { "Saal $it" }, detail.halls.map { it.hall.name })
+        assertEquals(listOf("Luxbox") + (1..6).map { "Saal $it" }, detail.halls.map { it.hall.name })
     }
 }

@@ -16,7 +16,7 @@ class SeedParserTest {
     @Test
     fun shippedSeedAssetIsValid() {
         val seed = SeedParser.parse(asset.readText())
-        assertEquals(1, seed.seedVersion)
+        assertEquals(2, seed.seedVersion)
         assertEquals(13, seed.cinemas.size)
         assertEquals(36, seed.cinemas.sumOf { it.halls.size })
         assertTrue(seed.cinemas.all { it.address != null })
@@ -26,7 +26,9 @@ class SeedParserTest {
         }
         val lux = seed.cinemas.single { it.seedKey == "delphi-lux" }
         assertEquals("delphi LUX", lux.name)
-        assertEquals((1..7).map { "Saal $it" }, lux.halls.map { it.name })
+        // The seventh hall is the Luxbox; its seed key stays "saal-7".
+        assertEquals((1..6).map { "Saal $it" } + "Luxbox", lux.halls.map { it.name })
+        assertEquals((1..7).map { "delphi-lux/saal-$it" }, lux.halls.map { it.seedKey })
         assertEquals(
             listOf("Yorck", "New Yorck"),
             seed.cinemas.single { it.seedKey == "yorck" }.halls.map { it.name },
