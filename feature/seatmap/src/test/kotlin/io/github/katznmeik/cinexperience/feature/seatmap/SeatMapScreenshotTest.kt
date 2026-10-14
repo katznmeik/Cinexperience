@@ -53,7 +53,7 @@ class SeatMapScreenshotTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private val repository = FakeCinexRepository(SampleData.storeWithSplitHall())
+    private var repository = FakeCinexRepository(SampleData.storeWithSplitHall())
 
     private fun capture(name: String, content: @Composable () -> Unit) {
         composeRule.setContent {
@@ -66,7 +66,7 @@ class SeatMapScreenshotTest {
     }
 
     private fun hallState(hallId: Long, select: ((HallDetailViewModel) -> Unit)? = null): HallDetailUiState {
-        val vm = HallDetailViewModel(hallId, repository)
+        val vm = HallDetailViewModel(hallId, repository, repository)
         select?.invoke(vm)
         return runBlocking { vm.uiState.first { it !is HallDetailUiState.Loading } }
     }
@@ -109,6 +109,46 @@ class SeatMapScreenshotTest {
         repository.store.value = repository.store.value.copy(visits = visits)
         val state = hallState(SampleData.DELPHI_LUX_SAAL_1)
         capture("hall_detail_visit_history") { hallDetail(state) }
+    }
+
+    /**
+     * The approved mockup: coloured map (great, OK, avoid, no data, favourite), legend,
+     * the selected favourite seat, scores and visits, on a tall screen.
+     */
+    @Test
+    @Config(qualifiers = "w412dp-h2000dp-port-night-xxhdpi")
+    fun hallDetailRatedTall() {
+        repository = FakeCinexRepository(RatedHallFixture.store())
+        val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.favourite) }
+        capture("hall_detail_rated_tall") { hallDetail(state) }
+    }
+
+    /** The same at phone size: what is visible without scrolling. */
+    @Test
+    fun hallDetailRated() {
+        repository = FakeCinexRepository(RatedHallFixture.store())
+        val state = hallState(RatedHallFixture.HALL)
+        capture("hall_detail_rated") { hallDetail(state) }
+    }
+
+    /** A seat set to "avoid" manually: the Avoid button is marked active. */
+    @Test
+    @Config(qualifiers = "w412dp-h1300dp-port-night-xxhdpi")
+    fun hallDetailManualOverride() {
+        repository = FakeCinexRepository(RatedHallFixture.store())
+        val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.manualAvoid) }
+        capture("hall_detail_manual_override") { hallDetail(state) }
+    }
+
+    /** A drawn hall without any visits: grey map, "–" scores. */
+    @Test
+    @Config(qualifiers = "w412dp-h1500dp-port-night-xxhdpi")
+    fun hallDetailNoRatingsYet() {
+        repository.store.value = repository.store.value.let { s ->
+            s.copy(visits = s.visits.filter { it.hallId != SampleData.DELPHI_LUX_SAAL_1 })
+        }
+        val state = hallState(SampleData.DELPHI_LUX_SAAL_1) { it.onSeatClick(RatedHallFixture.noData) }
+        capture("hall_detail_no_ratings") { hallDetail(state) }
     }
 
     @Test

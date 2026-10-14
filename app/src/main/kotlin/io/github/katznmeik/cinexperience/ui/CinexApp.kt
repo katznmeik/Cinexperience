@@ -99,6 +99,7 @@ fun CinexApp(
             )
             hallDetailScreen(
                 hallRepository = container.hallRepository,
+                seatOverrideRepository = container.seatOverrideRepository,
                 onBack = navController::navigateUp,
                 onEditLayout = navController::navigateToLayoutEditor,
                 onAddVisit = navController::navigateToAddVisit,

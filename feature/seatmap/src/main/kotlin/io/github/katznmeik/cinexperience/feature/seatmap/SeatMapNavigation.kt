@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
+import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailEntry
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailViewModel
@@ -29,6 +30,7 @@ fun NavController.navigateToLayoutEditor(hallId: Long) = navigate(LayoutEditorRo
 
 fun NavGraphBuilder.hallDetailScreen(
     hallRepository: HallRepository,
+    seatOverrideRepository: SeatOverrideRepository,
     onBack: () -> Unit,
     onEditLayout: (hallId: Long) -> Unit,
     onAddVisit: (hallId: Long) -> Unit,
@@ -37,7 +39,7 @@ fun NavGraphBuilder.hallDetailScreen(
     composable<HallDetailRoute> { entry ->
         val hallId = entry.toRoute<HallDetailRoute>().hallId
         HallDetailEntry(
-            viewModel = viewModel(factory = HallDetailViewModel.factory(hallId, hallRepository)),
+            viewModel = viewModel(factory = HallDetailViewModel.factory(hallId, hallRepository, seatOverrideRepository)),
             onBack = dropUnlessResumed(block = onBack),
             onEditLayout = dropUnlessResumedWith(onEditLayout),
             onAddVisit = dropUnlessResumedWith(onAddVisit),
