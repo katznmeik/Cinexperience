@@ -2,6 +2,7 @@ package io.github.katznmeik.cinexperience.core.seatmapui
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Density
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
@@ -18,21 +19,25 @@ import org.junit.Test
 class SeatNumbersTest {
 
     @Test
-    fun numberedKindsShowTheirNumberWheelchairSpacesNone() {
+    fun everyKindShowsItsNumberOrFixedLabel() {
         assertEquals("10", SeatLabel("7", 10).seatNumberText)
         assertEquals("3", SeatLabel("7", 3, SeatKind.COMPANION).seatNumberText)
         assertEquals("12", SeatLabel("7", 12, SeatKind.SOFA).seatNumberText)
-        assertNull(SeatLabel("1", 2, SeatKind.WHEELCHAIR).seatNumberText)
+        assertEquals("2", SeatLabel("1", 2, SeatKind.WHEELCHAIR).seatNumberText)
+        assertEquals("R", SeatLabel("8", "R", SeatKind.WHEELCHAIR).seatNumberText)
     }
 
     @Test
-    fun everyNumberedSeatOfALayoutGetsItsLabelsNumber() {
-        // W C . | . F F | S W: wheelchair spaces are skipped, companion and sofa places counted.
+    fun everySeatOfALayoutGetsItsLabelsText() {
+        // W C . | . F F | S W: every place is numbered, wheelchair spaces included.
         val layout = SeatLayout.fromPatterns("WC.|.FF|SW", firstSeatId = 1)
         val numbers = layout.labels().seatNumbers()
-        assertEquals(mapOf(SeatId(2) to "1", SeatId(3) to "2", SeatId(4) to "3", SeatId(5) to "4"), numbers)
-        assertNull(numbers[SeatId(1)])
-        assertNull(numbers[SeatId(6)])
+        assertEquals((1..6).associate { SeatId(it) to "$it" }, numbers)
+        // Right to left with a fixed "R" on the wheelchair space at the right end.
+        val kant = SeatLayout.fromPatterns("SSSSSSW", firstSeatId = 1)
+            .updateRow(0) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+            .withFixedLabel(0, 6, "R")
+        assertEquals(listOf("6", "5", "4", "3", "2", "1", "R"), kant.labels().seatNumbers().values.toList())
     }
 
     @Test

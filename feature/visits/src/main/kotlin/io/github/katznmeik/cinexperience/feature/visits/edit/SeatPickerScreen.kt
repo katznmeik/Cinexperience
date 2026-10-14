@@ -33,7 +33,6 @@ import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
-import io.github.katznmeik.cinexperience.feature.visits.shortText
 
 /**
  * Full-screen seat picker of the visit form: the hall's seat map (tap a seat to
@@ -129,7 +128,9 @@ internal fun SeatPickerScreen(state: VisitEditUiState, picker: SeatPickerState, 
                 )
             }
             Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionHeader("Or choose by row and number")
+                // A hall whose rows have no names (Kant Kino Saal 3) lists its seats by number alone.
+                val byNumberOnly = choices.isNotEmpty() && choices.all { it.isUnnamed }
+                SectionHeader(if (byNumberOnly) "Or choose by number" else "Or choose by row and number")
                 SeatPicker(
                     choices = choices,
                     selectedSeatId = picker.seatId,

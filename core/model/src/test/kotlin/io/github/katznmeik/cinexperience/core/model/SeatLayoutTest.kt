@@ -207,4 +207,48 @@ class SeatLayoutTest {
         assertEquals(ids(1).toSet(), shrunk.seatIds)
         assertNull(shrunk.positionOf(SeatId(2)))
     }
+
+    @Test
+    fun rowsKeepTheirDirectionAndSeatsTheirFixedLabelsThroughEdits() {
+        val layout = layoutOf("SSS", "SSW")
+            .updateRow(1) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+            .withFixedLabel(1, 2, "R")
+        val edited = layout.insertRow(0).insertColumn(0).removeColumn(3).resize(4, 3)
+        assertEquals(NumberingDirection.LEFT_TO_RIGHT, edited.rows[0].numberingDirection) // the new row
+        assertEquals(NumberingDirection.RIGHT_TO_LEFT, edited.rows[2].numberingDirection)
+        assertEquals(listOf<String?>(null, null, null), edited.rows[2].fixedLabels) // the R's column was removed
+        val kept = layout.insertRow(0).insertColumn(0).removeRow(0)
+        assertEquals(NumberingDirection.RIGHT_TO_LEFT, kept.rows[1].numberingDirection)
+        assertEquals(listOf(null, null, null, "R"), kept.rows[1].fixedLabels)
+        assertEquals(LayoutCell.Seat(SeatId(6), SeatKind.WHEELCHAIR, "R"), kept.cell(1, 3))
+    }
+
+    @Test
+    fun canonicalIdsCompareStructureNotIds() {
+        val seed = layoutOf("SS|S", "WSS.")
+            .updateRow(1) { it.copy(label = "R1", numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+            .withFixedLabel(1, 0, "R")
+        val shifted = seed.withIdsShiftedBy(40)
+        assertEquals(seed, shifted.withCanonicalSeatIds())
+        assertTrue(shifted.hasSameStructureAs(seed))
+        assertEquals(7, shifted.withCanonicalSeatIds().nextSeatId)
+        // Any other difference counts.
+        assertFalse(seed.hasSameStructureAs(seed.withFixedLabel(1, 0, null)))
+        assertFalse(seed.hasSameStructureAs(seed.updateRow(1) { it.copy(numberingDirection = NumberingDirection.LEFT_TO_RIGHT) }))
+        assertFalse(seed.hasSameStructureAs(seed.withSeatKind(0, 0, SeatKind.SOFA)))
+        assertFalse(seed.hasSameStructureAs(seed.updateRow(0) { it.copy(blockStartNumbers = listOf(2)) }))
+        assertFalse(seed.hasSameStructureAs(seed.withCellType(0, 3, CellType.AISLE)))
+        // Block starts that mean nothing for the labels don't count: trailing nulls, entries beyond the blocks.
+        val withStarts = seed.updateRow(0) { it.copy(blockStartNumbers = listOf(null, 4)) } // 2 blocks
+        assertTrue(withStarts.hasSameStructureAs(withStarts.updateRow(0) { it.copy(blockStartNumbers = listOf(null, 4, null)) }))
+        assertTrue(withStarts.hasSameStructureAs(withStarts.updateRow(0) { it.copy(blockStartNumbers = listOf(null, 4, 9, null)) }))
+        assertTrue(seed.hasSameStructureAs(seed.updateRow(1) { it.copy(blockStartNumbers = listOf(null)) })) // 1 block
+        assertTrue(seed.hasSameStructureAs(seed.updateRow(1) { it.copy(blockStartNumbers = listOf(null, 3)) }))
+        assertFalse(withStarts.hasSameStructureAs(withStarts.updateRow(0) { it.copy(blockStartNumbers = listOf(null, 5)) }))
+        assertFalse(withStarts.hasSameStructureAs(withStarts.updateRow(0) { it.copy(blockStartNumbers = listOf(1, 4)) }))
+        assertEquals(listOf(null, 4), withStarts.updateRow(0) { it.copy(blockStartNumbers = listOf(null, 4, 7)) }
+            .withCanonicalSeatIds().rows[0].blockStartNumbers)
+        // A seat deleted and redrawn in the same place has a new id but the same structure.
+        assertTrue(seed.hasSameStructureAs(seed.withCellType(0, 0, CellType.GAP).withCellType(0, 0, CellType.SEAT).withIdsShiftedBy(0)))
+    }
 }

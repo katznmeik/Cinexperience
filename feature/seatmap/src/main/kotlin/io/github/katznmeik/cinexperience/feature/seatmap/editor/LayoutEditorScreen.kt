@@ -80,10 +80,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.model.CellPosition
 import io.github.katznmeik.cinexperience.core.model.CellType
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import io.github.katznmeik.cinexperience.core.seatmapui.SeatMapViewState
+import io.github.katznmeik.cinexperience.core.seatmapui.blockName
 import io.github.katznmeik.cinexperience.core.seatmapui.icon
 import io.github.katznmeik.cinexperience.core.seatmapui.rememberSeatMapViewState
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
@@ -109,6 +111,7 @@ internal interface LayoutEditorActions : EditorCanvasActions {
     fun onResetReferencePosition() {}
     fun onRowLabel(text: String) {}
     fun onNumbering(numbering: SeatNumbering) {}
+    fun onNumberingDirection(direction: NumberingDirection) {}
     fun onHalfSeatOffset(enabled: Boolean) {}
     fun onBlockStart(block: Int, text: String) {}
     fun onInsertRowAbove() {}
@@ -155,6 +158,7 @@ private fun LayoutEditorViewModel.actions(pickReference: () -> Unit) = object : 
     override fun onResetReferencePosition() = setReferenceAlignment(null)
     override fun onRowLabel(text: String) = setRowLabel(text)
     override fun onNumbering(numbering: SeatNumbering) = setNumbering(numbering)
+    override fun onNumberingDirection(direction: NumberingDirection) = setNumberingDirection(direction)
     override fun onHalfSeatOffset(enabled: Boolean) = setHalfSeatOffset(enabled)
     override fun onBlockStart(block: Int, text: String) = setBlockStart(block, text)
     override fun onInsertRowAbove() = insertRowAbove()
@@ -570,6 +574,35 @@ private val SeatKind.editorName: String
         SeatKind.SOFA -> "Sofa"
     }
 
+/** Chip text of a numbering direction in the row panel. */
+internal val NumberingDirection.chipText: String
+    get() = when (this) {
+        NumberingDirection.LEFT_TO_RIGHT -> "Left → right"
+        NumberingDirection.RIGHT_TO_LEFT -> "Right → left"
+    }
+
+/** What a screen reader announces for the direction chip (the arrow is not read well). */
+internal val NumberingDirection.description: String
+    get() = when (this) {
+        NumberingDirection.LEFT_TO_RIGHT -> "Numbered left to right"
+        NumberingDirection.RIGHT_TO_LEFT -> "Numbered right to left"
+    }
+
+/**
+ * Screen-reader name of a block's "Starts at" field, the block named by its place
+ * as drawn ("Right block start number, …"), since the fields follow the numbering
+ * direction.
+ */
+internal fun blockStartDescription(index: Int, blockCount: Int): String {
+    val name = blockName(index, blockCount)
+    val field = when {
+        name == null -> "Start number"
+        blockCount <= 3 -> "$name block start number"
+        else -> "$name from the left, start number"
+    }
+    return "$field, empty for automatic"
+}
+
 @Composable
 private fun Notice(text: String) {
     Text(
@@ -620,8 +653,9 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
         if (row == null) {
             PanelTitle("Rows")
             Text(
-                "Tap a row label on the left of the canvas to edit that row: label, numbering, seat offset and block starts. " +
-                    "Tap the screen to change its width, distance and position.",
+                "Tap a row label on the left of the canvas to edit that row: label, numbering direction, numbering, " +
+                    "seat offset and block starts. The label \"-\" means the row has no name: its seats are shown " +
+                    "as \"Seat 12\". Tap the screen to change its width, distance and position.",
                 style = MaterialTheme.typography.bodySmall,
                 color = CinexTheme.colors.textMuted,
             )
@@ -641,6 +675,18 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
             ) {
                 Text("½ seat offset", style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.text)
                 Checkbox(checked = row.halfSeatOffset, onCheckedChange = null, modifier = Modifier.padding(start = 8.dp))
+            }
+        }
+        FlowRow(itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FieldLabel("Direction", Modifier.padding(end = 4.dp))
+            NumberingDirection.entries.forEach { direction ->
+                ChoiceChip(
+                    text = direction.chipText,
+                    selected = row.numberingDirection == direction,
+                    onClick = { actions.onNumberingDirection(direction) },
+                    shape = SegmentChipShape,
+                    modifier = Modifier.semantics { contentDescription = direction.description },
+                )
             }
         }
         FlowRow(itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -664,12 +710,12 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
                 value = state.labelInput,
                 onValueChange = actions::onRowLabel,
                 placeholder = row.autoLabel ?: "–",
-                description = "Row label, empty for automatic",
+                description = "Row label, empty for automatic, a dash for no name",
                 width = 72.dp,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
             )
             Text(
-                if (row.customLabel == null) "automatic" else "custom",
+                row.labelKindText,
                 style = MaterialTheme.typography.labelSmall,
                 color = CinexTheme.colors.textMuted,
             )
@@ -677,14 +723,16 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
         if (row.blocks.isNotEmpty()) {
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FieldLabel("Starts at", Modifier.widthIn(min = 64.dp).padding(top = 15.dp))
+                // In numbering order (right block first when the row runs right to left),
+                // each with the range its block gets.
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.blocks.forEach { block ->
+                    row.blocksInNumberingOrder.forEach { block ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             SmallTextField(
                                 value = state.blockStartInputs.getOrElse(block.index) { "" },
                                 onValueChange = { actions.onBlockStart(block.index, it) },
                                 placeholder = block.firstNumber?.toString() ?: "–",
-                                description = "Block ${block.index + 1} start number, empty for automatic",
+                                description = blockStartDescription(block.index, row.blocks.size),
                                 width = 56.dp,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                             )

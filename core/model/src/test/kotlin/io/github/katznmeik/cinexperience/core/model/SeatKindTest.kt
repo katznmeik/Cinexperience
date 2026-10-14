@@ -64,39 +64,38 @@ class SeatKindTest {
     }
 
     @Test
-    fun wheelchairSpacesAreNotCountedInSeatNumbers() {
+    fun wheelchairSpacesAreNumberedLikeEverySeat() {
         val layout = layoutOf("WSSWSC|FSW")
         // Seats: W(1) S(2) S(3) W(4) S(5) C(6) | F(7) S(8) W(9), continuous numbering.
         assertEquals(SeatLabel("1", 1, SeatKind.WHEELCHAIR), layout.label(1))
-        assertEquals(SeatLabel("1", 1), layout.label(2))
-        assertEquals(SeatLabel("1", 2), layout.label(3))
-        assertEquals(SeatLabel("1", 2, SeatKind.WHEELCHAIR), layout.label(4))
-        assertEquals(SeatLabel("1", 3), layout.label(5))
-        assertEquals(SeatLabel("1", 4, SeatKind.COMPANION), layout.label(6))
-        assertEquals(SeatLabel("1", 5, SeatKind.SOFA), layout.label(7))
-        assertEquals(SeatLabel("1", 6), layout.label(8))
-        assertEquals(SeatLabel("1", 3, SeatKind.WHEELCHAIR), layout.label(9))
+        assertEquals(SeatLabel("1", 2), layout.label(2))
+        assertEquals(SeatLabel("1", 3), layout.label(3))
+        assertEquals(SeatLabel("1", 4, SeatKind.WHEELCHAIR), layout.label(4))
+        assertEquals(SeatLabel("1", 5), layout.label(5))
+        assertEquals(SeatLabel("1", 6, SeatKind.COMPANION), layout.label(6))
+        assertEquals(SeatLabel("1", 7, SeatKind.SOFA), layout.label(7))
+        assertEquals(SeatLabel("1", 8), layout.label(8))
+        assertEquals(SeatLabel("1", 9, SeatKind.WHEELCHAIR), layout.label(9))
         assertEquals(listOf(0, 0, 0, 0, 0, 0, 1, 1, 1), layout.labels().seats.values.map { it.block })
     }
 
     @Test
-    fun wheelchairOnlyBlocksDoNotShiftNumbering() {
-        // Continuous: the first numbered seat of the row is 1 even after a wheelchair-only block.
+    fun wheelchairOnlyBlocksCountLikeOtherBlocks() {
         val continuous = layoutOf("WW|SS|SS")
-        assertEquals(listOf(1, 2, 1, 2, 3, 4), continuous.labels().seats.values.map { it.label.number })
-        // Restart per block with a block start: the start applies to the first numbered seat.
+        assertEquals(listOf(1, 2, 3, 4, 5, 6), continuous.labels().seats.values.map { it.number })
+        // Restart per block with a block start: the start applies to the block's first place.
         val restart = layoutOf("SW|WSS").updateRow(0) {
             it.copy(numbering = SeatNumbering.RESTART_PER_BLOCK, blockStartNumbers = listOf(null, 10))
         }
-        assertEquals(listOf(1, 1, 2, 10, 11), restart.labels().seats.values.map { it.label.number })
+        assertEquals(listOf(1, 2, 10, 11, 12), restart.labels().seats.values.map { it.number })
         // A row of wheelchair spaces only is still a seat row.
         assertEquals(listOf("1", "2"), layoutOf("WW", "SS").labels().rowLabels)
     }
 
     @Test
     fun displayTextsNameTheKind() {
-        assertEquals("Row 1, Wheelchair 2", SeatLabel("1", 2, SeatKind.WHEELCHAIR).displayText)
-        assertEquals("Row 1, Wheelchair 2", SeatLabel("1", 2, SeatKind.WHEELCHAIR).description)
+        assertEquals("Row 1, Seat 2", SeatLabel("1", 2, SeatKind.WHEELCHAIR).displayText)
+        assertEquals("Row 1, Seat 2, wheelchair space", SeatLabel("1", 2, SeatKind.WHEELCHAIR).description)
         assertEquals("Row 6, Seat 12", SeatLabel("6", 12, SeatKind.COMPANION).displayText)
         assertEquals("Row 6, Seat 12, companion seat", SeatLabel("6", 12, SeatKind.COMPANION).description)
         assertEquals("Row 6, Seat 3, sofa", SeatLabel("6", 3, SeatKind.SOFA).description)

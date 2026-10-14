@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
+import io.github.katznmeik.cinexperience.core.model.LayoutRow
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
@@ -29,13 +30,33 @@ import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 /** One seat the [SeatPicker] offers. */
 data class SeatChoice(val seatId: SeatId, val label: SeatLabel, val block: Int) {
-    /** Short chip text: the seat number, or "W2" for the second wheelchair space. */
-    val shortText: String get() = if (label.kind == SeatKind.WHEELCHAIR) "W${label.number}" else label.number.toString()
+    /**
+     * Short chip text: the seat's number, or its fixed label ("R"), nothing else.
+     * The chip shows a special kind's icon beside it; the kind is not part of this text.
+     */
+    val shortText: String get() = label.seat
 }
 
-/** One grid row with its seats, left to right. */
-data class SeatRowChoice(val rowIndex: Int, val label: String, val seats: List<SeatChoice>) {
-    /** The row's blocks (split by aisles), left to right, each with its seats. */
+/**
+ * One step of the [SeatPicker]'s row choice: a named grid row with its seats,
+ * left to right as drawn on the map (whatever the row's numbering direction, so a
+ * right-to-left row reads "6 5 4 3 2 1 R" like the map and Yorck's plan above it),
+ * or the group of every seat in rows without a name (spec §4.3), by seat number.
+ *
+ * @property rowIndex the grid row; for the group of unnamed rows, its frontmost row.
+ * @property label the row's label; `null` for the group of seats in rows without a name.
+ */
+data class SeatRowChoice(val rowIndex: Int, val label: String?, val seats: List<SeatChoice>) {
+    /** The group of seats in rows without a name ("Seat 12"), not a named row. */
+    val isUnnamed: Boolean get() = label == null
+
+    /** Chip text of the row step: the row's label, "Seats" for the unnamed group. */
+    val chipText: String get() = label ?: UNNAMED_GROUP_CHIP
+
+    /** What a screen reader announces for the row chip: "Row 7", "Seats without a row". */
+    val chipDescription: String get() = label?.let { "Row $it" } ?: UNNAMED_GROUP_TITLE
+
+    /** The row's blocks (split by aisles), left to right, each with its seats. One block for the unnamed group. */
     val blocks: List<List<SeatChoice>> get() = seats.groupBy { it.block }.toSortedMap().values.toList()
 
     /** Caption of the [index]-th of the row's [blocks], `null` if the row is not split. */
@@ -60,39 +81,68 @@ fun blockName(index: Int, blockCount: Int): String? = when {
     else -> "Block ${index + 1}"
 }
 
+private const val UNNAMED_GROUP_CHIP = "Seats"
+private const val UNNAMED_GROUP_TITLE = "Seats without a row"
+
 /**
  * The seats of a layout grouped by grid row, front to back, for choosing a seat
  * by row and number instead of tapping the map (accessibility; the visit form's
  * seat picker). Rows without seats are left out. Labels need not be unique, so
- * every grid row is its own choice.
+ * every named grid row is its own choice.
+ *
+ * Rows without a name ([LayoutRow.hasNoName], e.g. the double sofas of Kant Kino
+ * Saal 3, each its own unnamed row) can't be told apart by a row label, so all
+ * their seats form one group (label `null`, at the place of the frontmost such
+ * row), ordered by seat number (fixed labels after the numbers; equal numbers in
+ * map order, front to back and left to right), in one block.
  */
-fun seatChoices(labels: LayoutLabels): List<SeatRowChoice> =
-    labels.seats.values
-        .groupBy { it.position.row }
-        .toSortedMap()
-        .map { (row, seats) ->
-            SeatRowChoice(
-                rowIndex = row,
-                label = labels.rowLabels[row].orEmpty(),
-                seats = seats.sortedBy { it.position.column }.map { SeatChoice(it.id, it.label, it.block) },
-            )
-        }
+fun seatChoices(labels: LayoutLabels): List<SeatRowChoice> {
+    val byRow = labels.seats.values.groupBy { it.position.row }.toSortedMap()
+    val unnamed = byRow.filterKeys { labels.rowLabels[it] == null }
+    val choices = byRow.filterKeys { it !in unnamed }.map { (row, seats) ->
+        SeatRowChoice(
+            rowIndex = row,
+            label = labels.rowLabels[row],
+            seats = seats.sortedBy { it.position.column }.map { SeatChoice(it.id, it.label, it.block) },
+        )
+    }
+    if (unnamed.isEmpty()) return choices
+    val group = SeatRowChoice(
+        rowIndex = unnamed.keys.min(),
+        label = null,
+        seats = unnamed.values.flatten()
+            .sortedWith(compareBy({ it.number ?: Int.MAX_VALUE }, { it.position.row }, { it.position.column }))
+            .map { SeatChoice(it.id, it.label, block = 0) },
+    )
+    return (choices + group).sortedBy { it.rowIndex }
+}
 
 fun seatChoices(layout: SeatLayout): List<SeatRowChoice> = seatChoices(layout.labels())
 
-/** The first seat in a row labelled [rowLabel] whose label matches [number] and [kind]. */
-fun List<SeatRowChoice>.findSeat(rowLabel: String, number: Int, kind: SeatKind = SeatKind.STANDARD): SeatId? =
-    asSequence()
-        .filter { it.label.equals(rowLabel.trim(), ignoreCase = true) }
+/**
+ * The first seat in a row labelled [rowLabel] whose seat label is [seat] (a
+ * number like "10", or a fixed label like "R"). Both are trimmed and compared
+ * ignoring case; every kind of place is numbered, so the kind doesn't matter.
+ * A [rowLabel] that is `null`, blank or "-" ([LayoutRow.NO_NAME]) finds the seat
+ * among the rows without a name.
+ */
+fun List<SeatRowChoice>.findSeat(rowLabel: String?, seat: String): SeatId? {
+    val row = rowLabel?.trim()?.takeUnless { it.isEmpty() || it == LayoutRow.NO_NAME }
+    return asSequence()
+        .filter { if (row == null) it.isUnnamed else it.label.equals(row, ignoreCase = true) }
         .flatMap { it.seats }
-        .firstOrNull { it.label.number == number && (it.label.kind == SeatKind.WHEELCHAIR) == (kind == SeatKind.WHEELCHAIR) }
+        .firstOrNull { it.label.seat.equals(seat.trim(), ignoreCase = true) }
         ?.seatId
+}
 
 /**
  * Choose a seat by row, then by number: an accessible alternative to tapping the
  * [SeatMap]. Plain chips (no dialog), each announced with the seat's full label.
  * Split rows show their blocks separately (numbers may restart per block). When
  * [selectedSeatId] changes (e.g. tapped on the map), the shown row follows it.
+ * Seats in rows without a name are one group ([seatChoices]): a "Seats" chip
+ * beside the rows, or, in a hall where no row has a name, the seats alone
+ * without a row step.
  *
  * @param seatVisuals the map's seat states; when not empty, each chip also
  *   announces its seat's state ("Row 7, Seat 10, great, favourite").
@@ -115,19 +165,29 @@ fun SeatPicker(
         if (selectedRow >= 0) rowIndex = selectedRow
     }
     val row = choices[rowIndex.coerceIn(choices.indices)]
+    // A hall whose rows have no names (e.g. Kant Kino Saal 3) needs no row step.
+    val onlyUnnamed = choices.size == 1 && row.isUnnamed
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        PickerHeader("Row")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            choices.forEachIndexed { index, choice ->
-                ChoiceChip(
-                    text = choice.label,
-                    selected = index == rowIndex,
-                    onClick = { rowIndex = index },
-                    modifier = Modifier.semantics { contentDescription = "Row ${choice.label}" },
-                )
+        if (!onlyUnnamed) {
+            PickerHeader("Row")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                choices.forEachIndexed { index, choice ->
+                    ChoiceChip(
+                        text = choice.chipText,
+                        selected = index == rowIndex,
+                        onClick = { rowIndex = index },
+                        modifier = Modifier.semantics { contentDescription = choice.chipDescription },
+                    )
+                }
             }
         }
-        PickerHeader("Seat in row ${row.label}")
+        PickerHeader(
+            when {
+                onlyUnnamed -> "Seat"
+                row.label == null -> UNNAMED_GROUP_TITLE
+                else -> "Seat in row ${row.label}"
+            },
+        )
         row.blocks.forEachIndexed { index, block ->
             row.blockCaption(index)?.let { caption ->
                 Text(caption, style = MaterialTheme.typography.labelSmall, color = CinexTheme.colors.textMuted)

@@ -4,10 +4,15 @@ import io.github.katznmeik.cinexperience.core.model.Cinema
 import io.github.katznmeik.cinexperience.core.model.CinemaRatings
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallRatings
+import io.github.katznmeik.cinexperience.core.model.LayoutRow
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.Rating
+import io.github.katznmeik.cinexperience.core.model.SeatColour
+import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
+import io.github.katznmeik.cinexperience.core.model.SeatOverride
 import io.github.katznmeik.cinexperience.core.model.Visit
 import java.time.LocalDate
 
@@ -29,6 +34,9 @@ object SampleData {
 
     /** Delphi LUX, Saal 6: no layout, no visits. */
     const val DELPHI_LUX_SAAL_6 = 506L
+
+    /** Kant Kino, Saal 3: 11 double sofas, each an unnamed row (see [storeWithKantKinoSaal3]). */
+    const val KANT_KINO_SAAL_3 = 803L
 
     private val seed: List<Triple<String, String, List<String>>> = listOf(
         Triple("Babylon Kreuzberg", "Dresdener Straße 126, 10999 Berlin", saale(2)),
@@ -137,6 +145,40 @@ object SampleData {
         )
     }
 
+    /**
+     * [store] with Delphi LUX Saal 1 drawn as [SampleLayouts.yorckNumbering], without
+     * visits, and with INVENTED colours on its wheelchair spaces: row 1 great, OK,
+     * avoid, no data; row 6's "R" great and the favourite.
+     */
+    fun storeWithYorckNumbering(): FakeStore = store().let { s ->
+        val hall = DELPHI_LUX_SAAL_1
+        s.copy(
+            halls = s.halls.map {
+                if (it.id == hall) it.copy(layout = SampleLayouts.yorckNumbering, screenWidth = 13f, screenDistance = 2f) else it
+            },
+            visits = s.visits.filter { it.hallId != hall },
+            favourites = s.favourites - hall,
+            overrides = listOf(
+                SeatOverride(hall, SeatId(1), SeatColour.GREEN),
+                SeatOverride(hall, SeatId(2), SeatColour.YELLOW),
+                SeatOverride(hall, SeatId(10), SeatColour.RED),
+                SeatOverride(hall, SampleLayouts.yorckRowSixR, SeatColour.GREEN, isFavourite = true),
+            ),
+        )
+    }
+
+    /**
+     * [store] with Kant Kino Saal 3 drawn as the seed has it ([SampleLayouts.kantKinoSaal3]:
+     * rows without a name, sofa places), its screen as seeded (5 × 1.5), no visits.
+     */
+    fun storeWithKantKinoSaal3(): FakeStore = store().let { s ->
+        s.copy(
+            halls = s.halls.map {
+                if (it.id == KANT_KINO_SAAL_3) it.copy(layout = SampleLayouts.kantKinoSaal3, screenWidth = 5f, screenDistance = 1.5f) else it
+            },
+        )
+    }
+
     /** The preloaded cinemas and halls without any visits, as after a fresh install. */
     fun freshInstallStore(): FakeStore = FakeStore(cinemas, halls.map { it.copy(layout = null) })
 }
@@ -171,4 +213,62 @@ object SampleLayouts {
             }
         }
     }
+
+    /**
+     * Seat numbers as Yorck has them (spec §4.3), in a 7-row hall of 15 columns:
+     * - row 1: wheelchair spaces at both ends, numbered like every seat (1 2 · 3–9 · 10 11);
+     * - row 2: right to left (13 … 1);
+     * - row 3: left to right from 3 (3 … 15);
+     * - row 4: three blocks, right to left (13–11 | 10–4 | 3–1);
+     * - row 5: three blocks, left to right, restarting per block;
+     * - row 6: right to left, the wheelchair space at the right end labelled "R" (14 … 1 R);
+     * - row 7: left to right, an "R" wheelchair space first, a companion seat last (R 1 … 14).
+     * Seat ids run row-major from 1: row 6's "R" is seat 78, row 7's is seat 79.
+     */
+    val yorckNumbering: SeatLayout = SeatLayout.fromPatterns(
+        ".WW.SSSSSSS.WW.",
+        ".SSSSSSSSSSSSS.",
+        ".SSSSSSSSSSSSS.",
+        "SSS|SSSSSSS|SSS",
+        "SSS|SSSSSSS|SSS",
+        "SSSSSSSSSSSSSSW",
+        "WSSSSSSSSSSSSSC",
+        firstSeatId = 1,
+    )
+        .updateRow(1) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+        .updateRow(2) { it.copy(blockStartNumbers = listOf(3)) }
+        .updateRow(3) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+        .updateRow(4) { it.copy(numbering = SeatNumbering.RESTART_PER_BLOCK) }
+        .updateRow(5) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+        .withFixedLabel(5, 14, "R")
+        .withFixedLabel(6, 0, "R")
+
+    /** [yorckNumbering]'s wheelchair space labelled "R" in row 6. */
+    val yorckRowSixR: SeatId = SeatId(78)
+
+    /**
+     * Kant Kino Saal 3 exactly as the seed (version 5) holds it (checked against the
+     * seed in feature:seatmap's `KantKinoSaal3FixtureTest`): 11 double sofas, each its
+     * own row without a name ("-", spec §4.3), alternately right and left of the centre,
+     * numbered 1–22 across the room: the front sofa holds 11 12, the next 14 13, … the
+     * back one 1 2. Every place is a sofa place.
+     */
+    val kantKinoSaal3: SeatLayout = SeatLayout.fromPatterns(List(11) { if (it % 2 == 0) "...FF" else "FF..." }, firstSeatId = 1)
+        .let { layout ->
+            (0 until layout.rowCount).fold(layout) { acc, row ->
+                // Even rows: the right sofa, left to right from 11, 9, … 1; odd rows: the
+                // left sofa, right to left from 13, 15, … 21.
+                val start = if (row % 2 == 0) 11 - row else 12 + row
+                acc.updateRow(row) {
+                    it.copy(
+                        label = LayoutRow.NO_NAME,
+                        numberingDirection = if (row % 2 == 0) NumberingDirection.LEFT_TO_RIGHT else NumberingDirection.RIGHT_TO_LEFT,
+                        blockStartNumbers = if (start == 1) emptyList() else listOf(start),
+                    )
+                }
+            }
+        }
+
+    /** [kantKinoSaal3]'s "Seat 12": the right place of the front sofa. */
+    val kantKinoSaal3Seat12: SeatId = SeatId(2)
 }

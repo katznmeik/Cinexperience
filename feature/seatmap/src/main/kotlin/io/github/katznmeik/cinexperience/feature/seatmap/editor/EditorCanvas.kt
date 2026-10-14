@@ -396,13 +396,17 @@ internal fun EditorCanvas(
     )
     val numberStyle = SeatNumberTexts.style(MaterialTheme.typography.labelSmall)
 
-    // Measured once per row labels (and style), not on every paint stroke.
-    val rowLabelTexts = remember(textMeasurer, labels.rowLabels, labelStyle) {
-        measureRowLabels(textMeasurer, labels.rowLabels, labelStyle)
+    // The editor shows a row without a name as its stored "-" (the hall's map shows no label).
+    val rowLabels = remember(labels.rowLabels, draft.layout) {
+        labels.rowLabels.mapIndexed { row, label -> label ?: draft.layout.rows.getOrNull(row)?.label }
     }
-    val selectedRowLabelTexts = remember(textMeasurer, labels.rowLabels, selectedLabelStyle) {
+    // Measured once per row labels (and style), not on every paint stroke.
+    val rowLabelTexts = remember(textMeasurer, rowLabels, labelStyle) {
+        measureRowLabels(textMeasurer, rowLabels, labelStyle)
+    }
+    val selectedRowLabelTexts = remember(textMeasurer, rowLabels, selectedLabelStyle) {
         // A selected row without a label shows "–".
-        measureRowLabels(textMeasurer, labels.rowLabels.map { it ?: "–" }, selectedLabelStyle)
+        measureRowLabels(textMeasurer, rowLabels.map { it ?: "–" }, selectedLabelStyle)
     }
     val labelWidth = remember(rowLabelTexts, density) {
         rowLabelWidth(rowLabelTexts, minWidth = with(density) { 18.dp.toPx() }) + with(density) { 4.dp.toPx() }
@@ -796,7 +800,8 @@ private class EditorGridDrawing(
                 when (val cell = layout.cell(row, column)) {
                     is LayoutCell.Seat -> {
                         seats.addRoundRect(seatRoundRect(rect.deflate(0.75f * dp)))
-                        // Numbers come from the derived labels, so they follow every edit.
+                        // Numbers (and fixed labels) come from the derived labels, so they follow
+                        // every edit, also of the row's numbering direction.
                         marks += SeatMarks(rect, cell.kind, labels.labelOf(cell.id)?.seatNumberText)
                     }
                     LayoutCell.Gap -> gaps.addRoundRect(RoundRect(rect.deflate(0.5f * dp), CornerRadius(3f * dp)))
@@ -810,8 +815,9 @@ private class EditorGridDrawing(
     }
 
     /**
-     * With [showNumbers], numbered seats show their number (companion and sofa places
-     * their symbol above it); otherwise only the kind symbols are drawn. Over a
+     * With [showNumbers], seats show their number or fixed label (wheelchair spaces,
+     * companion and sofa places their symbol above it); otherwise only the kind
+     * symbols are drawn. Over a
      * reference screenshot ([overReference]) numbers and symbols get a dark halo.
      * Numbers and symbols outside [visible] (the drawing inside the canvas) are skipped.
      */

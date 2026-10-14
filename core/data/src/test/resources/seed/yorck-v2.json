@@ -1,0 +1,346 @@
+{
+  "seedVersion": 2,
+  "cinemas": [
+    {
+      "seedKey": "babylon-kreuzberg",
+      "name": "Babylon Kreuzberg",
+      "address": "Dresdener Straße 126, 10999 Berlin",
+      "halls": [
+        {
+          "seedKey": "babylon-kreuzberg/saal-1",
+          "name": "Saal 1"
+        },
+        {
+          "seedKey": "babylon-kreuzberg/saal-2",
+          "name": "Saal 2"
+        }
+      ]
+    },
+    {
+      "seedKey": "capitol-dahlem",
+      "name": "Capitol Dahlem",
+      "address": "Thielallee 36, 14195 Berlin",
+      "halls": [
+        {
+          "seedKey": "capitol-dahlem/saal-1",
+          "name": "Saal 1"
+        }
+      ]
+    },
+    {
+      "seedKey": "cinema-paris",
+      "name": "Cinema Paris",
+      "address": "Kurfürstendamm 211, 10719 Berlin",
+      "halls": [
+        {
+          "seedKey": "cinema-paris/saal-1",
+          "name": "Saal 1"
+        }
+      ]
+    },
+    {
+      "seedKey": "delphi-filmpalast",
+      "name": "Delphi Filmpalast",
+      "address": "Kantstraße 12a, 10623 Berlin",
+      "halls": [
+        {
+          "seedKey": "delphi-filmpalast/saal-1",
+          "name": "Saal 1"
+        }
+      ]
+    },
+    {
+      "seedKey": "delphi-lux",
+      "name": "delphi LUX",
+      "address": "Kantstraße 10, 10623 Berlin",
+      "halls": [
+        {
+          "seedKey": "delphi-lux/saal-1",
+          "name": "Saal 1",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "W.W|SSSSSSSSS|W.W" },
+              { "label": "2", "cells": "SS||SSSSSSSSS||SS" },
+              { "label": "3", "cells": "SS||SSSSSSSSS||SS" },
+              { "label": "4", "cells": "SS||SSSSSSSSS||SS" },
+              { "label": "5", "cells": "SS||SSSSSSSSS||SS" },
+              { "label": "6", "cells": "SS||SSSSSSSSS||SS" },
+              { "label": "7", "cells": "....SSSSSSSSS||SS" },
+              { "cells": "................." },
+              { "label": "8", "cells": "....SSSSSSSSS...." },
+              { "label": "9", "cells": "....SSSSSSSSS...." },
+              { "label": "10", "cells": "..SSSSSSSSSSSS..." }
+            ]
+          }
+        },
+        {
+          "seedKey": "delphi-lux/saal-2",
+          "name": "Saal 2",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "WWWCS|..SSSSSS" },
+              { "label": "2", "cells": "SSSSS|.SSSSSSS" },
+              { "label": "3", "cells": "SSSSS|SSSSSSSS" },
+              { "label": "4", "cells": "SSSSS|SSSSSSSS" },
+              { "label": "5", "cells": "SSSSS|SSSSSSSS" },
+              { "label": "6", "cells": "SSSSS|SSSSSSSS" },
+              { "label": "7", "cells": "SSSSS|SSSSSSSS" },
+              { "label": "8", "cells": "..SSS|SSSSSSSS" },
+              { "label": "9", "cells": "..SSS|SSSSSSSS" },
+              { "label": "10", "cells": "..SSS|.SSSSSSS" },
+              { "label": "11", "cells": "..SSS|..SSSSSS" },
+              { "label": "12", "cells": "..SSS|...SSSSS" }
+            ]
+          }
+        },
+        {
+          "seedKey": "delphi-lux/saal-3",
+          "name": "Saal 3",
+          "screenWidth": 11.5,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "W.SSSSSS.W.W" },
+              { "label": "2", "cells": "..SSSSSSSSSS" },
+              { "label": "3", "cells": "..SSSSSSSSSS" },
+              { "label": "4", "cells": "..SSSSSSSSSS" },
+              { "label": "5", "cells": "..SSSSSSSSSS" },
+              { "label": "6", "cells": "..SSSSSSSSSS" },
+              { "label": "7", "cells": ".....SSSSSSS" },
+              { "label": "8", "cells": ".....SSSSSSS" },
+              { "label": "9", "cells": "....SSSSSSSS" }
+            ]
+          }
+        },
+        {
+          "seedKey": "delphi-lux/saal-4",
+          "name": "Saal 4",
+          "screenWidth": 10.0,
+          "screenDistance": 2.0,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": ".WCSSSSSSS" },
+              { "label": "2", "cells": "SSSSSSSSSS" },
+              { "label": "3", "cells": "SSSSSSSSSS" },
+              { "label": "4", "cells": "SSSSSSSSSS" },
+              { "label": "5", "cells": "...SSSSSSS" },
+              { "label": "6", "cells": "..SSSSSSSS" }
+            ]
+          }
+        },
+        {
+          "seedKey": "delphi-lux/saal-5",
+          "name": "Saal 5",
+          "screenWidth": 9.0,
+          "screenDistance": 2.0,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "SSSSSSCW." },
+              { "label": "2", "cells": "SSSSSSSSS" },
+              { "label": "3", "cells": "SSSSSSSSS" },
+              { "label": "4", "cells": "SSSSSSSSS" },
+              { "label": "5", "cells": "SSSSSSSSS" },
+              { "label": "6", "cells": "...FFFFFF" }
+            ]
+          }
+        },
+        {
+          "seedKey": "delphi-lux/saal-6",
+          "name": "Saal 6",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "W.W|SSSSSSSSS|W.W" },
+              { "label": "2", "cells": ".SS|SSSSSSSSS||SS" },
+              { "label": "3", "cells": ".SS|SSSSSSSSS||SS" },
+              { "label": "4", "cells": ".SS|SSSSSSSSS||SS" },
+              { "label": "5", "cells": ".SS|SSSSSSSSS||SS" },
+              { "label": "6", "cells": ".SS|SSSSSSSSS||SS" },
+              { "label": "7", "cells": ".SS|SSSSSSSSS...." },
+              { "label": "8", "cells": ".SSSSSS.........." }
+            ]
+          }
+        },
+        {
+          "seedKey": "delphi-lux/saal-7",
+          "name": "Luxbox",
+          "screenWidth": 9.0,
+          "screenDistance": 2.0,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "SSSSCWS.." },
+              { "label": "2", "cells": "SSSSS...." },
+              { "label": "3", "cells": "SSSSS||SS" },
+              { "label": "4", "cells": "SSSSS||SS" },
+              { "label": "5", "cells": "SSSSSSSSS" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "seedKey": "filmtheater-am-friedrichshain",
+      "name": "Filmtheater am Friedrichshain",
+      "address": "Bötzowstraße 1–5, 10407 Berlin",
+      "halls": [
+        {
+          "seedKey": "filmtheater-am-friedrichshain/saal-1",
+          "name": "Saal 1"
+        },
+        {
+          "seedKey": "filmtheater-am-friedrichshain/saal-2",
+          "name": "Saal 2"
+        },
+        {
+          "seedKey": "filmtheater-am-friedrichshain/saal-3",
+          "name": "Saal 3"
+        },
+        {
+          "seedKey": "filmtheater-am-friedrichshain/saal-4",
+          "name": "Saal 4"
+        },
+        {
+          "seedKey": "filmtheater-am-friedrichshain/saal-5",
+          "name": "Saal 5"
+        }
+      ]
+    },
+    {
+      "seedKey": "international",
+      "name": "International",
+      "address": "Karl-Marx-Allee 33, 10178 Berlin",
+      "halls": [
+        {
+          "seedKey": "international/saal-1",
+          "name": "Saal 1"
+        }
+      ]
+    },
+    {
+      "seedKey": "kant-kino",
+      "name": "Kant Kino",
+      "address": "Kantstraße 54, 10627 Berlin",
+      "halls": [
+        {
+          "seedKey": "kant-kino/saal-1",
+          "name": "Saal 1"
+        },
+        {
+          "seedKey": "kant-kino/saal-2",
+          "name": "Saal 2"
+        },
+        {
+          "seedKey": "kant-kino/saal-3",
+          "name": "Saal 3"
+        },
+        {
+          "seedKey": "kant-kino/saal-4",
+          "name": "Saal 4"
+        },
+        {
+          "seedKey": "kant-kino/saal-5",
+          "name": "Saal 5"
+        }
+      ]
+    },
+    {
+      "seedKey": "neues-off",
+      "name": "Neues Off",
+      "address": "Hermannstraße 20, 12049 Berlin",
+      "halls": [
+        {
+          "seedKey": "neues-off/saal-1",
+          "name": "Saal 1"
+        }
+      ]
+    },
+    {
+      "seedKey": "odeon",
+      "name": "Odeon",
+      "address": "Hauptstraße 116, 10827 Berlin",
+      "halls": [
+        {
+          "seedKey": "odeon/saal-1",
+          "name": "Saal 1"
+        }
+      ]
+    },
+    {
+      "seedKey": "passage",
+      "name": "Passage",
+      "address": "Karl-Marx-Straße 131, 12043 Berlin",
+      "halls": [
+        {
+          "seedKey": "passage/saal-1",
+          "name": "Saal 1"
+        },
+        {
+          "seedKey": "passage/saal-2",
+          "name": "Saal 2"
+        },
+        {
+          "seedKey": "passage/saal-3",
+          "name": "Saal 3"
+        },
+        {
+          "seedKey": "passage/saal-4",
+          "name": "Saal 4"
+        }
+      ]
+    },
+    {
+      "seedKey": "rollberg",
+      "name": "Rollberg",
+      "address": "Rollbergstraße 70, 12053 Berlin",
+      "halls": [
+        {
+          "seedKey": "rollberg/saal-1",
+          "name": "Saal 1"
+        },
+        {
+          "seedKey": "rollberg/saal-2",
+          "name": "Saal 2"
+        },
+        {
+          "seedKey": "rollberg/saal-3",
+          "name": "Saal 3"
+        },
+        {
+          "seedKey": "rollberg/saal-4",
+          "name": "Saal 4"
+        },
+        {
+          "seedKey": "rollberg/saal-5",
+          "name": "Saal 5"
+        }
+      ]
+    },
+    {
+      "seedKey": "yorck",
+      "name": "Yorck",
+      "address": "Yorckstraße 86, 10965 Berlin",
+      "halls": [
+        {
+          "seedKey": "yorck/yorck",
+          "name": "Yorck"
+        },
+        {
+          "seedKey": "yorck/new-yorck",
+          "name": "New Yorck"
+        }
+      ]
+    }
+  ]
+}

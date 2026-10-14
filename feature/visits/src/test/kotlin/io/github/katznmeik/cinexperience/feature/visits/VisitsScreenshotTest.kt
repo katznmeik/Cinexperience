@@ -122,6 +122,38 @@ class VisitsScreenshotTest {
         capture("seat_picker_numbers") { VisitEditScreen(state, photo = null, actions = noActions) }
     }
 
+    /**
+     * Seat numbers as Yorck has them ([SampleLayouts.yorckNumbering]) in the picker:
+     * the "R" wheelchair space of row 6 is selected ("ROW 6 · SEAT R"), and the row's
+     * chips read as drawn, right to left numbered: 14 … 1, R (with the wheelchair icon).
+     */
+    @Test
+    @Config(qualifiers = "w412dp-h1500dp-port-night-xxhdpi")
+    fun seatPickerYorckNumbering() {
+        val vm = form(VisitEditMode.Add(SampleData.DELPHI_LUX_SAAL_1), store = SampleData.storeWithYorckNumbering()) {
+            openSeatPicker()
+            tapPickerSeat(SampleLayouts.yorckRowSixR)
+        }
+        val state = vm.uiState.value
+        capture("seat_picker_yorck_numbering") { VisitEditScreen(state, photo = null, actions = noActions) }
+    }
+
+    /**
+     * Kant Kino Saal 3 ([SampleLayouts.kantKinoSaal3]): rows without a name, so the picker
+     * has no row step and lists the 22 sofa places by number; seat 12 is selected
+     * ("SEAT 12"), and the map shows no row labels.
+     */
+    @Test
+    @Config(qualifiers = "w412dp-h1500dp-port-night-xxhdpi")
+    fun seatPickerKantKinoSaal3() {
+        val vm = form(VisitEditMode.Add(SampleData.KANT_KINO_SAAL_3), store = SampleData.storeWithKantKinoSaal3()) {
+            openSeatPicker()
+            tapPickerSeat(SampleLayouts.kantKinoSaal3Seat12)
+        }
+        val state = vm.uiState.value
+        capture("seat_picker_kant_kino_saal_3") { VisitEditScreen(state, photo = null, actions = noActions) }
+    }
+
     @Test
     fun allVisits() {
         val state = allVisitsState(VisitFixtures.store())

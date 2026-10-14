@@ -3,7 +3,9 @@ package io.github.katznmeik.cinexperience.core.data.backup
 import io.github.katznmeik.cinexperience.core.data.repository.RoomCinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomHallRepository
 import io.github.katznmeik.cinexperience.core.data.save
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.Visit
+import io.github.katznmeik.cinexperience.core.model.labels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -27,7 +29,7 @@ internal class BackupRoundTripTest : BackupTestBase() {
         val doc = deviceA.document("backup.zip")
 
         val counts = deviceA.repository.export(doc)
-        assertEquals(BackupCounts(cinemas = 14, halls = 37, visits = 4, overrides = 3, photos = 2, referenceImages = 2), counts)
+        assertEquals(BackupCounts(cinemas = 15, halls = 39, visits = 4, overrides = 3, photos = 2, referenceImages = 2), counts)
 
         // A fresh install: seeded, no user data.
         val deviceB = newDevice("b")
@@ -82,6 +84,43 @@ internal class BackupRoundTripTest : BackupTestBase() {
         BackupValidator.validate(copy, copy.filePaths)
         assertTrue(copy.cinemas.none { it.isFavourite })
         assertTrue(copy.halls.all { it.screenOffset == 0f })
+    }
+
+    /**
+     * Layouts of format 3 (numbering direction, fixed seat labels) go into the backup
+     * verbatim, validate, import and land in the safety copy without a new
+     * backupVersion: the DTOs didn't change, only the layout JSON they carry.
+     */
+    @Test
+    fun yorckNumberedLayoutsSurviveExportImportAndSafetyCopies() = runTest {
+        buildRealisticData()
+        val userHall = halls.getHall(db.hallDao().getAll().single { it.name == "Saal A" }.id)!!
+        val storedJson = db.hallDao().get(userHall.id)!!.layoutJson!!
+        assertTrue(storedJson, storedJson.contains("\"formatVersion\":3"))
+        assertEquals(NumberingDirection.RIGHT_TO_LEFT, userHall.layout!!.rows[2].numberingDirection)
+        val labels = userHall.layout!!.labels()
+        assertEquals(listOf("R", "5", "4", "3", "2", "1"), userHall.layout!!.rows[2].seatIds.map { labels.labelOf(it)!!.seat })
+
+        val doc = deviceA.document("backup.zip")
+        deviceA.repository.export(doc)
+        val data = BackupFormat.strictJson.decodeFromString(
+            BackupData.serializer(),
+            readZip(File(doc)).single { it.first == BackupFormat.DATA }.second.decodeToString(),
+        )
+        assertEquals(storedJson, data.halls.single { it.name == "Saal A" }.layoutJson)
+
+        // Into a fresh install, and back onto device A (whose safety copy then holds the format 3 layout).
+        val deviceB = newDevice("b")
+        deviceB.seed()
+        deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
+        val restored = RoomHallRepository(deviceB.db, Dispatchers.Default).getHall(userHall.id)!!
+        assertEquals(userHall.layout, restored.layout)
+        assertEquals(storedJson, deviceB.db.hallDao().get(userHall.id)!!.layoutJson)
+
+        deviceA.repository.commitImport(deviceA.repository.prepareImport(doc))
+        val copy = deviceA.latestCopyData()!!
+        BackupValidator.validate(copy, copy.filePaths)
+        assertEquals(storedJson, copy.halls.single { it.name == "Saal A" }.layoutJson)
     }
 
     @Test
@@ -204,7 +243,7 @@ internal class BackupRoundTripTest : BackupTestBase() {
         val deviceB = newDevice("b")
         deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
         val names = deviceB.snapshot().cinemas.map { it.name }
-        assertEquals(14, names.size)
+        assertEquals(15, names.size)
         assertTrue("Kiezkino" in names)
     }
 }

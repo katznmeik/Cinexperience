@@ -3,11 +3,15 @@ package io.github.katznmeik.cinexperience.feature.visits
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.lifecycle.SavedStateHandle
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.testing.ACCESSIBILITY_FONT_SCALES
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
+import io.github.katznmeik.cinexperience.core.testing.FakeStore
 import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.SampleData
@@ -61,9 +65,9 @@ class VisitsAccessibilityTest(private val fontScale: Float) {
         composeRule.assertAccessible()
     }
 
-    private fun form(mode: VisitEditMode, setUp: VisitEditViewModel.() -> Unit = {}): VisitEditViewModel {
+    private fun form(mode: VisitEditMode, store: FakeStore = VisitFixtures.store(), setUp: VisitEditViewModel.() -> Unit = {}): VisitEditViewModel {
         val photos = FakeVisitPhotoStore(setOf("photos/visit-fixture.jpg"))
-        val repository = FakeCinexRepository(VisitFixtures.store())
+        val repository = FakeCinexRepository(store)
         return VisitEditViewModel(mode, repository, repository, photos, SavedStateHandle(), today = { LocalDate.of(2026, 10, 14) }).apply(setUp)
     }
 
@@ -87,6 +91,20 @@ class VisitsAccessibilityTest(private val fontScale: Float) {
             tapPickerSeat(SampleLayouts.splitHall.rows[6].seatIds[13])
         }.uiState.value
         check("seat_picker") { VisitEditScreen(state, photo = null, actions = noActions) }
+    }
+
+    /** Rows without a name (Kant Kino Saal 3): no row step, one group of seats by number, "SEAT 12" selected. */
+    @Test
+    fun seatPickerKantKinoSaal3() {
+        val state = form(VisitEditMode.Add(SampleData.KANT_KINO_SAAL_3), store = SampleData.storeWithKantKinoSaal3()) {
+            openSeatPicker()
+            tapPickerSeat(SampleLayouts.kantKinoSaal3Seat12)
+        }.uiState.value
+        check("seat_picker_kant_kino_saal_3") { VisitEditScreen(state, photo = null, actions = noActions) }
+        composeRule.onNodeWithText("SEAT 12").assertExists()
+        composeRule.onNodeWithText("OR CHOOSE BY NUMBER").assertExists()
+        composeRule.onNodeWithContentDescription("Seat 12, sofa").assertIsSelected()
+        composeRule.onNodeWithText("Row").assertDoesNotExist()
     }
 
     @Test

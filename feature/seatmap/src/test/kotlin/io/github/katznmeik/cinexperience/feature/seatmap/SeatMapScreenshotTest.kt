@@ -20,6 +20,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
+import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.Visit
@@ -36,6 +37,7 @@ import io.github.katznmeik.cinexperience.core.ui.theme.DarkCinexColors
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailUiState
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailViewModel
+import io.github.katznmeik.cinexperience.feature.seatmap.detail.titleText
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutDraft
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutEditorActions
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutEditorScreen
@@ -270,6 +272,78 @@ class SeatMapScreenshotTest {
         val state = vm.uiState.value
         check(state.draft?.screenOffset == -3f)
         capture("layout_editor_screen_offset") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
+    }
+
+    /**
+     * Seat numbers as Yorck has them ([SampleLayouts.yorckNumbering]): wheelchair spaces
+     * numbered with their symbol above the number (row 1: great, OK, avoid, no data),
+     * rows right to left, and the selected favourite "R" in row 6: "ROW 6 · SEAT R".
+     */
+    @Test
+    @Config(qualifiers = "w412dp-h1300dp-port-night-xxhdpi")
+    fun hallDetailYorckNumbering() {
+        repository = FakeCinexRepository(SampleData.storeWithYorckNumbering())
+        val state = hallState(SampleData.DELPHI_LUX_SAAL_1) { it.onSeatClick(SampleLayouts.yorckRowSixR) }
+        check((state as HallDetailUiState.Loaded).selectedSeat?.label == SeatLabel("6", "R", SeatKind.WHEELCHAIR))
+        capture("hall_detail_yorck_numbering") { HallDetail(state) }
+    }
+
+    /**
+     * The row panel of a right-to-left row in three blocks (row 4 of
+     * [SampleLayouts.yorckNumbering]): "Right → left" selected, the "Starts at"
+     * fields in numbering order (right block first: 1–3, 4–10, 11–13).
+     */
+    @Test
+    @Config(qualifiers = "w412dp-h1300dp-port-night-xxhdpi")
+    fun layoutEditorRightToLeftRow() {
+        repository = FakeCinexRepository(SampleData.storeWithYorckNumbering())
+        val vm = LayoutEditorViewModel(SampleData.DELPHI_LUX_SAAL_1, repository, FakeReferenceImageStore())
+        vm.selectRow(3)
+        val state = vm.uiState.value
+        check(state.row?.blocksInNumberingOrder?.map { it.rangeText } == listOf("1–3", "4–10", "11–13"))
+        capture("layout_editor_right_to_left") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
+    }
+
+    /**
+     * The row with the fixed "R" (row 6, right to left, the "R" at the right end)
+     * selected in the editor: the "R" on its seat, the range "R + 1–14" in numbering order.
+     */
+    @Test
+    @Config(qualifiers = "w412dp-h1300dp-port-night-xxhdpi")
+    fun layoutEditorFixedLabelRow() {
+        repository = FakeCinexRepository(SampleData.storeWithYorckNumbering())
+        val vm = LayoutEditorViewModel(SampleData.DELPHI_LUX_SAAL_1, repository, FakeReferenceImageStore())
+        vm.selectRow(5)
+        val state = vm.uiState.value
+        check(state.row?.blocks?.single()?.rangeText == "R + 1–14")
+        capture("layout_editor_fixed_label") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
+    }
+
+    /**
+     * Kant Kino Saal 3 as seeded ([SampleLayouts.kantKinoSaal3]): 11 double sofas, each a
+     * row without a name, so the map has no row labels beside them; every place shows its
+     * sofa symbol and number. Seat 12 is selected: the card reads "SEAT 12", "Sofa".
+     */
+    @Test
+    @Config(qualifiers = "w412dp-h1500dp-port-night-xxhdpi")
+    fun hallDetailKantKinoSaal3() {
+        repository = FakeCinexRepository(SampleData.storeWithKantKinoSaal3())
+        val state = hallState(SampleData.KANT_KINO_SAAL_3) { it.onSeatClick(SampleLayouts.kantKinoSaal3Seat12) }
+        val seat = (state as HallDetailUiState.Loaded).selectedSeat!!
+        check(seat.label == SeatLabel(null, 12, SeatKind.SOFA) && seat.titleText() == "SEAT 12")
+        capture("hall_detail_kant_kino_saal_3") { HallDetail(state) }
+    }
+
+    /** An unnamed row of Kant Kino Saal 3 selected in the editor: "-" on the canvas and in the label field. */
+    @Test
+    @Config(qualifiers = "w412dp-h1300dp-port-night-xxhdpi")
+    fun layoutEditorUnnamedRow() {
+        repository = FakeCinexRepository(SampleData.storeWithKantKinoSaal3())
+        val vm = LayoutEditorViewModel(SampleData.KANT_KINO_SAAL_3, repository, FakeReferenceImageStore())
+        vm.selectRow(1)
+        val state = vm.uiState.value
+        check(state.row?.title == "Unnamed row · 1 block" && state.labelInput == "-")
+        capture("layout_editor_unnamed_row") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
     }
 
     /** The hall detail of a hall whose screen is 3 seats left of centre: the map and the viewing angle follow it. */

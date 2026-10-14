@@ -101,9 +101,10 @@ val MAX_ZOOM_SEAT_SIZE: Dp = 44.dp
 /**
  * The seat map of one hall (spec §6.3, §4.3): the screen as a straight bar at the
  * top, the seat grid with row labels on both sides, staggered rows shifted by
- * half a seat, aisles and gaps as empty space. Every numbered seat shows its seat
- * number (from [labels]) once the seats are big enough on screen for it (see
- * [MIN_SEAT_NUMBER_SIZE]); wheelchair spaces show their symbol.
+ * half a seat, aisles and gaps as empty space. Every seat shows its seat number
+ * or fixed label (from [labels]) once the seats are big enough on screen for it
+ * (see [MIN_SEAT_NUMBER_SIZE]); wheelchair spaces, companion seats and sofa places
+ * show their symbol above it.
  *
  * Drawn on one canvas (no composable per seat) and hit-tested with
  * [SeatMapGeometry.seatAt], so it stays smooth for big halls. It starts fitted
@@ -370,9 +371,8 @@ private class SeatMapDrawing(
     }
 
     /**
-     * With [showNumbers], numbered seats show their number with their marks in a band
-     * above it ([NumberedSeat]); otherwise (and on wheelchair spaces) the marks are
-     * drawn as symbols ([drawSeatMarks]). Seat decorations outside [visible] (the
+     * With [showNumbers], seats show their number with their marks in a band above
+     * it ([NumberedSeat]); otherwise the marks are drawn as symbols ([drawSeatMarks]). Seat decorations outside [visible] (the
      * content inside the canvas) are skipped.
      */
     fun DrawScope.draw(selected: SeatId?, showNumbers: Boolean, visible: Rect) {
@@ -421,10 +421,10 @@ private class SeatMapDrawing(
 
 /**
  * The kind symbol, favourite star and avoid × of a seat shown without a number
- * (wheelchair spaces, the legend, and every seat while the map is zoomed out too
- * far for numbers). On a standard seat the mark sits in the middle; on a
- * wheelchair, companion or sofa seat the symbol stays and the marks become small
- * badges in the corners. Numbered seats with their number use [drawNumberedSeat].
+ * (the legend, and every seat while the map is zoomed out too far for numbers).
+ * On a standard seat the mark sits in the middle; on a wheelchair, companion or
+ * sofa seat the symbol stays and the marks become small badges in the corners.
+ * Seats showing their number use [NumberedSeat].
  */
 internal fun DrawScope.drawSeatMarks(rect: Rect, kind: SeatKind, visual: SeatVisual, colors: CinexColors) {
     val onSeat = colors.seat.onColorOf(visual.tone)

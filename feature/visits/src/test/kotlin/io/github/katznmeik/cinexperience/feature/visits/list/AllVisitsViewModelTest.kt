@@ -1,8 +1,11 @@
 package io.github.katznmeik.cinexperience.feature.visits.list
 
+import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
+import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.SampleData
+import io.github.katznmeik.cinexperience.core.testing.SampleLayouts
 import io.github.katznmeik.cinexperience.feature.visits.VisitFixtures
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -14,6 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.IOException
+import java.time.LocalDate
 
 class AllVisitsViewModelTest {
 
@@ -33,6 +37,20 @@ class AllVisitsViewModelTest {
         assertEquals("3 Oct 2026 · Row 7 · Seat 10 · OmU", first.detailText())
         assertEquals("30 Aug 2026 · Row 5 · Seat 3", state.visits.last().detailText())
         assertEquals("5 Sep 2026 · German dub", state.visits[3].detailText())
+    }
+
+    @Test
+    fun aSeatInARowWithoutANameIsShownBySeatAlone() = runTest {
+        val store = SampleData.storeWithKantKinoSaal3()
+        val visit = Visit(
+            id = 9_100, hallId = SampleData.KANT_KINO_SAAL_3, date = LocalDate.of(2026, 10, 4),
+            seatId = SampleLayouts.kantKinoSaal3Seat12, screeningFormat = ScreeningFormat.OMU,
+        )
+        val vm = AllVisitsViewModel(FakeCinexRepository(store.copy(visits = listOf(visit))))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        val item = vm.uiState.value.visits.single()
+        assertEquals("Kant Kino · Saal 3", item.placeText())
+        assertEquals("4 Oct 2026 · Seat 12 · OmU", item.detailText())
     }
 
     @Test

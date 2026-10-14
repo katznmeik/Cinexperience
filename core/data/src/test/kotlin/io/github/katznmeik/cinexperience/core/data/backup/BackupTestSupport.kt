@@ -12,6 +12,7 @@ import io.github.katznmeik.cinexperience.core.data.seed.Seeder
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.CinemaRatings
 import io.github.katznmeik.cinexperience.core.model.HallRatings
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatColour
@@ -202,8 +203,8 @@ internal abstract class BackupTestBase : DatabaseTest() {
         SafetyCopies(File(filesDir, SafetyCopies.FOLDER)).latest()?.file?.inputStream()?.use { BackupReader().readDataOrNull(it) }
 
     /**
-     * Realistic data on device A: the shipped seed (13 cinemas, 36 halls, delphi
-     * LUX layouts with seat kinds), two favourite cinemas (one preloaded, one
+     * Realistic data on device A: the shipped seed (14 cinemas, 38 halls, all
+     * with layouts and seat kinds), two favourite cinemas (one preloaded, one
      * user-added), two halls with a shifted screen, a renamed preloaded hall with a reference image,
      * visits with seats, ratings, photos and formats, seat colours and a favourite,
      * a user-added cinema whose hall has seat kinds, an aisle, a seat id mark above
@@ -247,7 +248,9 @@ internal abstract class BackupTestBase : DatabaseTest() {
             .setSeat(2, 0, SeatKind.WHEELCHAIR)
             .setSeat(2, 1, SeatKind.COMPANION)
             .setSeat(0, 5, SeatKind.SOFA)
-        halls.updateHall(empty.copy(layout = drawn.layout))
+            // Yorck numbering (layout format 3): row 3 runs right to left, its wheelchair space is "R".
+            .updateRow(2) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+        halls.updateHall(empty.copy(layout = drawn.layout!!.withFixedLabel(2, 0, "R")))
         val lastRowSeat = halls.getHall(hallId)!!.layout!!.rows[3].seatIds[1]
         visits.save(Visit(hallId = hallId, date = LocalDate.of(2026, 8, 1), seatId = lastRowSeat, seatRating = Rating(1)))
         // Remove the last row (the highest ids): they stay used (mark), the visit keeps its seat id.
