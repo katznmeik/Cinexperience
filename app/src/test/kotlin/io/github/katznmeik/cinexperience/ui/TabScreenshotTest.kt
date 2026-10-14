@@ -39,6 +39,7 @@ internal class FakeAppContainer(
 ) : AppContainer {
     override val applicationContext: Context = RuntimeEnvironment.getApplication()
     override val appVersion: String = "0.1.0"
+    override val buildId: String = "abc1234"
     override val cinemaRepository = repository
     override val hallRepository = repository
     override val visitRepository = repository

@@ -64,7 +64,7 @@ class SettingsViewModelTest {
     private val backup = FakeBackupRepository()
 
     private fun TestScope.viewModel(repository: FakeCinexRepository = FakeCinexRepository(SampleData.store())): SettingsViewModel {
-        val vm = SettingsViewModel(repository, backup, "1.2.3", today = { LocalDate.of(2026, 10, 3) })
+        val vm = SettingsViewModel(repository, backup, "1.2.3", "abc1234", today = { LocalDate.of(2026, 10, 3) })
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         return vm
     }
@@ -76,6 +76,7 @@ class SettingsViewModelTest {
         val vm = viewModel()
         val state = vm.uiState.value
         assertEquals("1.2.3", state.appVersion)
+        assertEquals("abc1234", state.buildId)
         assertEquals(DataCounts(cinemas = 13, halls = 36, layoutsDrawn = 4, visits = SampleData.visits.size), state.counts)
     }
 
@@ -352,7 +353,7 @@ class SettingsScreenshotTest {
 
     private fun state(backup: BackupUiState): SettingsUiState {
         val cinemas = runBlocking { FakeCinexRepository(SampleData.store()).observeCinemaDetails().first() }
-        return SettingsUiState(appVersion = "0.1.0", counts = DataCounts.of(cinemas), backup = backup)
+        return SettingsUiState(appVersion = "0.1.0", buildId = "abc1234", counts = DataCounts.of(cinemas), backup = backup)
     }
 
     private fun show(state: SettingsUiState, onOpenManage: () -> Unit = {}, onOpenAllVisits: () -> Unit = {}) {
