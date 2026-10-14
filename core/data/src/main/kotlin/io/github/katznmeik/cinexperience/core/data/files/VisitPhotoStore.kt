@@ -21,8 +21,8 @@ import kotlin.math.roundToInt
 /**
  * App-private storage of visit photos (spec §4.4). Photos live under
  * `filesDir/photos/`; a visit stores the path relative to the files dir (e.g.
- * `photos/visit-<uuid>.jpg`) in `Visit.photoPath`. The backup export (M6) will
- * include this folder; Android Auto Backup leaves it out (database and
+ * `photos/visit-<uuid>.jpg`) in `Visit.photoPath`. The backup export includes
+ * the referenced photos; Android Auto Backup leaves them out (database and
  * preferences only).
  *
  * Camera captures are written by the camera app to a temporary file under

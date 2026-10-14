@@ -166,3 +166,65 @@ internal interface MetadataDao {
     @Upsert
     suspend fun put(entry: MetadataEntity)
 }
+
+/**
+ * Whole-table reads and writes for the backup export and import. Reads are
+ * ordered, so two snapshots of the same data compare equal. Use only inside a
+ * transaction: a snapshot must be consistent and a replace atomic.
+ */
+@Dao
+internal interface BackupDao {
+    @Query("SELECT * FROM cinema ORDER BY id")
+    suspend fun cinemas(): List<CinemaEntity>
+
+    @Query("SELECT * FROM hall ORDER BY id")
+    suspend fun halls(): List<HallEntity>
+
+    @Query("SELECT * FROM visit ORDER BY id")
+    suspend fun visits(): List<VisitEntity>
+
+    @Query("SELECT * FROM seat_override ORDER BY hall_id, seat_id")
+    suspend fun seatOverrides(): List<SeatOverrideEntity>
+
+    @Query("SELECT * FROM seed_snapshot ORDER BY kind, seed_key, field")
+    suspend fun seedSnapshots(): List<SeedSnapshotEntity>
+
+    @Query("SELECT * FROM app_metadata ORDER BY `key`")
+    suspend fun metadata(): List<MetadataEntity>
+
+    @Query("DELETE FROM seat_override")
+    suspend fun clearSeatOverrides()
+
+    @Query("DELETE FROM visit")
+    suspend fun clearVisits()
+
+    @Query("DELETE FROM hall")
+    suspend fun clearHalls()
+
+    @Query("DELETE FROM cinema")
+    suspend fun clearCinemas()
+
+    @Query("DELETE FROM seed_snapshot")
+    suspend fun clearSeedSnapshots()
+
+    @Query("DELETE FROM app_metadata")
+    suspend fun clearMetadata()
+
+    @Insert
+    suspend fun insertCinemas(rows: List<CinemaEntity>)
+
+    @Insert
+    suspend fun insertHalls(rows: List<HallEntity>)
+
+    @Insert
+    suspend fun insertVisits(rows: List<VisitEntity>)
+
+    @Insert
+    suspend fun insertSeatOverrides(rows: List<SeatOverrideEntity>)
+
+    @Insert
+    suspend fun insertSeedSnapshots(rows: List<SeedSnapshotEntity>)
+
+    @Insert
+    suspend fun insertMetadata(rows: List<MetadataEntity>)
+}

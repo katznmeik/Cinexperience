@@ -1,6 +1,8 @@
 package io.github.katznmeik.cinexperience.ui
 
 import android.content.Context
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -12,6 +14,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.github.takahirom.roborazzi.captureRoboImage
+import io.github.katznmeik.cinexperience.core.testing.FakeBackupRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
@@ -30,7 +33,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /** App container backed by the in-memory fake repositories. */
-private class FakeAppContainer(repository: FakeCinexRepository) : AppContainer {
+private class FakeAppContainer(
+    repository: FakeCinexRepository,
+    override val backupRepository: FakeBackupRepository = FakeBackupRepository(),
+) : AppContainer {
     override val applicationContext: Context = RuntimeEnvironment.getApplication()
     override val appVersion: String = "0.1.0"
     override val cinemaRepository = repository
@@ -87,6 +93,25 @@ class TabScreenshotTest {
         composeRule.onNodeWithTag(TopLevelDestination.Settings.testTag).performClick()
         composeRule.onNodeWithText("13 cinemas · 36 halls · 0 layouts drawn").assertExists()
         capture("tab_settings")
+    }
+
+    /** While a backup import replaces the data, the tabs can't be switched (nothing else may write). */
+    @Test
+    fun tabsAreLockedWhileImporting() {
+        val backup = FakeBackupRepository()
+        val container = FakeAppContainer(FakeCinexRepository(SampleData.freshInstallStore()), backup)
+        composeRule.setContent { CinexTheme { CinexApp(container) } }
+        composeRule.onNodeWithTag(TopLevelDestination.Settings.testTag).performClick()
+        composeRule.onNodeWithText("13 cinemas · 36 halls · 0 layouts drawn").assertExists()
+
+        backup.isImporting.value = true
+        composeRule.onNodeWithTag(TopLevelDestination.Cinemas.testTag).assertIsNotEnabled().performClick()
+        composeRule.onNodeWithTag(TopLevelDestination.Rankings.testTag).performClick()
+        composeRule.onNodeWithText("13 cinemas · 36 halls · 0 layouts drawn").assertExists()
+
+        backup.isImporting.value = false
+        composeRule.onNodeWithTag(TopLevelDestination.Cinemas.testTag).assertIsEnabled().performClick()
+        composeRule.onNodeWithText("13 venues · 0 visits").assertExists()
     }
 
     @Test

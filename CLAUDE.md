@@ -39,7 +39,7 @@ Look at the screenshot PNGs after every UI change.
 |---|---|---|
 | `app` | application | `MainActivity`, `CinexApp` (NavHost + bottom bar), manual DI `AppContainer`, screenshot tests |
 | `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic (no Android) |
-| `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos) |
+| `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos), backup export/import engine |
 | `core:testing` | Android lib (tests only) | in-memory fake repositories and file stores, illustrative screenshot fixtures, `MainDispatcherRule` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips) |
 | `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
@@ -47,7 +47,7 @@ Look at the screenshot PNGs after every UI change.
 | `feature:seatmap` | feature | hall detail with seat map, layout editor |
 | `feature:visits` | feature | add/edit visit (seat picker, photos), all visits |
 | `feature:rankings` | feature | rankings tab |
-| `feature:backup` | feature | settings tab, export/import |
+| `feature:backup` | feature | settings tab, export/import UI (file pickers, preview, progress), restore safety copy |
 
 Build configuration lives in the convention plugins in `build-logic/convention`
 (`cinex.android.application`, `.library`, `.compose`, `.feature`, `.room`,
@@ -86,7 +86,33 @@ Don't duplicate config in module build files.
   (the fake in `core:testing` models them like Room: `FakeStore.overrides`).
 - **Schema changes:** bump the `CinexDatabase` version, add a migration to
   `ALL_MIGRATIONS`, commit the exported `core/data/schemas/.../<n>.json` and add
-  a case to `MigrationTest`. No destructive fallback.
+  a case to `MigrationTest`. No destructive fallback. A new table or column must
+  also reach the backup (next point).
+- **Backup** (`core/data/.../backup/`, format in `BackupFormat.kt`): a zip with
+  `manifest.json`, `data.json` (every row, ids included, layouts as stored) and
+  the referenced `photos/` and `reference/` files. The DTOs are the format and
+  are separate from the Room entities: any DTO change bumps `BACKUP_VERSION` and
+  adds a step to `BackupMigrations` (imports parse `data.json` strictly,
+  straight into the DTOs). `BackupValidator` holds the data rules; export and
+  safety copies run it too, so no backup is written that can't be imported.
+  Imports validate everything before touching data (`BackupReader`; manifest
+  and data must precede the files, unreferenced entries are skipped), make
+  sure a safety copy exists (`filesDir/backups/pre-import-<seq>-<time>.zip`,
+  ordered by sequence, not clock; reused if the newest already holds the
+  current data; a failed import deletes the copy it wrote; pruned to the newest
+  2 only after success; Settings lists both, newest first, and restores the
+  chosen one through the same prepare → preview → commit path) and replace
+  all rows in one transaction
+  (`BackupRestorer`: imported files are added under names no existing file
+  has, and removed again if the transaction fails). While
+  `BackupRepository.isImporting` is true the UI blocks every other write
+  (tabs, Back, Settings rows). Once the transaction has committed, nothing
+  (progress callbacks, file clean-up, pruning, seeding, even Errors) can turn
+  the import into a failure or delete its safety copy (`onCommitted`). Failures
+  are `BackupException`s with user-facing messages. Tests:
+  `core/data/src/test/.../backup/`. Known limitation: if the current data fails
+  validation (e.g. a layout from a newer app), import is refused; there is no
+  "Replace anyway".
 - **Row and seat labels:** Yorck numbers rows and seats (1…n), which is the
   default labelling. Keep fixtures, examples and UI texts numeric ("Row 7 ·
   Seat 10"); custom row labels exist only for other cinemas.
@@ -97,9 +123,9 @@ Don't duplicate config in module build files.
   removed file is deleted only after a successful save, discarding deletes the
   files added in that session, deleting a visit deletes its photo. The startup
   sweep (`DataContainer.sweepOrphanFiles`) deletes unreferenced files older than
-  1 h. Auto Backup excludes them (database and preferences only); the M6 export
-  will include them. Tests use the fakes in `core:testing`
-  (`FakeReferenceImageStore`, `FakeVisitPhotoStore`).
+  1 h. Auto Backup excludes them (database and preferences only); the backup
+  export includes the referenced ones. Tests use the fakes in `core:testing`
+  (`FakeReferenceImageStore`, `FakeVisitPhotoStore`, `FakeBackupRepository`).
 - **Seed data:** `core/data/src/main/assets/seed/yorck.json`. Bump `seedVersion`
   for every change; `seedKey`s are permanent. Seeding only inserts missing items
   and fills empty fields, it never overwrites or deletes (a renamed seed hall

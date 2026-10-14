@@ -2,6 +2,7 @@ package io.github.katznmeik.cinexperience.di
 
 import android.content.Context
 import io.github.katznmeik.cinexperience.core.data.DataContainer
+import io.github.katznmeik.cinexperience.core.data.backup.BackupRepository
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRankingsRepository
@@ -37,6 +38,9 @@ interface AppContainer {
     val referenceImageStore: ReferenceImageStore
     val visitPhotoStore: VisitPhotoStore
 
+    /** Backup export and import (Settings, spec §8). */
+    val backupRepository: BackupRepository
+
     /** Housekeeping when the app starts (once per process), off the main thread. */
     fun onAppStart() {}
 }
@@ -60,6 +64,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val seatOverrideRepository: SeatOverrideRepository get() = data.seatOverrideRepository
     override val referenceImageStore: ReferenceImageStore get() = data.referenceImageStore
     override val visitPhotoStore: VisitPhotoStore get() = data.visitPhotoStore
+    override val backupRepository: BackupRepository get() = data.backupRepository
 
     private val started = AtomicBoolean(false)
 

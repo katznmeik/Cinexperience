@@ -4,6 +4,7 @@ import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
+import io.github.katznmeik.cinexperience.core.data.backup.BackupRepository
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import kotlinx.serialization.Serializable
 
@@ -16,13 +17,14 @@ data object SettingsRoute
  */
 fun NavGraphBuilder.settingsScreen(
     cinemaRepository: CinemaRepository,
+    backupRepository: BackupRepository,
     appVersion: String,
     onOpenManage: () -> Unit,
     onOpenAllVisits: () -> Unit,
 ) {
     composable<SettingsRoute> {
         SettingsEntry(
-            viewModel = viewModel(factory = SettingsViewModel.factory(cinemaRepository, appVersion)),
+            viewModel = viewModel(factory = SettingsViewModel.factory(cinemaRepository, backupRepository, appVersion)),
             onOpenManage = dropUnlessResumed(block = onOpenManage),
             onOpenAllVisits = dropUnlessResumed(block = onOpenAllVisits),
         )

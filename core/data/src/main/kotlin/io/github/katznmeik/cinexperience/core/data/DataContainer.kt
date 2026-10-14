@@ -2,6 +2,10 @@ package io.github.katznmeik.cinexperience.core.data
 
 import android.content.Context
 import android.util.Log
+import io.github.katznmeik.cinexperience.core.data.backup.BackupRepository
+import io.github.katznmeik.cinexperience.core.data.backup.ContentResolverDocuments
+import io.github.katznmeik.cinexperience.core.data.backup.LastExportStore
+import io.github.katznmeik.cinexperience.core.data.backup.RoomBackupRepository
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
 import io.github.katznmeik.cinexperience.core.data.files.FileReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.FileVisitPhotoStore
@@ -42,12 +46,13 @@ class DataContainer(
 
     private val database: CinexDatabase by lazy { CinexDatabase.build(appContext) }
 
+    private fun readSeedAsset(): String =
+        appContext.assets.open(DatabaseConfig.SEED_ASSET_PATH).bufferedReader().use { it.readText() }
+
     private val seeding: Deferred<Unit> by lazy {
         scope.async(ioDispatcher) {
             try {
-                Seeder(database) {
-                    appContext.assets.open(DatabaseConfig.SEED_ASSET_PATH).bufferedReader().use { it.readText() }
-                }.seedIfNeeded()
+                Seeder(database, ::readSeedAsset).seedIfNeeded()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -81,12 +86,51 @@ class DataContainer(
     /** Visit photos (spec §4.4), in app-private storage. */
     val visitPhotoStore: VisitPhotoStore by lazy { FileVisitPhotoStore(appContext, ioDispatcher) }
 
+    /** Backup export and import (spec §8). */
+    val backupRepository: BackupRepository get() = roomBackupRepository
+
+    private val roomBackupRepository: RoomBackupRepository by lazy {
+        RoomBackupRepository(
+            db = database,
+            filesDir = appContext.filesDir,
+            cacheDir = appContext.cacheDir,
+            documents = ContentResolverDocuments(appContext.contentResolver),
+            lastExportStore = LastExportStore(
+                appContext.getSharedPreferences(LastExportStore.PREFERENCES_NAME, Context.MODE_PRIVATE),
+            ),
+            appVersion = {
+                appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName.orEmpty()
+            },
+            readSeed = ::readSeedAsset,
+            ioDispatcher = ioDispatcher,
+            awaitReady = awaitReady,
+        ).also { seeding.start() }
+    }
+
     /**
-     * The startup sweep: [sweepOrphanReferenceImages] and [sweepOrphanVisitPhotos].
-     * Returns the total number of deleted files.
+     * The startup sweep: [sweepOrphanReferenceImages], [sweepOrphanVisitPhotos] and
+     * the leftover backup import staging in the cache. Returns the total number of
+     * deleted photos and reference images.
      */
-    suspend fun sweepOrphanFiles(now: Long = System.currentTimeMillis()): Int =
-        sweepOrphanReferenceImages(now) + sweepOrphanVisitPhotos(now)
+    suspend fun sweepOrphanFiles(now: Long = System.currentTimeMillis()): Int {
+        clearLeftoverImportStaging()
+        return sweepOrphanReferenceImages(now) + sweepOrphanVisitPhotos(now)
+    }
+
+    /**
+     * Deletes `cacheDir/backup-import/` left by an earlier process (e.g. killed while
+     * an import preview was open); a prepared import of this process is kept.
+     * Failures are logged, not thrown.
+     */
+    suspend fun clearLeftoverImportStaging() {
+        try {
+            roomBackupRepository.clearLeftoverStaging()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Clearing the import staging failed", e)
+        }
+    }
 
     /**
      * Deletes reference screenshots that no hall points to, e.g. left behind when
