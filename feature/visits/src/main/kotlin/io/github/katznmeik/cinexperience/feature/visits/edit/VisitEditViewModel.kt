@@ -54,7 +54,7 @@ class VisitEditViewModel(
     private val cinemaRepository: CinemaRepository,
     private val visitRepository: VisitRepository,
     private val photoStore: VisitPhotoStore,
-    private val savedState: SavedStateHandle = SavedStateHandle(),
+    private val savedState: SavedStateHandle,
     today: () -> LocalDate = LocalDate::now,
 ) : ViewModel() {
 

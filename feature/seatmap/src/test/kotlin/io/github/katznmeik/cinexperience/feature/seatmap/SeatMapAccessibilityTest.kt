@@ -59,7 +59,7 @@ class SeatMapAccessibilityTest(private val fontScale: Float) {
     }
 
     @Composable
-    private fun hallDetail(state: HallDetailUiState) {
+    private fun HallDetail(state: HallDetailUiState) {
         HallDetailScreen(state, onBack = {}, onEditLayout = {}, onAddVisit = {}, onOpenVisit = {}, onSeatClick = {}, onSeatChosen = {})
     }
 
@@ -68,13 +68,13 @@ class SeatMapAccessibilityTest(private val fontScale: Float) {
         val state = hallState(FakeCinexRepository(RatedHallFixture.store()), RatedHallFixture.HALL) {
             it.onSeatClick(RatedHallFixture.favourite)
         }
-        check("hall_detail_a11y") { hallDetail(state) }
+        check("hall_detail_a11y") { HallDetail(state) }
     }
 
     @Test
     fun hallDetailWithoutLayout() {
         val state = hallState(FakeCinexRepository(SampleData.storeWithSplitHall()), SampleData.DELPHI_LUX_SAAL_6)
-        check("hall_detail_empty") { hallDetail(state) }
+        check("hall_detail_empty") { HallDetail(state) }
     }
 
     @Test

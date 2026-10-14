@@ -59,8 +59,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -354,7 +354,10 @@ private fun ReadyContent(
 
 /** The canvas grows with the fitted grid up to about half the screen height. */
 @Composable
-private fun canvasMaxHeight(): Dp = (LocalConfiguration.current.screenHeightDp * 0.5f).dp.coerceIn(300.dp, 560.dp)
+private fun canvasMaxHeight(): Dp {
+    val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+    return (windowHeight * 0.5f).coerceIn(300.dp, 560.dp)
+}
 
 /** Paint tools on the left, undo / redo / reference on the right; wraps with large text. */
 @Composable

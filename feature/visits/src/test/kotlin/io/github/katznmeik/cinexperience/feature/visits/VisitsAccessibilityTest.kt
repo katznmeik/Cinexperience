@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.lifecycle.SavedStateHandle
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.testing.ACCESSIBILITY_FONT_SCALES
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
@@ -63,7 +64,7 @@ class VisitsAccessibilityTest(private val fontScale: Float) {
     private fun form(mode: VisitEditMode, setUp: VisitEditViewModel.() -> Unit = {}): VisitEditViewModel {
         val photos = FakeVisitPhotoStore(setOf("photos/visit-fixture.jpg"))
         val repository = FakeCinexRepository(VisitFixtures.store())
-        return VisitEditViewModel(mode, repository, repository, photos, today = { LocalDate.of(2026, 10, 14) }).apply(setUp)
+        return VisitEditViewModel(mode, repository, repository, photos, SavedStateHandle(), today = { LocalDate.of(2026, 10, 14) }).apply(setUp)
     }
 
     @Test
