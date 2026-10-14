@@ -40,15 +40,17 @@ object ScreenOffsetRules {
 
     /**
      * [value] rounded to the nearest [STEP] and clamped to ±[maxMagnitude] of
-     * [columns] (or ±[MAX_MAGNITUDE] when [columns] is `null`). NaN gives
-     * [CENTRED]. The result is always [isValid] and never `-0.0` (an Int times
-     * [STEP]), so equal offsets compare equal.
+     * [columns] (or ±[MAX_MAGNITUDE] when [columns] is `null`). Halfway values
+     * round away from the centre on both sides, so moving left and right behaves
+     * the same. NaN gives [CENTRED]. The result is always [isValid] and never
+     * `-0.0` (an Int times [STEP]), so equal offsets compare equal.
      */
     fun snap(value: Float, columns: Int? = null): Float {
         if (value.isNaN()) return CENTRED
         val limit = columns?.let(::maxMagnitude) ?: MAX_MAGNITUDE
         val clamped = value.coerceIn(-limit, limit)
-        return (clamped / STEP).roundToInt() * STEP
+        val steps = (abs(clamped) / STEP).roundToInt()
+        return (if (clamped < 0f) -steps else steps) * STEP
     }
 
     private fun snapDown(value: Float): Float = (value / STEP).toInt() * STEP
