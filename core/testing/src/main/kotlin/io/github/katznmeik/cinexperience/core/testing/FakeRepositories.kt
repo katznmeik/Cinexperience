@@ -18,6 +18,7 @@ import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatOverride
+import io.github.katznmeik.cinexperience.core.model.SeatOverrides
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
 import io.github.katznmeik.cinexperience.core.model.cinemaScores
@@ -36,15 +37,30 @@ import kotlinx.coroutines.flow.update
 private val NEWEST_FIRST = compareByDescending<Visit> { it.date }.thenByDescending { it.id }
 
 /**
- * Everything the fake repositories hold. Favourite seats are given by label here,
- * because the fake has no seat overrides table.
+ * Everything the fake repositories hold.
+ *
+ * @property favourites fixture shortcut: favourite seats by label (the first seat
+ *   with that label). A favourite in [overrides] takes precedence for its hall.
+ * @property overrides manual colours and favourites by seat id, as written by the
+ *   [SeatOverrideRepository] methods.
  */
 data class FakeStore(
     val cinemas: List<Cinema> = emptyList(),
     val halls: List<Hall> = emptyList(),
     val visits: List<Visit> = emptyList(),
     val favourites: Map<Long, SeatLabel> = emptyMap(),
-)
+    val overrides: List<SeatOverride> = emptyList(),
+) {
+    /** The hall's overrides, with the [favourites] label shortcut resolved to a seat id. */
+    fun overridesOf(hallId: Long): List<SeatOverride> {
+        val own = overrides.filter { it.hallId == hallId }
+        if (own.any { it.isFavourite }) return own
+        val labels = halls.firstOrNull { it.id == hallId }?.layout?.labels() ?: return own
+        val favourite = favourites[hallId]?.let { label -> labels.seats.values.firstOrNull { it.label == label }?.id }
+            ?: return own
+        return SeatOverrides.withFavourite(own, hallId, favourite)
+    }
+}
 
 /**
  * In-memory implementation of the core:data repositories for ViewModel tests and
@@ -86,7 +102,8 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         val scores = cinemaScores(visitsByHall)
         val hallSummaries = cinemaHalls.map { hall ->
             val hallScores = scores.halls.getValue(hall.id)
-            HallSummary(hall, hallScores.overall, hallScores.visitCount, favourites[hall.id])
+            val favourite = SeatOverrides.favourite(overridesOf(hall.id))
+            HallSummary(hall, hallScores.overall, hallScores.visitCount, favourite?.let { hall.layout?.labels()?.labelOf(it) })
         }.sortedWith(compareBy(NameOrder) { it.hall.name })
         return CinemaDetail(cinema, scores, hallSummaries)
     }
@@ -147,6 +164,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
                 halls = s.halls.filter { it.id !in hallIds },
                 visits = s.visits.filter { it.hallId !in hallIds },
                 favourites = s.favourites - hallIds,
+                overrides = s.overrides.filter { it.hallId !in hallIds },
             )
         }
         return DeleteResult.DELETED
@@ -159,9 +177,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         val cinema = s.cinemas.first { it.id == hall.cinemaId }
         val visits = s.visits.filter { it.hallId == hallId }.sortedWith(NEWEST_FIRST)
         val labels = hall.layout?.labels()
-        // The fake keeps favourites by label; as overrides they point at the first seat with that label.
-        val favouriteSeat = s.favourites[hallId]?.let { label -> labels?.seats?.values?.firstOrNull { it.label == label }?.id }
-        val overrides = listOfNotNull(favouriteSeat?.let { SeatOverride(hallId, it, isFavourite = true) })
+        val overrides = s.overridesOf(hallId).sortedBy { it.seatId.value }
         val seats = hall.layout?.let { seatStates(it, visits, overrides) }.orEmpty()
         HallDetail(hall, cinema, hallScores(visits), visits, labels, seats, overrides)
     }.distinctUntilChanged()
@@ -212,7 +228,25 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
             nextSeatId = maxOf(mark, newLayout?.nextSeatId ?: 0),
             layoutUnreadable = keepUnreadable,
         )
-        store.update { s -> s.copy(halls = s.halls.map { if (it.id == hall.id) updated else it }) }
+        // Like Room: only a changed layout touches the overrides. A kept unreadable
+        // layout is unchanged; replacing an unreadable one, or clearing a layout, is a change.
+        val layoutChanged = !keepUnreadable && (newLayout != stored || existing.layoutUnreadable)
+        store.update { s ->
+            if (!layoutChanged) {
+                s.copy(halls = s.halls.map { if (it.id == hall.id) updated else it })
+            } else {
+                // Overrides of seats that no longer exist are deleted. The label shortcut
+                // is resolved against the stored layout first, so the favourite cannot
+                // jump to a new seat that happens to have the same label.
+                val remaining = newLayout?.seatIds.orEmpty()
+                val kept = s.overridesOf(hall.id).filter { it.seatId in remaining }
+                s.copy(
+                    halls = s.halls.map { if (it.id == hall.id) updated else it },
+                    favourites = s.favourites - hall.id,
+                    overrides = s.overrides.filter { it.hallId != hall.id } + kept,
+                )
+            }
+        }
         return true
     }
 
@@ -225,6 +259,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
                 halls = s.halls - hall,
                 visits = s.visits.filter { it.hallId != hallId },
                 favourites = s.favourites - hallId,
+                overrides = s.overrides.filter { it.hallId != hallId },
             )
         }
         return DeleteResult.DELETED
@@ -275,17 +310,29 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         return exists
     }
 
-    // SeatOverrideRepository (colours are not modelled by the fake)
+    // SeatOverrideRepository: like Room, the seat must be in the hall's current layout.
 
-    override suspend fun setSeatColour(hallId: Long, seatId: SeatId, colour: SeatColour?) = write()
+    override suspend fun setSeatColour(hallId: Long, seatId: SeatId, colour: SeatColour?) =
+        modifyOverrides(hallId, seatId) { SeatOverrides.withColour(it, hallId, seatId, colour) }
 
-    override suspend fun setFavouriteSeat(hallId: Long, seatId: SeatId?) {
+    override suspend fun setFavouriteSeat(hallId: Long, seatId: SeatId?) =
+        modifyOverrides(hallId, seatId) { SeatOverrides.withFavourite(it, hallId, seatId) }
+
+    override suspend fun clearSeatOverride(hallId: Long, seatId: SeatId) =
+        modifyOverrides(hallId, seatId) { SeatOverrides.cleared(it, hallId, seatId) }
+
+    private fun modifyOverrides(hallId: Long, seatId: SeatId?, change: (List<SeatOverride>) -> List<SeatOverride>) {
         write()
-        val label = seatId?.let { id -> getHall(hallId)?.layout?.labels()?.labelOf(id) }
-        store.update { s -> s.copy(favourites = if (label == null) s.favourites - hallId else s.favourites + (hallId to label)) }
+        val hall = requireNotNull(store.value.halls.firstOrNull { it.id == hallId }) { "No hall $hallId" }
+        if (seatId != null) {
+            require(hall.layout?.seatIds?.contains(seatId) == true) { "$seatId is not in the layout of hall $hallId" }
+        }
+        store.update { s ->
+            // The label shortcut is resolved into real overrides on the first write.
+            val updated = change(s.overridesOf(hallId))
+            s.copy(favourites = s.favourites - hallId, overrides = s.overrides.filter { it.hallId != hallId } + updated)
+        }
     }
-
-    override suspend fun clearSeatOverride(hallId: Long, seatId: SeatId) = write()
 
     private fun String.requireName(): String = trim().also { require(it.isNotEmpty()) { "Name must not be blank" } }
 

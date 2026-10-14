@@ -1,7 +1,10 @@
 package io.github.katznmeik.cinexperience.core.data
 
 import io.github.katznmeik.cinexperience.core.data.db.toEntity
+import io.github.katznmeik.cinexperience.core.data.db.toModel
+import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.SeatOverride
 import io.github.katznmeik.cinexperience.core.model.Visit
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -55,10 +58,14 @@ internal class UnreadableLayoutTest : DatabaseTest() {
     @Test
     fun editingOtherFieldsKeepsTheStoredLayout() = runTest {
         val hallId = hallWithFutureLayout()
+        // Overrides stored with the unreadable layout (they can't be set through the app).
+        val favourite = SeatOverride(hallId, SeatId(1), SeatColour.RED, isFavourite = true)
+        db.seatOverrideDao().insertAll(listOf(favourite.toEntity()))
         val hall = halls.getHall(hallId)!!
         halls.updateHall(hall.copy(name = "Renamed", notes = "note"))
         assertEquals(futureJson, db.hallDao().get(hallId)!!.layoutJson)
         assertEquals("Renamed", halls.getHall(hallId)!!.name)
+        assertEquals(listOf(favourite), db.seatOverrideDao().getForHall(hallId).map { it.toModel() })
     }
 
     @Test

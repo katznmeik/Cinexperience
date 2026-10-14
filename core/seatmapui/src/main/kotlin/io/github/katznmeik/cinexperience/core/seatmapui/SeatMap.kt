@@ -94,7 +94,10 @@ val MAX_ZOOM_SEAT_SIZE: Dp = 44.dp
  * it). Its height follows the fitted content, up to [maxHeight].
  *
  * @param contentDescription what the map shows, e.g. from [seatMapDescription].
- * @param seatVisuals colour, favourite and avoid states (M4); missing seats are neutral.
+ * @param seatVisuals colour, favourite and avoid states (spec §5); missing seats are neutral.
+ *   When it is not empty, the selected seat's state is part of its screen-reader
+ *   description ("Selected: Row 7, Seat 10, great, favourite"). Pair the map with a
+ *   [SeatLegend].
  * @param onSeatClick called with the tapped seat; `null` makes the map display-only.
  * @param onChooseSeatByLabel accessibility alternative to tapping a seat: shown to
  *   screen readers as a custom action (e.g. opening a [SeatPicker]).
@@ -156,7 +159,15 @@ fun SeatMap(
             .semantics {
                 this.contentDescription = contentDescription
                 role = Role.Image
-                if (selectedLabel != null) stateDescription = "Selected: ${selectedLabel.description}"
+                if (selectedLabel != null) {
+                    // With colours shown, the selected seat's state is announced as well.
+                    val description = if (seatVisuals.isEmpty()) {
+                        selectedLabel.description
+                    } else {
+                        seatDescription(selectedLabel, selectedSeatId?.let { seatVisuals[it] } ?: SeatVisual.Neutral)
+                    }
+                    stateDescription = "Selected: $description"
+                }
                 if (onChooseSeatByLabel != null) {
                     customActions = listOf(
                         CustomAccessibilityAction(CHOOSE_BY_LABEL_ACTION) {
@@ -300,26 +311,31 @@ internal fun DrawScope.drawSeatMarks(rect: Rect, kind: SeatKind, visual: SeatVis
         val outline = rect.inflate(rect.width * 0.1f)
         drawPath(Path().apply { addRoundRect(seatRoundRect(outline)) }, colors.text, style = Stroke(width = rect.width * 0.1f))
     }
+    // Badges sit in the seat's top corners, barely past its edge (less than the seat gap).
+    val badge = rect.width * 0.24f
+    val inset = rect.width * 0.2f
+    fun avoidBadge() {
+        val centre = Offset(rect.left + inset, rect.top + inset)
+        drawCircle(colors.surface, radius = badge, center = centre)
+        strokeGlyph(SeatGlyphs.cross, Rect(centre, badge * 0.7f), colors.text, strokeWidth = 3.2f)
+    }
     val glyph = SeatGlyphs.of(kind)
     if (glyph == null) {
         when {
-            visual.isFavourite -> fillGlyph(SeatGlyphs.star, rect.innerSquare(0.72f), onSeat)
+            visual.isFavourite -> {
+                fillGlyph(SeatGlyphs.star, rect.innerSquare(0.72f), onSeat)
+                // A favourite marked "avoid" keeps its × as a badge (colour-blind cue).
+                if (visual.tone == SeatTone.AVOID) avoidBadge()
+            }
             visual.tone == SeatTone.AVOID -> strokeGlyph(SeatGlyphs.cross, rect.innerSquare(0.62f), colors.surface, strokeWidth = 3.2f)
         }
         return
     }
     strokeGlyph(glyph, rect.innerSquare(0.8f), onSeat)
-    // Badges sit in the seat's top corners, barely past its edge (less than the seat gap).
-    val badge = rect.width * 0.24f
-    val inset = rect.width * 0.2f
     if (visual.isFavourite) {
         val centre = Offset(rect.right - inset, rect.top + inset)
         drawCircle(colors.text, radius = badge, center = centre)
         fillGlyph(SeatGlyphs.star, Rect(centre, badge * 0.8f), colors.onPrimary)
     }
-    if (visual.tone == SeatTone.AVOID) {
-        val centre = Offset(rect.left + inset, rect.top + inset)
-        drawCircle(colors.surface, radius = badge, center = centre)
-        strokeGlyph(SeatGlyphs.cross, Rect(centre, badge * 0.7f), colors.text, strokeWidth = 3.2f)
-    }
+    if (visual.tone == SeatTone.AVOID) avoidBadge()
 }

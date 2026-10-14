@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.core.seatmapui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -8,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -99,4 +101,27 @@ class SeatMapUiTest {
         composeRule.onNodeWithContentDescription("Row 7").assertIsSelected()
         composeRule.onNodeWithContentDescription("Row 7, Seat 10, centre block").assertIsSelected()
     }
+
+    @Test
+    fun seatStatesAreAnnounced() {
+        val layout = SeatLayout.fromPatterns("SSS", firstSeatId = 1)
+        val visuals = mapOf(
+            SeatId(1) to SeatVisual(SeatTone.AVOID),
+            SeatId(2) to SeatVisual(SeatTone.GREAT, isFavourite = true),
+        )
+        composeRule.setContent {
+            CinexTheme {
+                Column {
+                    SeatMap(layout = layout, contentDescription = "Seat map", seatVisuals = visuals, selectedSeatId = SeatId(2))
+                    SeatPicker(seatChoices(layout), selectedSeatId = null, onSeatSelected = {}, seatVisuals = visuals)
+                }
+            }
+        }
+        val map = composeRule.onNodeWithContentDescription("Seat map").fetchSemanticsNode()
+        assertEquals("Selected: Row 1, Seat 2, great, favourite", map.config[SemanticsProperties.StateDescription])
+        composeRule.onNodeWithContentDescription("Row 1, Seat 1, avoid").assertExists()
+        composeRule.onNodeWithContentDescription("Row 1, Seat 2, great, favourite").assertExists()
+        composeRule.onNodeWithContentDescription("Row 1, Seat 3, no data").assertExists()
+    }
 }
+

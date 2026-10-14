@@ -42,7 +42,7 @@ Look at the screenshot PNGs after every UI change.
 | `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos) |
 | `core:testing` | Android lib (tests only) | in-memory fake repositories and file stores, illustrative screenshot fixtures, `MainDispatcherRule` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips) |
-| `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, accessible `SeatPicker` |
+| `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
 | `feature:cinemas` | feature | cinema list (start tab), cinema detail, manage cinemas & halls |
 | `feature:seatmap` | feature | hall detail with seat map, layout editor |
 | `feature:visits` | feature | add/edit visit (seat picker, photos), all visits |
@@ -78,6 +78,12 @@ Don't duplicate config in module build files.
   `layout.labels()`.
 - **Scores and seat colours** come from the `core:model` functions
   (`hallScores`, `cinemaScores`, `seatStates`), never from SQL math.
+  On the map, `SeatState.toSeatVisual()` gives the `SeatVisual`; colour is never
+  the only cue (× on avoid, ★ and outline on the favourite, great/OK differ in
+  lightness), screen readers get the state from `seatDescription()` /
+  `seatStatesDescription()`, and a coloured map is shown with a `SeatLegend`.
+  Overrides and the favourite are written only through `SeatOverrideRepository`
+  (the fake in `core:testing` models them like Room: `FakeStore.overrides`).
 - **Schema changes:** bump the `CinexDatabase` version, add a migration to
   `ALL_MIGRATIONS`, commit the exported `core/data/schemas/.../<n>.json` and add
   a case to `MigrationTest`. No destructive fallback.
