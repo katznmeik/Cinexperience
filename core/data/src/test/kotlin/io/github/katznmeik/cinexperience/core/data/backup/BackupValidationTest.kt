@@ -276,6 +276,59 @@ internal class BackupValidationTest : BackupTestBase() {
     }
 
     @Test
+    fun deeplyNestedJsonIsRejectedInsteadOfCrashing() = runTest {
+        exportValid()
+        val deep = "[".repeat(200_000)
+        fun replaced(name: String, entry: String, content: String) = modified(name) {
+            val i = indexOfFirst { it.first == entry }
+            this[i] = entry to content.toByteArray()
+        }
+        assertRejected(replaced("deep-data.zip", BackupFormat.DATA, deep), BackupError.INVALID_DATA)
+        assertRejected(
+            replaced("deep-field.zip", BackupFormat.DATA, """{"backupVersion":1,"cinemas":$deep"""),
+            BackupError.INVALID_DATA,
+        )
+        assertRejected(replaced("deep-manifest.zip", BackupFormat.MANIFEST, "[".repeat(60_000)), BackupError.NOT_A_BACKUP)
+        assertRejected(
+            replaced("deep-manifest-field.zip", BackupFormat.MANIFEST, """{"format":"cinexperience-backup","x":${"[".repeat(60_000)}"""),
+            BackupError.NOT_A_BACKUP,
+        )
+    }
+
+    @Test
+    fun filesBeforeTheDataAreRejected() = runTest {
+        exportValid()
+        val reordered = modified("reordered.zip") {
+            val data = first { it.first == BackupFormat.DATA }
+            remove(data)
+            add(data) // data.json last, after the photos
+        }
+        val e = assertRejected(reordered, BackupError.INVALID_DATA)
+        assertTrue(e.message!!.contains("data.json must come before"))
+        val noManifestFirst = modified("manifest-last.zip") {
+            val manifest = first { it.first == BackupFormat.MANIFEST }
+            remove(manifest)
+            add(manifest)
+        }
+        assertRejected(noManifestFirst, BackupError.NOT_A_BACKUP)
+    }
+
+    @Test
+    fun unreferencedEntriesAreSkippedButStillCapped() = runTest {
+        exportValid()
+        val extra = modified("extra.zip") { add("photos/visit-unreferenced.jpg" to Random.nextBytes(500)) }
+        val deviceB = newDevice("b")
+        val preview = deviceB.repository.prepareImport(extra)
+        val staged = File(deviceB.cacheDir, RoomBackupRepository.STAGING_FOLDER).walk().filter { it.isFile }.map { it.name }.toList()
+        assertFalse(staged.contains("visit-unreferenced.jpg"))
+        deviceB.repository.commitImport(preview)
+        assertFalse(File(deviceB.filesDir, "photos/visit-unreferenced.jpg").exists())
+
+        val bomb = modified("unreferenced-bomb.zip") { add("photos/visit-bomb.jpg" to ByteArray(1_000_000)) }
+        assertRejected(bomb, BackupError.TOO_LARGE, device = newDevice("small", BackupLimits(maxFileBytes = 10_000)))
+    }
+
+    @Test
     fun aRejectedBackupDoesNotBlockTheNextImport() = runTest {
         exportValid()
         assertRejected(write("random.zip", Random.nextBytes(100)), BackupError.NOT_A_BACKUP)

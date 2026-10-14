@@ -157,12 +157,15 @@ internal class BackupRestorer(
 
     private fun sameContent(a: File, b: File): Boolean {
         if (a.length() != b.length()) return false
-        a.inputStream().buffered(BUFFER_SIZE).use { ia ->
-            b.inputStream().buffered(BUFFER_SIZE).use { ib ->
+        val bufferA = ByteArray(BUFFER_SIZE)
+        val bufferB = ByteArray(BUFFER_SIZE)
+        a.inputStream().use { ia ->
+            b.inputStream().use { ib ->
                 while (true) {
-                    val x = ia.read()
-                    if (x != ib.read()) return false
-                    if (x < 0) return true
+                    val readA = ia.readNBytes(bufferA, 0, BUFFER_SIZE)
+                    val readB = ib.readNBytes(bufferB, 0, BUFFER_SIZE)
+                    if (!java.util.Arrays.equals(bufferA, 0, readA, bufferB, 0, readB)) return false
+                    if (readA < BUFFER_SIZE) return true
                 }
             }
         }

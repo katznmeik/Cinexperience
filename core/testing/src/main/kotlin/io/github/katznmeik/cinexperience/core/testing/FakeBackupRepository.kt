@@ -23,6 +23,9 @@ class FakeBackupRepository(
     override val lastExport = MutableStateFlow(lastExport)
     override val latestSafetyCopy = MutableStateFlow(safetyCopy)
 
+    /** True while [commitImport] runs (e.g. held by [gate]); tests may also set it directly. */
+    override val isImporting = MutableStateFlow(false)
+
     /** What an export writes and what a prepared import contains. */
     var counts = BackupCounts(cinemas = 13, halls = 36, visits = 27, overrides = 4, photos = 9, referenceImages = 2)
 
@@ -71,11 +74,16 @@ class FakeBackupRepository(
 
     override suspend fun commitImport(preview: ImportPreview, onProgress: (Float) -> Unit): BackupCounts {
         committed += preview
-        onProgress(progress)
-        gate?.await()
-        commitFailure?.let { throw it }
-        latestSafetyCopy.value = SafetyCopy(now)
-        return preview.counts
+        isImporting.value = true
+        try {
+            onProgress(progress)
+            gate?.await()
+            commitFailure?.let { throw it }
+            latestSafetyCopy.value = SafetyCopy(now)
+            return preview.counts
+        } finally {
+            isImporting.value = false
+        }
     }
 
     override suspend fun discardImport(preview: ImportPreview) {

@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.core.data.backup
 
+import io.github.katznmeik.cinexperience.core.data.repository.RoomCinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomVisitRepository
 import io.github.katznmeik.cinexperience.core.data.save
 import io.github.katznmeik.cinexperience.core.model.Visit
@@ -20,20 +21,6 @@ import java.time.Instant
 import java.time.LocalDate
 
 internal class BackupAtomicityTest : BackupTestBase() {
-
-    /** Device B with its own data (a seeded install with one visit and photo) and a backup of device A. */
-    private suspend fun prepareTwoDevices(): Pair<Device, String> {
-        buildRealisticData()
-        val doc = deviceA.document("backup.zip")
-        deviceA.repository.export(doc)
-        val deviceB = newDevice("b")
-        deviceB.seed()
-        val hallId = deviceB.db.hallDao().getAll().first().id
-        RoomVisitRepository(deviceB.db, Dispatchers.Default).save(
-            Visit(hallId = hallId, date = LocalDate.of(2026, 1, 1), photoPath = deviceB.writeFile("photos/visit-b.jpg")),
-        )
-        return deviceB to doc
-    }
 
     private suspend fun assertImportFailsAndChangesNothing(device: Device, doc: String, error: BackupError = BackupError.WRITE_FAILED) {
         val before = device.snapshot()
@@ -151,24 +138,55 @@ internal class BackupAtomicityTest : BackupTestBase() {
     fun safetyCopiesAreWrittenBeforeEachImportAndPrunedToTwo() = runTest {
         val (deviceB, doc) = prepareTwoDevices()
         val original = deviceB.snapshot()
-        val originalFiles = deviceB.files()
+        val cinemasB = RoomCinemaRepository(deviceB.db, Dispatchers.Default)
         assertNull(deviceB.repository.latestSafetyCopy.first())
 
-        repeat(3) {
+        repeat(3) { i ->
             clock.now = clock.now.plus(Duration.ofMinutes(10))
+            cinemasB.createCinema("Change $i") // different data before every import
             deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
         }
-        val copies = deviceB.safetyCopyFiles()
-        assertEquals(2, copies.size)
-        assertTrue(copies.all { it.startsWith("pre-import-") && it.endsWith(".zip") })
+        assertEquals(
+            listOf("pre-import-2-20261003T122500000Z.zip", "pre-import-3-20261003T123500000Z.zip"),
+            deviceB.safetyCopyFiles(),
+        )
         assertEquals(SafetyCopy(clock.now), deviceB.repository.latestSafetyCopy.first())
-        assertEquals(listOf("pre-import-20261003T122500000Z.zip", "pre-import-20261003T123500000Z.zip"), copies)
-        // The first copy (device B's own data) was pruned; the remaining ones hold device A's data.
+        // The first copy (device B's own data) was pruned; the newest holds A's data plus "Change 2".
         val restore = deviceB.repository.prepareSafetyCopyRestore()
         assertEquals(ImportSource.SAFETY_COPY, restore.source)
-        assertEquals(deviceA.snapshot().counts(), restore.counts)
+        assertEquals(deviceA.snapshot().counts().let { it.copy(cinemas = it.cinemas + 1) }, restore.counts)
         assertNotEquals(original.counts(), restore.counts)
-        assertTrue(originalFiles.isNotEmpty())
+    }
+
+    @Test
+    fun noNewSafetyCopyWhenTheNewestAlreadyHoldsTheCurrentData() = runTest {
+        val (deviceB, doc) = prepareTwoDevices()
+        deviceB.repository.commitImport(deviceB.repository.prepareImport(doc)) // copy 1: B's data
+        clock.now = clock.now.plusSeconds(60)
+        deviceB.repository.commitImport(deviceB.repository.prepareImport(doc)) // copy 2: A's data
+        val copies = deviceB.safetyCopyFiles()
+        clock.now = clock.now.plusSeconds(60)
+        deviceB.repository.commitImport(deviceB.repository.prepareImport(doc)) // A again: copy 2 holds it
+        assertEquals(copies, deviceB.safetyCopyFiles())
+        assertEquals(2, copies.size)
+    }
+
+    @Test
+    fun aCopyLeftByAnInterruptedImportIsReused() = runTest {
+        val (deviceB, doc) = prepareTwoDevices()
+        val original = deviceB.snapshot()
+        // Process death right after the safety copy was written: the copy (= current data) stays.
+        val leftover = SafetyCopies(File(deviceB.filesDir, SafetyCopies.FOLDER)).newFile(clock.now)
+        leftover.parentFile!!.mkdirs()
+        leftover.outputStream().use { out ->
+            val writer = BackupWriter(deviceB.filesDir)
+            writer.write(writer.prepare(original), "1.2.3", clock.now, out)
+        }
+        clock.now = clock.now.plusSeconds(60)
+        deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
+        assertEquals(listOf(leftover.name), deviceB.safetyCopyFiles())
+        deviceB.repository.commitImport(deviceB.repository.prepareSafetyCopyRestore())
+        assertEquals(original, deviceB.snapshot())
     }
 
     @Test

@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
 import java.io.BufferedOutputStream
 import java.io.File
+import java.io.FilterOutputStream
 import java.io.OutputStream
 import java.time.Instant
 import java.util.zip.Deflater
@@ -28,25 +29,23 @@ internal suspend fun CinexDatabase.readBackupDataInTransaction(): BackupData {
     )
 }
 
+/** Data ready to be written: missing files left out, validated like an import. */
+internal class PreparedBackup(val data: BackupData) {
+    val counts: BackupCounts = data.counts()
+}
+
 /** Writes backup zips (export and pre-import safety copies). */
 internal class BackupWriter(private val filesDir: File) {
 
     /**
-     * Writes [data] and the files it refers to as a backup zip to [out], which is
-     * flushed but not closed. Files are streamed, never loaded into memory.
-     *
-     * A reference to a file that is missing on disk (or has an unsafe path) is
-     * left out of the backup (written as `null`) and logged, so one lost photo
-     * can't block every export; the app shows such a photo as missing anyway.
-     * Returns the counts that were written.
+     * Prepares [data] for writing. A reference to a file that is missing on disk
+     * (or has an unsafe path) is left out (written as `null`) and logged, so one
+     * lost photo can't block every export; the app shows such a photo as missing
+     * anyway. Then the data is checked with the import's [BackupValidator], so a
+     * backup that this app couldn't import again is never written.
+     * @throws ValidationProblem naming the first problem.
      */
-    fun write(
-        data: BackupData,
-        appVersion: String,
-        exportedAt: Instant,
-        out: OutputStream,
-        onProgress: (Float) -> Unit = {},
-    ): BackupCounts {
+    fun prepare(data: BackupData): PreparedBackup {
         val available = data.filePaths.filterTo(HashSet()) { path ->
             BackupFormat.isFilePath(path) && File(filesDir, path).isFile
         }
@@ -56,7 +55,24 @@ internal class BackupWriter(private val filesDir: File) {
             halls = data.halls.map { if (it.referenceImagePath in missing) it.copy(referenceImagePath = null) else it },
             visits = data.visits.map { if (it.photoPath in missing) it.copy(photoPath = null) else it },
         )
-        val counts = written.counts()
+        BackupValidator.validate(written, available)
+        return PreparedBackup(written)
+    }
+
+    /**
+     * Writes [prepared] and the files it refers to as a backup zip to [out], which
+     * is flushed but not closed. Files are streamed, never loaded into memory.
+     * Returns the counts that were written.
+     */
+    fun write(
+        prepared: PreparedBackup,
+        appVersion: String,
+        exportedAt: Instant,
+        out: OutputStream,
+        onProgress: (Float) -> Unit = {},
+    ): BackupCounts {
+        val written = prepared.data
+        val counts = prepared.counts
         val manifest = BackupManifest(
             format = BackupFormat.FORMAT_ID,
             backupVersion = BackupFormat.BACKUP_VERSION,
@@ -69,28 +85,35 @@ internal class BackupWriter(private val filesDir: File) {
         var done = 0
         onProgress(0f)
 
-        val zip = ZipOutputStream(BufferedOutputStream(out, BUFFER_SIZE))
-        fun entry(name: String, write: () -> Unit) {
-            zip.putNextEntry(ZipEntry(name).apply { time = exportedAt.toEpochMilli() })
-            write()
-            zip.closeEntry()
-            onProgress(++done / steps)
+        // Closing the zip ends its Deflater (native memory) but must not close the caller's stream.
+        ZipOutputStream(BufferedOutputStream(NonClosingOutputStream(out), BUFFER_SIZE)).use { zip ->
+            fun entry(name: String, write: () -> Unit) {
+                zip.putNextEntry(ZipEntry(name).apply { time = exportedAt.toEpochMilli() })
+                write()
+                zip.closeEntry()
+                onProgress(++done / steps)
+            }
+            // Manifest and data go first: an import checks them before reading any file.
+            entry(BackupFormat.MANIFEST) {
+                zip.write(BackupFormat.writeJson.encodeToString(BackupManifest.serializer(), manifest).toByteArray())
+            }
+            entry(BackupFormat.DATA) {
+                zip.write(BackupFormat.writeJson.encodeToString(BackupData.serializer(), written).toByteArray())
+            }
+            // Photos are JPEGs and don't compress; store them quickly.
+            zip.setLevel(Deflater.NO_COMPRESSION)
+            for (path in files) {
+                entry(path) { File(filesDir, path).inputStream().use { it.copyTo(zip, BUFFER_SIZE) } }
+            }
         }
-        // The manifest goes first, so an import can reject a wrong file before unpacking the rest.
-        entry(BackupFormat.MANIFEST) {
-            zip.write(BackupFormat.writeJson.encodeToString(BackupManifest.serializer(), manifest).toByteArray())
-        }
-        entry(BackupFormat.DATA) {
-            zip.write(BackupFormat.writeJson.encodeToString(BackupData.serializer(), written).toByteArray())
-        }
-        // Photos are JPEGs and don't compress; store them quickly.
-        zip.setLevel(Deflater.NO_COMPRESSION)
-        for (path in files) {
-            entry(path) { File(filesDir, path).inputStream().use { it.copyTo(zip, BUFFER_SIZE) } }
-        }
-        zip.finish()
-        zip.flush()
         return counts
+    }
+
+    /** Passes writes through; `close()` only flushes. */
+    private class NonClosingOutputStream(out: OutputStream) : FilterOutputStream(out) {
+        override fun write(b: ByteArray, off: Int, len: Int) = out.write(b, off, len)
+
+        override fun close() = out.flush()
     }
 
     private companion object {

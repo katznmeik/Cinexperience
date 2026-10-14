@@ -11,6 +11,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -32,20 +34,29 @@ import kotlin.coroutines.coroutineContext
 /**
  * [BackupRepository] on the Room database and the app-private files.
  *
- * - **Export** reads every row in one transaction, then streams the zip to the
- *   document. Only after the stream was closed without error is the export
- *   recorded as [lastExport]; on any failure the document is deleted (best effort)
- *   and an error is reported. Process death mid-export can leave an incomplete
- *   file at the destination: it lacks the zip's directory or entries, so an import
- *   rejects it (missing manifest, data or files).
+ * - **Export** reads every row in one transaction and checks it with the
+ *   import's validation (a backup this app couldn't import again is never
+ *   written), then streams the zip to the document. Only after the stream was
+ *   closed without error is the export recorded as [lastExport]; on any failure
+ *   the document is deleted (best effort) and an error is reported. Process death
+ *   mid-export can leave an incomplete file at the destination: it lacks the
+ *   zip's directory or entries, so an import rejects it.
  * - **Import** is two-step: [prepareImport] unpacks into `cacheDir/backup-import/`
  *   and validates everything ([BackupReader]) without touching the data;
- *   [commitImport] writes a safety copy of the current data ([SafetyCopies]) and
- *   then replaces everything atomically ([BackupRestorer]). Afterwards seeding runs
- *   with the backup's seed version and snapshot, so it adds nothing that the
- *   backup's own seed state doesn't call for.
+ *   [commitImport] makes sure a safety copy of the current data exists
+ *   ([SafetyCopies]) and then replaces everything atomically ([BackupRestorer]).
+ *   Afterwards seeding runs with the backup's seed version and snapshot, so it
+ *   adds nothing that the backup's own seed state doesn't call for.
+ * - **Safety copies:** if the newest copy already holds exactly the current data
+ *   (e.g. after a failed attempt or process death) it is reused; otherwise a new
+ *   one is written. A failed import deletes the copy it wrote; old copies are
+ *   pruned only after a successful import. So the newest copy always holds the
+ *   data from before the last successful import, and failed attempts never push
+ *   an older copy out.
  *
- * Operations are serialised by a mutex. Every failure becomes a [BackupException].
+ * Operations are serialised by a mutex. Failures become [BackupException]s,
+ * including stack overflow and out-of-memory while reading a backup; only
+ * cancellation and other fatal VM errors are passed on.
  */
 internal class RoomBackupRepository(
     private val db: CinexDatabase,
@@ -75,6 +86,10 @@ internal class RoomBackupRepository(
     /** Bumped whenever the last export or the safety copies change. */
     private val changes = MutableStateFlow(0)
 
+    private val importing = MutableStateFlow(false)
+
+    override val isImporting: StateFlow<Boolean> = importing.asStateFlow()
+
     override val lastExport: Flow<LastExport?> =
         changes.map { lastExportStore.read() }.distinctUntilChanged().flowOn(ioDispatcher)
 
@@ -92,10 +107,16 @@ internal class RoomBackupRepository(
             } catch (e: Exception) {
                 throw BackupException(BackupError.WRITE_FAILED, "Couldn't read your data for the backup.", e)
             }
+            // Checked before the document is opened: nothing is written for invalid data.
+            val prepared = try {
+                writer.prepare(data)
+            } catch (p: ValidationProblem) {
+                throw BackupException(BackupError.INVALID_DATA, "Your data can't be backed up: ${p.detail}", p)
+            }
             val exportedAt = clock.instant().truncatedTo(ChronoUnit.SECONDS)
             val counts = try {
                 documents.openOutput(destinationUri).use { out ->
-                    writer.write(data, appVersion(), exportedAt, out) { progress ->
+                    writer.write(prepared, appVersion(), exportedAt, out) { progress ->
                         job.ensureActive()
                         onProgress(progress)
                     }
@@ -143,6 +164,7 @@ internal class RoomBackupRepository(
                     is BackupException, is CancellationException -> e
                     is IOException -> BackupException(BackupError.READ_FAILED, "Couldn't read the backup file.", e)
                     is Exception -> BackupException(BackupError.INVALID_DATA, "The backup is damaged and can't be read.", e)
+                    is StackOverflowError -> BackupException(BackupError.INVALID_DATA, "The backup is damaged and can't be read.", e)
                     is OutOfMemoryError -> BackupException(BackupError.TOO_LARGE, "This backup is too large to import.", e)
                     else -> e
                 }
@@ -157,18 +179,35 @@ internal class RoomBackupRepository(
             mutex.withLock {
                 withContext(ioDispatcher) {
                     val current = staged?.takeIf { it.id == preview.id } ?: throw expired()
+                    importing.value = true
+                    var newCopy: File? = null
+                    var committed = false
                     try {
                         if (!current.filesIntact()) throw expired()
                         awaitReady()
                         val before = db.readBackupData()
-                        writeSafetyCopy(before) { onProgress(it * SAFETY_COPY_SHARE) }
+                        val prepared = try {
+                            writer.prepare(before)
+                        } catch (p: ValidationProblem) {
+                            throw BackupException(
+                                BackupError.INVALID_DATA,
+                                "Current data can't be backed up: ${p.detail.removeSuffix(".")} — import cancelled.",
+                                p,
+                            )
+                        }
+                        newCopy = ensureSafetyCopy(prepared) { onProgress(it * SAFETY_COPY_SHARE) }
                         val restorer = BackupRestorer(db, filesDir, clock::millis, failpoint)
                         val imported = restorer.replace(current, before) {
                             onProgress(SAFETY_COPY_SHARE + it * (1 - SAFETY_COPY_SHARE))
                         }
+                        committed = true
+                        pruneSafetyCopies()
                         seed()
                         imported.counts()
                     } catch (e: Throwable) {
+                        // The import didn't happen: the copy written for it would hide the
+                        // copy of the last successful import, so it goes.
+                        if (!committed) newCopy?.delete()
                         throw when (e) {
                             is BackupException -> e
                             is Exception -> BackupException(
@@ -180,6 +219,7 @@ internal class RoomBackupRepository(
                         }
                     } finally {
                         clearStaging()
+                        importing.value = false
                         changes.update { it + 1 }
                     }
                 }
@@ -194,15 +234,42 @@ internal class RoomBackupRepository(
         }
     }
 
-    /** Writes [data] to a new safety copy (via a temporary file) and prunes old copies. */
-    private fun writeSafetyCopy(data: BackupData, onProgress: (Float) -> Unit) {
+    /**
+     * Deletes leftover staging files of an earlier process (e.g. killed while the
+     * preview was open). Called at app start; keeps the files of a prepared import.
+     */
+    suspend fun clearLeftoverStaging() {
+        mutex.withLock {
+            withContext(ioDispatcher) {
+                if (staged == null) stagingRoot.deleteRecursively()
+            }
+        }
+    }
+
+    /**
+     * Makes sure a safety copy of [prepared] exists. Returns the file it wrote, or
+     * `null` if the newest copy already holds exactly this data (nothing written).
+     */
+    private fun ensureSafetyCopy(prepared: PreparedBackup, onProgress: (Float) -> Unit): File? {
+        val newest = safetyCopies.latest()
+        val newestData = newest?.let { copy ->
+            try {
+                copy.file.inputStream().use { reader.readDataOrNull(it) }
+            } catch (e: IOException) {
+                null
+            }
+        }
+        if (newestData == prepared.data) {
+            onProgress(1f)
+            return null
+        }
         val createdAt: Instant = clock.instant()
-        val target = safetyCopies.fileFor(createdAt)
+        val target = safetyCopies.newFile(createdAt)
         val temp = File(target.parentFile, target.name + SafetyCopies.TEMP_SUFFIX)
         try {
             target.parentFile?.mkdirs()
             FileOutputStream(temp).use { out ->
-                writer.write(data, appVersion(), createdAt.truncatedTo(ChronoUnit.SECONDS), out, onProgress)
+                writer.write(prepared, appVersion(), createdAt.truncatedTo(ChronoUnit.SECONDS), out, onProgress)
                 out.fd.sync()
             }
             if (!temp.renameTo(target)) throw IOException("Couldn't rename $temp")
@@ -214,7 +281,16 @@ internal class RoomBackupRepository(
                 e,
             )
         }
-        safetyCopies.prune()
+        return target
+    }
+
+    /** After a successful import; the newest copy (this import's) is always kept. */
+    private fun pruneSafetyCopies() {
+        try {
+            safetyCopies.prune()
+        } catch (e: Exception) {
+            Log.w(TAG, "Pruning safety copies failed", e)
+        }
     }
 
     /** Applies a newer shipped seed to imported data, like at app start; failures are only logged. */

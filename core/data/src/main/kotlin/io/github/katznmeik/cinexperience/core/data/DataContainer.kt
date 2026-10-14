@@ -87,7 +87,9 @@ class DataContainer(
     val visitPhotoStore: VisitPhotoStore by lazy { FileVisitPhotoStore(appContext, ioDispatcher) }
 
     /** Backup export and import (spec §8). */
-    val backupRepository: BackupRepository by lazy {
+    val backupRepository: BackupRepository get() = roomBackupRepository
+
+    private val roomBackupRepository: RoomBackupRepository by lazy {
         RoomBackupRepository(
             db = database,
             filesDir = appContext.filesDir,
@@ -106,11 +108,29 @@ class DataContainer(
     }
 
     /**
-     * The startup sweep: [sweepOrphanReferenceImages] and [sweepOrphanVisitPhotos].
-     * Returns the total number of deleted files.
+     * The startup sweep: [sweepOrphanReferenceImages], [sweepOrphanVisitPhotos] and
+     * the leftover backup import staging in the cache. Returns the total number of
+     * deleted photos and reference images.
      */
-    suspend fun sweepOrphanFiles(now: Long = System.currentTimeMillis()): Int =
-        sweepOrphanReferenceImages(now) + sweepOrphanVisitPhotos(now)
+    suspend fun sweepOrphanFiles(now: Long = System.currentTimeMillis()): Int {
+        clearLeftoverImportStaging()
+        return sweepOrphanReferenceImages(now) + sweepOrphanVisitPhotos(now)
+    }
+
+    /**
+     * Deletes `cacheDir/backup-import/` left by an earlier process (e.g. killed while
+     * an import preview was open); a prepared import of this process is kept.
+     * Failures are logged, not thrown.
+     */
+    suspend fun clearLeftoverImportStaging() {
+        try {
+            roomBackupRepository.clearLeftoverStaging()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Clearing the import staging failed", e)
+        }
+    }
 
     /**
      * Deletes reference screenshots that no hall points to, e.g. left behind when

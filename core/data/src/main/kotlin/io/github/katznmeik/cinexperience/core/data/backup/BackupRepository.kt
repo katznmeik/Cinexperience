@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.core.data.backup
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import java.time.Instant
 import java.time.LocalDate
 
@@ -88,10 +89,19 @@ class BackupException(val error: BackupError, message: String, cause: Throwable?
  * `data.json` and the app-private `photos/` and `reference/` files. See
  * `BackupFormat.kt` for the format and `RoomBackupRepository` for the guarantees.
  *
- * Every method throws [BackupException] with a user-facing message on failure;
- * a failed import leaves the current data and files untouched.
+ * Every method throws [BackupException] with a user-facing message on failure
+ * (only cancellation and fatal VM errors are passed on); a failed import leaves
+ * the current data and files untouched.
  */
 interface BackupRepository {
+    /**
+     * True while [commitImport] replaces the data. The UI blocks everything that
+     * could write meanwhile (other screens, tab switches): a write queued behind
+     * the import would land on the imported data, possibly on a different row
+     * with the same id.
+     */
+    val isImporting: StateFlow<Boolean>
+
     /** The last successful export, `null` if there was none. */
     val lastExport: Flow<LastExport?>
 

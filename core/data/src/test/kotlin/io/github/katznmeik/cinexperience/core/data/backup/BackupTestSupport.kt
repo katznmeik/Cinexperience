@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import io.github.katznmeik.cinexperience.core.data.DatabaseConfig
 import io.github.katznmeik.cinexperience.core.data.DatabaseTest
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
+import io.github.katznmeik.cinexperience.core.data.repository.RoomVisitRepository
 import io.github.katznmeik.cinexperience.core.data.save
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
 import io.github.katznmeik.cinexperience.core.model.CellType
@@ -174,6 +175,24 @@ internal abstract class BackupTestBase : DatabaseTest() {
 
         suspend fun seed(): Boolean = Seeder(db) { seedAsset }.seedIfNeeded()
     }
+
+    /** Device B with its own data (a seeded install with one visit and photo) and a backup of device A. */
+    protected suspend fun prepareTwoDevices(): Pair<Device, String> {
+        buildRealisticData()
+        val doc = deviceA.document("backup.zip")
+        deviceA.repository.export(doc)
+        val deviceB = newDevice("b")
+        deviceB.seed()
+        val hallId = deviceB.db.hallDao().getAll().first().id
+        RoomVisitRepository(deviceB.db, Dispatchers.Default).save(
+            Visit(hallId = hallId, date = LocalDate.of(2026, 1, 1), photoPath = deviceB.writeFile("photos/visit-b.jpg")),
+        )
+        return deviceB to doc
+    }
+
+    /** The data in the device's newest safety copy. */
+    protected fun Device.latestCopyData(): BackupData? =
+        SafetyCopies(File(filesDir, SafetyCopies.FOLDER)).latest()?.file?.inputStream()?.use { BackupReader().readDataOrNull(it) }
 
     /**
      * Realistic data on device A: the shipped seed (13 cinemas, 36 halls, delphi

@@ -101,39 +101,43 @@ internal class LastExportStore(private val prefs: SharedPreferences) {
 
 /**
  * Automatic copies of the data taken right before an import replaces it, as
- * backup zips in `filesDir/backups/pre-import-<UTC timestamp>.zip`. Only the
- * newest [keep] are kept. App-private and not part of Android Auto Backup.
+ * backup zips in `filesDir/backups/pre-import-<sequence>-<UTC timestamp>.zip`.
+ *
+ * Copies are ordered by their sequence number (one above the highest existing),
+ * never by the clock, so a clock that goes backwards can't make a new copy look
+ * old. The timestamp is only shown to the user. [prune] keeps the newest [keep]
+ * copies and is called only after an import succeeded; a failed import deletes
+ * the copy it wrote, so the newest copy always holds the data from before the
+ * last *successful* import. App-private and not part of Android Auto Backup.
  */
 internal class SafetyCopies(private val dir: File, private val keep: Int = KEEP) {
 
-    class Copy(val file: File, val createdAt: Instant)
+    class Copy(val file: File, val sequence: Long, val createdAt: Instant)
 
+    /** Newest first. */
     fun all(): List<Copy> = dir.listFiles().orEmpty()
-        .mapNotNull { file -> parse(file.name)?.let { Copy(file, it) } }
-        .sortedByDescending { it.createdAt }
+        .mapNotNull { file -> parse(file) }
+        .sortedByDescending { it.sequence }
 
     fun latest(): Copy? = all().firstOrNull()
 
-    /** The file for a copy taken at [at] (not created yet); never an existing file. */
-    fun fileFor(at: Instant): File {
-        var time = at
-        while (true) {
-            val file = File(dir, "$PREFIX${STAMP.format(time)}$SUFFIX")
-            if (!file.exists()) return file
-            time = time.plusMillis(1)
-        }
+    /** The file for a new copy taken at [at] (not created yet): newer than every existing copy. */
+    fun newFile(at: Instant): File {
+        val sequence = (all().maxOfOrNull { it.sequence } ?: 0L) + 1
+        return File(dir, "$PREFIX$sequence-${STAMP.format(at)}$SUFFIX")
     }
 
     /** Deletes all but the newest [keep] copies, and leftover temporary files. */
     fun prune() {
-        all().drop(keep).forEach { it.file.delete() }
+        all().drop(keep.coerceAtLeast(1)).forEach { it.file.delete() }
         dir.listFiles().orEmpty().filter { it.name.endsWith(TEMP_SUFFIX) }.forEach { it.delete() }
     }
 
-    private fun parse(name: String): Instant? {
-        if (!name.startsWith(PREFIX) || !name.endsWith(SUFFIX)) return null
+    private fun parse(file: File): Copy? {
+        val match = NAME.matchEntire(file.name) ?: return null
+        val sequence = match.groupValues[1].toLongOrNull() ?: return null
         return try {
-            Instant.from(STAMP.parse(name.removePrefix(PREFIX).removeSuffix(SUFFIX)))
+            Copy(file, sequence, Instant.from(STAMP.parse(match.groupValues[2])))
         } catch (e: DateTimeParseException) {
             null
         }
@@ -145,6 +149,7 @@ internal class SafetyCopies(private val dir: File, private val keep: Int = KEEP)
         const val TEMP_SUFFIX: String = ".tmp"
         private const val PREFIX = "pre-import-"
         private const val SUFFIX = ".zip"
+        private val NAME = Regex("pre-import-(\\d{1,18})-(\\d{8}T\\d{9}Z)\\.zip")
         private val STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmssSSS'Z'").withZone(ZoneOffset.UTC)
     }
 }

@@ -43,20 +43,22 @@ class BackupFormatTest {
     }
 
     @Test
-    fun safetyCopiesAreNamedByTimeAndPrunedToTheNewest() {
+    fun safetyCopiesAreOrderedBySequenceNotByTheClock() {
         val dir = tmp.newFolder("backups")
         val copies = SafetyCopies(dir)
         assertNull(copies.latest())
+        // The clock jumps around; the order of writing decides.
         val times = listOf("2026-10-01T10:00:00Z", "2026-10-03T09:00:00Z", "2026-10-02T08:00:00Z").map(Instant::parse)
-        for (time in times) copies.fileFor(time).writeText("x")
-        File(dir, "pre-import-x.zip.tmp").writeText("leftover")
+        for (time in times) copies.newFile(time).writeText("x")
+        File(dir, "pre-import-9-x.zip.tmp").writeText("leftover")
         File(dir, "unrelated.txt").writeText("keep")
-        assertEquals(Instant.parse("2026-10-03T09:00:00Z"), copies.latest()!!.createdAt)
-        assertEquals("pre-import-20261003T090000000Z.zip", copies.latest()!!.file.name)
+        assertEquals(3L, copies.latest()!!.sequence)
+        assertEquals(Instant.parse("2026-10-02T08:00:00Z"), copies.latest()!!.createdAt)
+        assertEquals("pre-import-3-20261002T080000000Z.zip", copies.latest()!!.file.name)
 
         copies.prune()
         assertEquals(
-            listOf("pre-import-20261002T080000000Z.zip", "pre-import-20261003T090000000Z.zip", "unrelated.txt"),
+            listOf("pre-import-2-20261003T090000000Z.zip", "pre-import-3-20261002T080000000Z.zip", "unrelated.txt"),
             dir.list()!!.sorted(),
         )
     }
@@ -65,8 +67,12 @@ class BackupFormatTest {
     fun aSafetyCopyNeverOverwritesAnother() {
         val copies = SafetyCopies(tmp.newFolder("backups"))
         val at = Instant.parse("2026-10-03T09:00:00Z")
-        val first = copies.fileFor(at).apply { writeText("first") }
-        val second = copies.fileFor(at)
+        val first = copies.newFile(at).apply { writeText("first") }
+        val second = copies.newFile(at)
         assertTrue(first.name != second.name)
+        second.writeText("second")
+        // Sequence numbers compare as numbers, not text.
+        repeat(9) { copies.newFile(at).writeText("x") }
+        assertEquals(11L, copies.latest()!!.sequence)
     }
 }
