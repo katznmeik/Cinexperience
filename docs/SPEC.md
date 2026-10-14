@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 15)
+**Last updated:** 2026-10-14 (rev. 16)
 
 ---
 
@@ -223,8 +223,9 @@ Save is always allowed — nothing besides hall is required.
   Import backup (validates, previews, warns that it replaces all data), Restore safety copy, Android Auto Backup shown as "On" (§8)
 - **Data:** Manage cinemas & halls (add, rename, delete user-added ones; shows
   counts and how many layouts are drawn); All visits (§6.8)
-- **About:** version, note that the app is unofficial and not affiliated with
-  Yorck Kinos
+- **About:** version and build ID (the short commit hash the APK was built
+  from; it matches the APK file name from CI), note that the app is unofficial
+  and not affiliated with Yorck Kinos
 
 ### 6.8 All visits
 - One chronological list of every visit across all cinemas, newest first.
@@ -354,8 +355,9 @@ redacted) to build and test the parser.
 | M4 | Scores & seat map | Rating aggregation, seat colours, overrides, favourite |
 | M5 | Rankings | Sortable rankings for halls and cinemas |
 | M6 | Backup | Export / import zip, Auto Backup |
-| M7 | Polish & release | Accessibility pass, app icon, signed APK → v1.0 |
-| M8 | Ticket import | Share-intent parser (v1.1) |
+| M7 | Polish & release prep | Accessibility pass, app icon, signed release APK, release workflow |
+| M8 | Polish from testing | Fixes and improvements from the owner's tests on the phone, delivered in batches → v1.0 release |
+| M9 | Ticket import | Share-intent parser (v1.1) |
 
 ## 13. Development approach
 
@@ -408,6 +410,7 @@ complexity (higher effort = more careful reasoning, but more time and usage):
 | `feature:seatmap`: seat map & layout editor | xhigh | Hardest part: zoom/pan, split & staggered rows, overlay, screen geometry |
 | `feature:backup`: export / import | high | Errors mean data loss |
 | Seed layouts from Yorck-app screenshots | high | Seats must be transcribed exactly |
+| M8 polish items | medium (high when data, backup or the seat map change) | Small changes, but existing data must stay intact |
 | `feature:ticketimport` parser (v1.1) | xhigh | Error-prone free-text parsing |
 | Review agents | high (xhigh for seat map & backup) | Independent check before merge |
 | Stubborn bugs | max | Only when needed |
