@@ -9,6 +9,7 @@ import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
+import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailEntry
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailViewModel
@@ -38,13 +39,15 @@ fun NavGraphBuilder.hallDetailScreen(
 ) {
     composable<HallDetailRoute> { entry ->
         val hallId = entry.toRoute<HallDetailRoute>().hallId
-        HallDetailEntry(
-            viewModel = viewModel(factory = HallDetailViewModel.factory(hallId, hallRepository, seatOverrideRepository)),
-            onBack = dropUnlessResumed(block = onBack),
-            onEditLayout = dropUnlessResumedWith(onEditLayout),
-            onAddVisit = dropUnlessResumedWith(onAddVisit),
-            onOpenVisit = dropUnlessResumedWith(onOpenVisit),
-        )
+        ScreenBackground {
+            HallDetailEntry(
+                viewModel = viewModel(factory = HallDetailViewModel.factory(hallId, hallRepository, seatOverrideRepository)),
+                onBack = dropUnlessResumed(block = onBack),
+                onEditLayout = dropUnlessResumedWith(onEditLayout),
+                onAddVisit = dropUnlessResumedWith(onAddVisit),
+                onOpenVisit = dropUnlessResumedWith(onOpenVisit),
+            )
+        }
     }
 }
 
@@ -60,10 +63,12 @@ fun NavGraphBuilder.layoutEditorScreen(
 ) {
     composable<LayoutEditorRoute> { entry ->
         val hallId = entry.toRoute<LayoutEditorRoute>().hallId
-        LayoutEditorEntry(
-            viewModel = viewModel(factory = LayoutEditorViewModel.factory(hallId, hallRepository, referenceImageStore)),
-            referenceImages = referenceImageStore,
-            onClose = onClose,
-        )
+        ScreenBackground {
+            LayoutEditorEntry(
+                viewModel = viewModel(factory = LayoutEditorViewModel.factory(hallId, hallRepository, referenceImageStore)),
+                referenceImages = referenceImageStore,
+                onClose = onClose,
+            )
+        }
     }
 }
