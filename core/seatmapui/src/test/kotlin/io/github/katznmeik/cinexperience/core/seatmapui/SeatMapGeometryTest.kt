@@ -95,9 +95,10 @@ class SeatMapGeometryTest {
         assertEquals(77f, right.screenRight)
         assertEquals(78f, right.contentBounds.right)
 
-        // Room for drag handles beside the screen's ends.
-        val handles = SeatMapGeometry(layout, metrics.copy(screenSideSpace = 6f), 4f, 2f, screenOffset = 2f)
-        assertEquals(84f, handles.contentBounds.right)
+        // A caption centred on the screen (the seat map's "SCREEN") stays inside the content: 53 + 60 / 2 + 1.
+        val captioned = SeatMapGeometry(layout, metrics.copy(screenCaptionWidth = 60f), 4f, 2f, screenOffset = 2f)
+        assertEquals(84f, captioned.contentBounds.right)
+        assertEquals(-11f, captioned.contentBounds.left) // the labels reach further left
 
         // An unusable offset draws the screen centred.
         assertEquals(29f, SeatMapGeometry(layout, metrics, 4f, 2f, screenOffset = Float.NaN).screenCenterX)

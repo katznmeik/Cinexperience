@@ -371,14 +371,15 @@ private fun ReadyContent(
 /**
  * The line under the drawing area: the canvas hint and, while the view is zoomed
  * or panned, the "Fit" control. Outside the drawing, so neither ever covers the
- * grid, the screen bar or its handles.
+ * grid, the screen bar or its handles. Always as tall as the "Fit" control's
+ * touch area, so nothing below jumps when it appears.
  */
 @Composable
 private fun CanvasFooter(hint: String, showFit: Boolean, onFit: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 30.dp)
+            .heightIn(min = 48.dp)
             .padding(start = 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),

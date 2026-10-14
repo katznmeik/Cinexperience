@@ -104,6 +104,38 @@ class SeatMapScreenshotTest {
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/seat_map_numbers.png")
     }
 
+    /**
+     * A narrow screen moved as far as the editor allows (a 10-column hall, a 2-seat
+     * screen 5 seats left and right of centre): the "SCREEN" caption stays whole.
+     */
+    @Test
+    fun screenCaptionAtTheGridsEdge() {
+        val layout = SeatLayout.fromPatterns(List(5) { "S".repeat(10) }, firstSeatId = 1)
+        composeRule.setContent {
+            CinexTheme {
+                Column(
+                    Modifier.fillMaxSize().background(CinexTheme.colors.background).padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    for (offset in listOf(-5f, 5f)) {
+                        Card {
+                            SeatMap(
+                                layout,
+                                "Screen $offset",
+                                screenWidth = 2f,
+                                screenOffset = offset,
+                                maxHeight = 260.dp,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/seat_map_screen_edge.png")
+    }
+
     /** Like the hall detail's map card: surface, 6 dp side padding. */
     @Composable
     private fun Card(content: @Composable () -> Unit) {

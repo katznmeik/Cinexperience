@@ -78,8 +78,12 @@ private const val MARKS_SPACING = 0.04f
 
 /**
  * Measured seat numbers for seats [seatSize] wide (content px), cached per text.
- * Build one per seat size and layout; it is cheap, since a hall has few distinct
- * numbers.
+ * It doesn't depend on the layout: remember one per measurer, style, seat size
+ * and density, so edits and selections reuse the measured numbers.
+ *
+ * Numbers too wide for [SEAT_NUMBER_MAX_WIDTH] shrink by their number of digits,
+ * not each on its own: every three-digit number gets the font size at which the
+ * widest three digits fit, so "100" and "101" look alike.
  */
 class SeatNumberTexts(
     private val measurer: TextMeasurer,
@@ -91,14 +95,32 @@ class SeatNumberTexts(
     class Measured(val layout: TextLayoutResult, val fontSize: Float)
 
     private val cache = HashMap<String, Measured>()
+    private val fontSizes = HashMap<Int, Float>()
+    private val maxWidth = seatSize * SEAT_NUMBER_MAX_WIDTH
 
     /** Font size (px) of numbers of up to two digits. */
     val standardFontSize: Float = seatSize * SEAT_NUMBER_SIZE
 
+    /** The digit that is widest in the number font, measured once. */
+    private val widestDigit: Char by lazy {
+        ('0'..'9').maxBy { measure(it.toString(), standardFontSize).layout.size.width }
+    }
+
+    /**
+     * Font size (px) of every number with [length] digits: [standardFontSize], or
+     * smaller so that [length] of the widest digit fit [SEAT_NUMBER_MAX_WIDTH].
+     */
+    fun fontSizeFor(length: Int): Float = fontSizes.getOrPut(length) {
+        val widest = measure(widestDigit.toString().repeat(length.coerceAtLeast(1)), standardFontSize).layout.size.width
+        if (widest <= maxWidth) standardFontSize else standardFontSize * maxWidth / widest
+    }
+
     operator fun get(text: String): Measured = cache.getOrPut(text) {
-        val first = measure(text, standardFontSize)
-        val maxWidth = seatSize * SEAT_NUMBER_MAX_WIDTH
-        if (first.layout.size.width <= maxWidth) first else measure(text, standardFontSize * maxWidth / first.layout.size.width)
+        val measured = measure(text, fontSizeFor(text.length))
+        val width = measured.layout.size.width
+        // Digits are never wider than the widest digit, so all numbers of one length keep
+        // one size; anything else (not a seat number) is shrunk on its own if it must.
+        if (width <= maxWidth || text.all { it in '0'..'9' }) measured else measure(text, measured.fontSize * maxWidth / width)
     }
 
     private fun measure(text: String, fontPx: Float): Measured {
@@ -119,36 +141,8 @@ class SeatNumberTexts(
 }
 
 
-/** Width of a number's halo, as a fraction of its font size (see [drawSeatNumber]). */
+/** Width of a number's halo, as a fraction of its font size (see [NumberedSeat]). */
 const val SEAT_NUMBER_HALO: Float = 0.24f
-
-/**
- * Draws [number] centred in the seat [rect], below the marks band when
- * [belowMarks]. With a [halo] colour, the digits get a rim of it first, so they
- * keep their contrast over an unknown background (the editor's reference screenshot).
- */
-fun DrawScope.drawSeatNumber(
-    number: SeatNumberTexts.Measured,
-    rect: Rect,
-    color: Color,
-    belowMarks: Boolean,
-    halo: Color? = null,
-) {
-    val layout = number.layout
-    val centreY = rect.top + rect.height * (if (belowMarks) NUMBER_CENTRE_BELOW_MARKS else NUMBER_CENTRE)
-    val baseline = centreY + number.fontSize * DIGIT_HEIGHT / 2f
-    val topLeft = Offset(rect.center.x - layout.size.width / 2f, baseline - layout.firstBaseline)
-    if (halo != null) {
-        drawText(
-            layout,
-            color = halo,
-            topLeft = topLeft,
-            drawStyle = Stroke(width = number.fontSize * SEAT_NUMBER_HALO, join = StrokeJoin.Round),
-        )
-    }
-    // Fill explicitly: without a draw style the text paint keeps the halo's stroke.
-    drawText(layout, color = color, topLeft = topLeft, drawStyle = Fill)
-}
 
 /** A symbol in the marks band of a numbered seat. */
 internal enum class SeatMark { KIND, AVOID, FAVOURITE }
@@ -178,38 +172,68 @@ internal fun marksBand(rect: Rect, count: Int): List<Rect> {
 }
 
 /**
- * A numbered seat's number and marks (spec §5, §7): the seat kind symbol
+ * A numbered seat's number and marks (spec §5, §7), laid out once per layout and
+ * seat states, so drawing it every frame allocates nothing: the seat kind symbol
  * (companion, sofa), the avoid × and the favourite ★ side by side in a band at
- * the top, the number below them (centred when there are no marks), all in the
- * seat colour's on-colour ([on]; the layout editor passes its own, and a [halo]
- * over its reference screenshot). The favourite also gets its light outline. The
- * fill (and the "no data" rim) is drawn by the caller.
+ * the top of [rect], the [number] below them (centred when there are no marks).
+ * The favourite also gets its light outline. The fill (and the "no data" rim) is
+ * drawn by the caller.
  */
-fun DrawScope.drawNumberedSeat(
-    rect: Rect,
+class NumberedSeat(
+    val rect: Rect,
     kind: SeatKind,
     visual: SeatVisual,
-    number: SeatNumberTexts.Measured,
-    colors: CinexColors,
-    on: Color = colors.seat.onColorOf(visual.tone),
-    halo: Color? = null,
+    private val number: SeatNumberTexts.Measured,
 ) {
-    if (visual.isFavourite) drawFavouriteOutline(rect, colors)
-    val marks = seatMarks(kind, visual)
-    marksBand(rect, marks.size).forEachIndexed { index, box ->
-        val (glyph, width) = when (marks[index]) {
-            SeatMark.KIND -> (SeatGlyphs.of(kind) ?: return@forEachIndexed) to 2.4f
-            SeatMark.AVOID -> SeatGlyphs.markCross to 3.6f
-            SeatMark.FAVOURITE -> SeatGlyphs.star to 0f
-        }
-        if (halo != null) strokeGlyph(glyph, box, halo, strokeWidth = width + 4f)
-        if (width == 0f) fillGlyph(glyph, box, on) else strokeGlyph(glyph, box, on, strokeWidth = width)
+    /** A symbol in the marks band: stroked with [stroke], or filled without one; [halo] is its rim. */
+    private class Mark(val glyph: Path, val box: Rect, val stroke: Stroke?, val halo: Stroke)
+
+    private val favourite: FavouriteOutline? = if (visual.isFavourite) FavouriteOutline(rect) else null
+    private val marks: Array<Mark>
+    private val numberTopLeft: Offset
+    private val numberHalo = Stroke(width = number.fontSize * SEAT_NUMBER_HALO, join = StrokeJoin.Round)
+
+    init {
+        val kinds = seatMarks(kind, visual)
+        val boxes = marksBand(rect, kinds.size)
+        marks = kinds.mapIndexedNotNull { index, mark ->
+            val (glyph, width) = when (mark) {
+                SeatMark.KIND -> (SeatGlyphs.of(kind) ?: return@mapIndexedNotNull null) to 2.4f
+                SeatMark.AVOID -> SeatGlyphs.markCross to 3.6f
+                SeatMark.FAVOURITE -> SeatGlyphs.star to 0f
+            }
+            Mark(glyph, boxes[index], stroke = if (width == 0f) null else glyphStroke(width), halo = glyphStroke(width + 4f))
+        }.toTypedArray()
+        val centreY = rect.top + rect.height * (if (kinds.isNotEmpty()) NUMBER_CENTRE_BELOW_MARKS else NUMBER_CENTRE)
+        val baseline = centreY + number.fontSize * DIGIT_HEIGHT / 2f
+        numberTopLeft = Offset(rect.center.x - number.layout.size.width / 2f, baseline - number.layout.firstBaseline)
     }
-    drawSeatNumber(number, rect, on, belowMarks = marks.isNotEmpty(), halo = halo)
+
+    /**
+     * Draws the marks and the number in [on] (the seat colour's on-colour; the layout
+     * editor passes its own). With a [halo] colour, everything gets a rim of it
+     * first, so it keeps its contrast over an unknown background (the editor's
+     * reference screenshot).
+     */
+    fun DrawScope.draw(colors: CinexColors, on: Color, halo: Color? = null) {
+        favourite?.run { drawOutline(colors) }
+        for (mark in marks) {
+            if (halo != null) drawGlyph(mark.glyph, mark.box, halo, mark.halo)
+            drawGlyph(mark.glyph, mark.box, on, mark.stroke ?: Fill)
+        }
+        if (halo != null) drawText(number.layout, color = halo, topLeft = numberTopLeft, drawStyle = numberHalo)
+        // Fill explicitly: without a draw style the text paint keeps the halo's stroke.
+        drawText(number.layout, color = on, topLeft = numberTopLeft, drawStyle = Fill)
+    }
 }
 
-/** The favourite's light outline just outside the seat. */
-internal fun DrawScope.drawFavouriteOutline(rect: Rect, colors: CinexColors) {
-    val outline = rect.inflate(rect.width * 0.09f)
-    drawPath(Path().apply { addRoundRect(seatRoundRect(outline)) }, colors.text, style = Stroke(width = rect.width * 0.08f))
+/** The favourite's light outline just outside a seat, built once. */
+internal class FavouriteOutline(rect: Rect) {
+    private val path = Path().apply { addRoundRect(seatRoundRect(rect.inflate(rect.width * 0.09f))) }
+    private val stroke = Stroke(width = rect.width * 0.08f)
+
+    fun DrawScope.drawOutline(colors: CinexColors) = drawPath(path, colors.text, style = stroke)
 }
+
+/** The favourite's light outline just outside the seat [rect] (for single seats, e.g. the legend). */
+internal fun DrawScope.drawFavouriteOutline(rect: Rect, colors: CinexColors) = with(FavouriteOutline(rect)) { drawOutline(colors) }

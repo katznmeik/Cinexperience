@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -24,6 +25,7 @@ import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleLayouts
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -69,6 +71,36 @@ class SeatMapUiTest {
         assertEquals(CHOOSE_BY_LABEL_ACTION, action.label)
         composeRule.runOnIdle { action.action() }
         assertTrue(pickerRequested)
+    }
+
+    /**
+     * Selecting a seat only redraws the map (its prepared drawing is kept): the ring
+     * appears on the newly selected seat, and the map looks as before once deselected.
+     */
+    @Test
+    fun selectingASeatRedrawsTheRing() {
+        val layout = SeatLayout.fromPatterns("SSSSS", firstSeatId = 1)
+        var selected by mutableStateOf<SeatId?>(null)
+        composeRule.setContent {
+            CinexTheme {
+                Box(Modifier.width(300.dp)) { SeatMap(layout = layout, contentDescription = "Seat map", selectedSeatId = selected) }
+            }
+        }
+        fun pixels(): IntArray {
+            val image = composeRule.onNodeWithContentDescription("Seat map").captureToImage()
+            return IntArray(image.width * image.height).also { image.readPixels(it) }
+        }
+        val none = pixels()
+        selected = SeatId(3)
+        composeRule.waitForIdle()
+        val third = pixels()
+        assertFalse("the ring is drawn", none.contentEquals(third))
+        selected = SeatId(4)
+        composeRule.waitForIdle()
+        assertFalse("the ring moves", third.contentEquals(pixels()))
+        selected = null
+        composeRule.waitForIdle()
+        assertTrue("no ring", none.contentEquals(pixels()))
     }
 
     @Test

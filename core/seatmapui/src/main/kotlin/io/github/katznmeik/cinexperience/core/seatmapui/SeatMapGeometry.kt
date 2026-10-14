@@ -15,11 +15,12 @@ import kotlin.math.min
  * Sizes of a seat map drawing, in content units (pixels at zoom 1). The seat map
  * and the layout editor use different metrics for the same [SeatMapGeometry].
  *
- * @property screenTopSpace room above the screen line (its stroke, drag handles).
+ * @property screenTopSpace room above the screen line (its stroke).
  * @property minScreenGap minimum room between the screen line and row 0, e.g. for
  *   a "SCREEN" caption; 0 draws the screen distance exactly.
  * @property rightLabels also show row labels on the right of every row.
- * @property screenSideSpace room left and right of the screen's ends (drag handles).
+ * @property screenCaptionWidth width of a caption centred on the screen (the seat
+ *   map's "SCREEN"): a screen moved to the grid's edge keeps it inside the drawing.
  */
 data class SeatMapMetrics(
     val seatSize: Float,
@@ -31,7 +32,7 @@ data class SeatMapMetrics(
     val minScreenGap: Float,
     val padding: Float,
     val rightLabels: Boolean = true,
-    val screenSideSpace: Float = 0f,
+    val screenCaptionWidth: Float = 0f,
 ) {
     /** Horizontal distance between neighbouring cells' left edges. */
     val pitchX: Float get() = seatSize + seatGap
@@ -96,11 +97,15 @@ class SeatMapGeometry(
     private val labelsRight: Float =
         if (metrics.rightLabels) gridWidth + metrics.labelGap + metrics.labelWidth else gridWidth
 
-    /** Everything that is drawn, plus padding. */
+    /**
+     * Everything that is drawn in content coordinates, plus padding. What is drawn at
+     * a fixed size on screen (the layout editor's screen label and handles) gets its
+     * room from the view instead.
+     */
     val contentBounds: Rect = Rect(
-        left = min(labelsLeft, screenLeft - metrics.screenSideSpace) - metrics.padding,
+        left = minOf(labelsLeft, screenLeft, screenCenterX - metrics.screenCaptionWidth / 2f) - metrics.padding,
         top = screenY - metrics.screenTopSpace - metrics.padding,
-        right = max(labelsRight, screenRight + metrics.screenSideSpace) + metrics.padding,
+        right = maxOf(labelsRight, screenRight, screenCenterX + metrics.screenCaptionWidth / 2f) + metrics.padding,
         bottom = gridHeight + metrics.padding,
     )
 

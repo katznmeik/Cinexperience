@@ -281,6 +281,60 @@ class LayoutEditorViewModelTest {
         assertFalse(again.state.hasUnsavedChanges)
     }
 
+    /**
+     * A valid stored offset beyond what the grid allows in the editor (possible after an
+     * import or from the seed) is kept as it is: opening and saving the editor doesn't
+     * change it; only moving the screen or changing the columns limits it to the grid.
+     */
+    @Test
+    fun loadingKeepsAStoredOffsetBeyondTheGrid() {
+        val storedOffset = -10f
+        check(ScreenOffsetRules.isValid(storedOffset) && storedOffset < -ScreenOffsetRules.maxMagnitude(4)) // 4 columns: ±2
+        repository.store.value = repository.store.value.copy(halls = listOf(hall.copy(screenOffset = storedOffset)))
+
+        val vm = viewModel()
+        assertEquals(storedOffset, vm.draft.screenOffset)
+        assertFalse(vm.state.hasUnsavedChanges)
+        // Selecting the screen, changing its distance and width, adding rows: the offset stays.
+        vm.selectScreen()
+        vm.beginGesture()
+        vm.dragScreenDistance(3f)
+        vm.endGesture()
+        vm.changeScreenWidth(ScreenRules.STEP)
+        vm.changeRowCount(+1)
+        assertEquals(storedOffset, vm.draft.screenOffset)
+        vm.undo()
+        vm.undo()
+        vm.undo()
+        assertFalse(vm.state.hasUnsavedChanges)
+        // Saved with another edit: still the stored offset.
+        vm.selectTool(CellType.GAP)
+        vm.tapCell(0, 0)
+        vm.save()
+        assertTrue(vm.state.isClosed)
+        assertEquals(storedOffset, storedHall().screenOffset)
+        assertEquals(".SSS", LayoutPattern.encode(storedHall().layout!!.rows[0].cells))
+
+        // Moving the screen limits it to the grid; undoing that brings the stored offset back.
+        val moved = viewModel()
+        assertFalse(moved.state.hasUnsavedChanges)
+        moved.changeScreenOffset(ScreenOffsetRules.STEP)
+        assertEquals(-2f, moved.draft.screenOffset)
+        assertTrue(moved.state.hasUnsavedChanges)
+        moved.undo()
+        assertEquals(storedOffset, moved.draft.screenOffset)
+        assertFalse(moved.state.hasUnsavedChanges)
+
+        // So does changing the columns.
+        moved.changeColumnCount(+1)
+        assertEquals(-2.5f, moved.draft.screenOffset)
+        moved.undo()
+        assertEquals(storedOffset, moved.draft.screenOffset)
+        moved.requestDiscard()
+        assertTrue(moved.state.isClosed) // nothing to ask: unchanged
+        assertEquals(storedOffset, storedHall().screenOffset)
+    }
+
     @Test
     fun tappingTheScreenSelectsItAndClearsTheRow() {
         val vm = viewModel()
