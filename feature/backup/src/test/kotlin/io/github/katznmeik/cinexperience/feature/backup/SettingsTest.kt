@@ -152,6 +152,26 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun errorsFromTheRepositoryBecomeMessagesInsteadOfCrashes() = runTest {
+        val vm = viewModel()
+        backup.exportFailure = OutOfMemoryError("Simulated")
+        vm.onExportDestinationChosen("content://downloads/1")
+        assertEquals("Couldn't export the backup.", vm.backupState.message)
+
+        backup.prepareFailure = StackOverflowError()
+        vm.onImportSourceChosen("content://downloads/2")
+        assertEquals("Couldn't read the backup.", vm.backupState.message)
+
+        backup.prepareFailure = null
+        backup.commitFailure = OutOfMemoryError("Simulated")
+        vm.onImportSourceChosen("content://downloads/2")
+        vm.onConfirmImport()
+        assertEquals("The import stopped with an unexpected error. Please check your data.", vm.backupState.message)
+        assertNull(vm.backupState.task)
+        assertTrue(!vm.backupState.isBusy)
+    }
+
+    @Test
     fun importShowsThePreviewAndReplacesOnConfirm() = runTest {
         val vm = viewModel()
         backup.gate = CompletableDeferred()

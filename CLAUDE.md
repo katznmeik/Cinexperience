@@ -106,8 +106,13 @@ Don't duplicate config in module build files.
   (`BackupRestorer`: imported files are added under names no existing file
   has, and removed again if the transaction fails). While
   `BackupRepository.isImporting` is true the UI blocks every other write
-  (tabs, Back, Settings rows). Failures are `BackupException`s with
-  user-facing messages. Tests: `core/data/src/test/.../backup/`.
+  (tabs, Back, Settings rows). Once the transaction has committed, nothing
+  (progress callbacks, file clean-up, pruning, seeding, even Errors) can turn
+  the import into a failure or delete its safety copy (`onCommitted`). Failures
+  are `BackupException`s with user-facing messages. Tests:
+  `core/data/src/test/.../backup/`. Known limitation: if the current data fails
+  validation (e.g. a layout from a newer app), import is refused; there is no
+  "Replace anyway".
 - **Row and seat labels:** Yorck numbers rows and seats (1…n), which is the
   default labelling. Keep fixtures, examples and UI texts numeric ("Row 7 ·
   Seat 10"); custom row labels exist only for other cinemas.

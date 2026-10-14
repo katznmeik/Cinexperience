@@ -132,6 +132,78 @@ internal class BackupReviewRegressionTest : BackupTestBase() {
         assertNull(deviceB.repository.latestSafetyCopy.first())
     }
 
+    // 1b. Anything that fails after the commit must not undo the safety copy or report a failure.
+
+    /**
+     * Device B imports A while something fails after the database commit; the
+     * import must count as done: A's data live, B's data in the safety copy, success
+     * reported, and the copy restorable.
+     */
+    private suspend fun failureAfterTheCommitIsStillASuccess(onProgress: (Float) -> Unit = {}, setup: (Device) -> Unit = {}) {
+        val (deviceB, doc) = prepareTwoDevices()
+        val bOnly = deviceB.snapshot()
+        val bFiles = deviceB.files()
+        setup(deviceB)
+        val counts = deviceB.repository.commitImport(deviceB.repository.prepareImport(doc), onProgress)
+
+        assertEquals(deviceA.snapshot().counts(), counts)
+        assertEquals(deviceA.snapshot(), deviceB.snapshot())
+        assertEquals(1, deviceB.safetyCopyFiles().size)
+        assertEquals(bOnly, deviceB.latestCopyData())
+        assertFalse(deviceB.repository.isImporting.value)
+        assertTrue(deviceB.stagingIsEmpty())
+
+        deviceB.failpoint = {}
+        clock.now = clock.now.plusSeconds(60)
+        deviceB.repository.commitImport(deviceB.repository.prepareSafetyCopyRestore())
+        assertEquals(bOnly, deviceB.snapshot())
+        assertEquals(bFiles, deviceB.files())
+    }
+
+    @Test
+    fun progressCallbackThrowingAtTheEnd() = runTest {
+        failureAfterTheCommitIsStillASuccess(onProgress = { if (it >= 1f) throw IllegalStateException("The screen is gone") })
+    }
+
+    @Test
+    fun errorRightAfterTheCommit() = runTest {
+        failureAfterTheCommitIsStillASuccess { device ->
+            device.failpoint = { if (it == ImportStep.COMMITTED) throw OutOfMemoryError("Simulated") }
+        }
+    }
+
+    @Test
+    fun errorWhileCleaningUpOldFiles() = runTest {
+        var deleted = 0
+        failureAfterTheCommitIsStillASuccess { device ->
+            device.failpoint = {
+                if (it == ImportStep.OLD_FILE_DELETED) {
+                    deleted++
+                    throw StackOverflowError()
+                }
+            }
+        }
+        assertEquals(1, deleted)
+    }
+
+    @Test
+    fun anErrorBeforeTheCommitIsReportedAndDropsTheNewCopy() = runTest {
+        val (deviceB, doc) = prepareTwoDevices()
+        val before = deviceB.snapshot()
+        val files = deviceB.files()
+        deviceB.failpoint = { if (it == ImportStep.ROWS_REPLACED) throw OutOfMemoryError("Simulated") }
+        try {
+            deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
+            fail("Expected the import to fail")
+        } catch (e: BackupException) {
+            assertEquals(BackupError.WRITE_FAILED, e.error)
+        }
+        assertEquals(before, deviceB.snapshot())
+        assertEquals(files, deviceB.files())
+        assertTrue(deviceB.safetyCopyFiles().isEmpty())
+        assertFalse(deviceB.repository.isImporting.value)
+    }
+
     // 2. A clock that goes backwards must not prune the copy just written.
 
     @Test

@@ -34,9 +34,9 @@ class FakeBackupRepository(
     /** The time of the next export, and of the backup a prepared import comes from. */
     var now: Instant = Instant.parse("2026-10-03T12:05:00Z")
 
-    var exportFailure: Exception? = null
-    var prepareFailure: Exception? = null
-    var commitFailure: Exception? = null
+    var exportFailure: Throwable? = null
+    var prepareFailure: Throwable? = null
+    var commitFailure: Throwable? = null
 
     /** Progress reported before waiting for [gate]. */
     var progress: Float = 0.5f

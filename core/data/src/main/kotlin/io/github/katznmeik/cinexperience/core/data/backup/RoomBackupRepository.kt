@@ -208,34 +208,52 @@ internal class RoomBackupRepository(
                         }
                         newCopy = ensureSafetyCopy(prepared) { onProgress(it * SAFETY_COPY_SHARE) }
                         val restorer = BackupRestorer(db, filesDir, clock::millis, failpoint)
-                        val imported = restorer.replace(current, before) {
-                            onProgress(SAFETY_COPY_SHARE + it * (1 - SAFETY_COPY_SHARE))
+                        restorer.replace(
+                            staged = current,
+                            expected = before,
+                            onProgress = { onProgress(SAFETY_COPY_SHARE + it * (1 - SAFETY_COPY_SHARE)) },
+                            onCommitted = { committed = true },
+                        )
+                    } catch (e: Throwable) {
+                        if (committed) {
+                            // The data was replaced: this is a success, whatever failed afterwards,
+                            // and the new copy now holds the only copy of the replaced data.
+                            Log.w(TAG, "A step after the import's commit failed", e)
+                        } else {
+                            // The import didn't happen: the copy written for it would hide the
+                            // copy of the last successful import, so it goes.
+                            newCopy?.delete()
+                            clearStaging()
+                            importing.value = false
+                            changes.update { it + 1 }
+                            throw failure(e)
                         }
-                        committed = true
+                    }
+                    // Committed. Clean-up failures are logged, never reported.
+                    try {
                         pruneSafetyCopies()
                         seed()
-                        imported.counts()
                     } catch (e: Throwable) {
-                        // The import didn't happen: the copy written for it would hide the
-                        // copy of the last successful import, so it goes.
-                        if (!committed) newCopy?.delete()
-                        throw when (e) {
-                            is BackupException -> e
-                            is Exception -> BackupException(
-                                BackupError.WRITE_FAILED,
-                                "Couldn't import the backup. Your data was not changed.",
-                                e,
-                            )
-                            else -> e
-                        }
-                    } finally {
-                        clearStaging()
-                        importing.value = false
-                        changes.update { it + 1 }
+                        Log.w(TAG, "Clean-up after the import failed", e)
                     }
+                    clearStaging()
+                    importing.value = false
+                    changes.update { it + 1 }
+                    current.data.counts()
                 }
             }
         }
+
+    /** The error to report for a failure before the commit (nothing was changed). */
+    private fun failure(e: Throwable): Throwable = when (e) {
+        is BackupException -> e
+        is Exception, is StackOverflowError, is OutOfMemoryError -> BackupException(
+            BackupError.WRITE_FAILED,
+            "Couldn't import the backup. Your data was not changed.",
+            e,
+        )
+        else -> e
+    }
 
     override suspend fun discardImport(preview: ImportPreview) {
         mutex.withLock {

@@ -128,7 +128,7 @@ class SettingsViewModel(
                 throw e
             } catch (e: BackupException) {
                 e.message
-            } catch (e: Exception) {
+            } catch (e: Throwable) { // anything unexpected, even an Error, becomes a message
                 "Couldn't export the backup."
             }
             transient.update { it.copy(task = null, message = message) }
@@ -170,7 +170,7 @@ class SettingsViewModel(
                 transient.update { it.copy(task = null, preview = preview) }
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 val message = (e as? BackupException)?.message ?: "Couldn't read the backup."
                 transient.update { it.copy(task = null, message = message) }
             }
@@ -193,8 +193,10 @@ class SettingsViewModel(
                 throw e
             } catch (e: BackupException) {
                 e.message
-            } catch (e: Exception) {
-                "Couldn't import the backup. Your data was not changed."
+            } catch (e: Throwable) {
+                // The repository reports every failure before the commit as a BackupException,
+                // so whether the data changed is unknown here: don't claim either.
+                "The import stopped with an unexpected error. Please check your data."
             }
             transient.update { it.copy(task = null, message = message) }
         }
@@ -209,7 +211,7 @@ class SettingsViewModel(
                 backupRepository.discardImport(preview)
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 // Only temporary files are left; the next import clears them.
             }
         }

@@ -18,6 +18,9 @@ internal enum class ImportStep {
 
     /** After the commit, before files of the old data are deleted. */
     COMMITTED,
+
+    /** After the commit, after each file of the old data was deleted. */
+    OLD_FILE_DELETED,
 }
 
 /**
@@ -34,7 +37,8 @@ internal enum class ImportStep {
  *    snapshot the safety copy was made from.
  * 3. If 1 or 2 fails, the files added in 1 are deleted again and the transaction is
  *    rolled back: the old data and files are intact.
- * 4. After the commit, files that only the old data referenced are deleted.
+ * 4. After the commit, files that only the old data referenced are deleted. Any
+ *    failure from here on is logged, never reported: the import has happened.
  *
  * Process death: SQLite rolls an unfinished transaction back. Files added before
  * the commit (or old files not yet deleted after it) are unreferenced and are
@@ -50,8 +54,17 @@ internal class BackupRestorer(
      * Replaces everything with [staged]. [expected] is the current data as read
      * for the safety copy; if the database changed since, nothing is replaced.
      * Returns the data as imported (file paths possibly renamed).
+     *
+     * [onCommitted] is called right after the transaction committed, before any
+     * other step: from then on the import has happened, whatever follows. An
+     * exception from this method always means nothing was committed.
      */
-    suspend fun replace(staged: StagedBackup, expected: BackupData, onProgress: (Float) -> Unit = {}): BackupData {
+    suspend fun replace(
+        staged: StagedBackup,
+        expected: BackupData,
+        onProgress: (Float) -> Unit = {},
+        onCommitted: () -> Unit = {},
+    ): BackupData {
         val added = ArrayList<File>()
         val renamed = HashMap<String, String>()
         val oldData: BackupData
@@ -92,17 +105,28 @@ internal class BackupRestorer(
             added.forEach { it.delete() }
             throw e
         }
-        onProgress(1f)
-        try {
-            failpoint(ImportStep.COMMITTED)
-            for (path in oldData.filePaths - newData.filePaths) {
+        // Committed. Nothing after this point may turn the import into a failure:
+        // the caller learns about the commit first, and every later step is guarded.
+        onCommitted()
+        postCommit("Reporting progress") { onProgress(1f) }
+        postCommit("The post-commit step") { failpoint(ImportStep.COMMITTED) }
+        for (path in oldData.filePaths - newData.filePaths) {
+            // Leftovers are removed by the startup sweep of orphan files.
+            postCommit("Deleting a file of the replaced data") {
                 if (BackupFormat.isFilePath(path)) File(filesDir, path).delete()
+                failpoint(ImportStep.OLD_FILE_DELETED)
             }
-        } catch (e: Exception) {
-            // The import is complete; leftovers are removed by the startup sweep.
-            Log.w(TAG, "Deleting files of the replaced data failed", e)
         }
         return newData
+    }
+
+    /** Runs [step] after the commit; any failure, even an Error, is only logged. */
+    private inline fun postCommit(what: String, step: () -> Unit) {
+        try {
+            step()
+        } catch (e: Throwable) {
+            Log.w(TAG, "$what failed after the import was committed", e)
+        }
     }
 
     private suspend fun replaceRows(data: BackupData) {

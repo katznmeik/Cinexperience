@@ -56,12 +56,15 @@ internal class BackupAtomicityTest : BackupTestBase() {
     @Test
     fun failureAfterTheCommitStillCompletesTheImport() = runTest {
         val (deviceB, doc) = prepareTwoDevices()
-        deviceB.failpoint = { if (it == ImportStep.COMMITTED) throw IllegalStateException("Simulated clean-up failure") }
+        deviceB.failpoint = {
+            if (it == ImportStep.COMMITTED) throw IllegalStateException("Simulated post-commit failure")
+            if (it == ImportStep.OLD_FILE_DELETED) throw IOException("Simulated clean-up failure")
+        }
         val expected = deviceA.snapshot()
         deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
         assertEquals(expected, deviceB.snapshot())
-        // The old photo was not cleaned up; the startup sweep removes it later.
-        assertTrue(File(deviceB.filesDir, "photos/visit-b.jpg").exists())
+        // Each post-commit step is guarded on its own: the old photo was still deleted.
+        assertTrue(!File(deviceB.filesDir, "photos/visit-b.jpg").exists())
     }
 
     @Test
