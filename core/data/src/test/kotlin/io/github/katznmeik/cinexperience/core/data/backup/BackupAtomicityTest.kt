@@ -150,12 +150,50 @@ internal class BackupAtomicityTest : BackupTestBase() {
             listOf("pre-import-2-20261003T122500000Z.zip", "pre-import-3-20261003T123500000Z.zip"),
             deviceB.safetyCopyFiles(),
         )
-        assertEquals(SafetyCopy(clock.now), deviceB.repository.latestSafetyCopy.first())
+        assertEquals(clock.now, deviceB.repository.latestSafetyCopy.first()!!.createdAt)
         // The first copy (device B's own data) was pruned; the newest holds A's data plus "Change 2".
         val restore = deviceB.repository.prepareSafetyCopyRestore()
         assertEquals(ImportSource.SAFETY_COPY, restore.source)
         assertEquals(deviceA.snapshot().counts().let { it.copy(cinemas = it.cinemas + 1) }, restore.counts)
         assertNotEquals(original.counts(), restore.counts)
+    }
+
+    @Test
+    fun bothSafetyCopiesAreListedAndTheOlderOneCanBeRestored() = runTest {
+        val (deviceB, doc) = prepareTwoDevices()
+        val cinemasB = RoomCinemaRepository(deviceB.db, Dispatchers.Default)
+        val bOnly = deviceB.snapshot()
+        val bFiles = deviceB.files()
+        deviceB.repository.commitImport(deviceB.repository.prepareImport(doc)) // copy 1: B's own data
+        clock.now = clock.now.plus(Duration.ofMinutes(10))
+        cinemasB.createCinema("Added after the first import")
+        val second = deviceB.snapshot()
+        deviceB.repository.commitImport(deviceB.repository.prepareImport(doc)) // copy 2: A + the new cinema
+
+        val listed = deviceB.repository.safetyCopies.first()
+        assertEquals(listOf(2L, 1L), listed.map { it.id })
+        assertEquals(listOf(Instant.parse("2026-10-03T12:15:00Z"), Instant.parse("2026-10-03T12:05:00Z")), listed.map { it.createdAt })
+        assertEquals(listOf(second.counts(), bOnly.counts()), listed.map { it.counts })
+
+        // Go back two imports: restore the older copy.
+        clock.now = clock.now.plus(Duration.ofMinutes(10))
+        val restore = deviceB.repository.prepareSafetyCopyRestore(copyId = 1L)
+        assertEquals(ImportSource.SAFETY_COPY, restore.source)
+        assertEquals(bOnly.counts(), restore.counts)
+        deviceB.repository.commitImport(restore)
+        assertEquals(bOnly, deviceB.snapshot())
+        assertEquals(bFiles, deviceB.files())
+
+        // The usual rules held: a copy of the data before the restore was saved, and only
+        // after the success were the copies pruned to the newest two (sequence order).
+        assertEquals(listOf(3L, 2L), deviceB.repository.safetyCopies.first().map { it.id })
+        assertEquals(deviceA.snapshot(), deviceB.latestCopyData())
+        try {
+            deviceB.repository.prepareSafetyCopyRestore(copyId = 1L)
+            fail("Expected an error")
+        } catch (e: BackupException) {
+            assertEquals(BackupError.NO_SAFETY_COPY, e.error)
+        }
     }
 
     @Test

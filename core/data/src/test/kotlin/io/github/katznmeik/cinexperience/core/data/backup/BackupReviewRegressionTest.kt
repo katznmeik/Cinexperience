@@ -145,7 +145,7 @@ internal class BackupReviewRegressionTest : BackupTestBase() {
         val beforeSecond = deviceB.snapshot()
         deviceB.repository.commitImport(deviceB.repository.prepareImport(doc)) // copy 2 at 11:05
         assertEquals(beforeSecond, deviceB.latestCopyData())
-        assertEquals(SafetyCopy(Instant.parse("2026-10-03T11:05:00Z")), deviceB.repository.latestSafetyCopy.first())
+        assertEquals(Instant.parse("2026-10-03T11:05:00Z"), deviceB.repository.latestSafetyCopy.first()!!.createdAt)
 
         clock.now = clock.now.minus(Duration.ofHours(1))
         cinemasB.createCinema("Even later")

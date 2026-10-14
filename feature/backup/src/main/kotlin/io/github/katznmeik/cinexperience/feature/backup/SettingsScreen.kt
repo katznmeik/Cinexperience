@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.data.backup.BackupRepository
 import io.github.katznmeik.cinexperience.core.data.backup.ImportPreview
 import io.github.katznmeik.cinexperience.core.data.backup.ImportSource
+import io.github.katznmeik.cinexperience.core.data.backup.SafetyCopy
 import io.github.katznmeik.cinexperience.core.ui.component.CinexScreen
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
@@ -50,6 +51,8 @@ internal interface BackupActions {
     fun onExport() {}
     fun onImport() {}
     fun onRestoreSafetyCopy() {}
+    fun onSafetyCopyChosen(copyId: Long) {}
+    fun onCancelSafetyCopyChoice() {}
     fun onConfirmImport() {}
     fun onCancelImport() {}
     fun onMessageShown() {}
@@ -77,6 +80,8 @@ internal fun SettingsEntry(
             override fun onExport() = launchPicker(viewModel) { exportPicker.launch(viewModel.exportFileName()) }
             override fun onImport() = launchPicker(viewModel) { importPicker.launch(BackupRepository.IMPORT_MIME_TYPES) }
             override fun onRestoreSafetyCopy() = viewModel.onRestoreSafetyCopy()
+            override fun onSafetyCopyChosen(copyId: Long) = viewModel.onSafetyCopyChosen(copyId)
+            override fun onCancelSafetyCopyChoice() = viewModel.onCancelSafetyCopyChoice()
             override fun onConfirmImport() = viewModel.onConfirmImport()
             override fun onCancelImport() = viewModel.onCancelImport()
             override fun onMessageShown() = viewModel.onMessageShown()
@@ -162,6 +167,55 @@ internal fun SettingsScreen(
         SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
     }
     backup.preview?.let { ImportPreviewDialog(it, actions) }
+    if (backup.choosingSafetyCopy) SafetyCopyChooser(backup.safetyCopies, actions)
+}
+
+/** The safety copies to restore from, newest first; picking one leads to the usual preview. */
+@Composable
+private fun SafetyCopyChooser(copies: List<SafetyCopy>, actions: BackupActions) {
+    AlertDialog(
+        onDismissRequest = actions::onCancelSafetyCopyChoice,
+        title = { Text("Restore safety copy") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Your data as it was before an import, newest first.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CinexTheme.colors.textMuted,
+                )
+                RowGroup {
+                    copies.forEachIndexed { index, copy ->
+                        if (index > 0) RowDivider()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 56.dp)
+                                .clickable(role = Role.Button) { actions.onSafetyCopyChosen(copy.id) }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    safetyCopyTitle(copy),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = CinexTheme.colors.text,
+                                )
+                                Text(safetyCopyContents(copy), style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
+                            }
+                            Icon(
+                                CinexIcons.ChevronRight,
+                                contentDescription = null,
+                                tint = CinexTheme.colors.textMuted,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = actions::onCancelSafetyCopyChoice) { Text("Cancel") } },
+    )
 }
 
 @Composable
@@ -201,19 +255,18 @@ private fun BackupRows(backup: BackupUiState, actions: BackupActions) {
             else -> null
         },
     )
-    val safetyCopy = backup.safetyCopy
+    val copies = backup.safetyCopies
     val restoring = importing?.source == ImportSource.SAFETY_COPY
-    if (safetyCopy != null || restoring) {
+    if (copies.isNotEmpty() || restoring) {
         RowDivider()
         SettingsRow(
             icon = CinexIcons.Undo,
             title = "Restore safety copy",
             subtitle = when {
                 restoring -> "Restoring… ${percentText(importing!!.progress)}"
-                safetyCopy != null -> "Before the import on ${dateTimeText(safetyCopy.createdAt)}"
-                else -> null
+                else -> safetyCopiesSummary(copies)
             },
-            enabled = idle || restoring,
+            enabled = idle || restoring || backup.choosingSafetyCopy,
             onClick = if (idle) actions::onRestoreSafetyCopy else null,
             progress = if (restoring) RowProgress(importing!!.progress) else null,
         )

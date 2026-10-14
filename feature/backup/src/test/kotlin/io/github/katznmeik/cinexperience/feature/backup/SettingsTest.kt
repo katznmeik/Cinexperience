@@ -50,6 +50,12 @@ import java.time.ZoneOffset
 private val EXPORTED_AT: Instant = Instant.parse("2026-10-03T12:05:00Z")
 private val COUNTS = BackupCounts(cinemas = 13, halls = 36, visits = 27, overrides = 4, photos = 9, referenceImages = 2)
 
+/** Two safety copies, newest first. */
+private val COPIES = listOf(
+    SafetyCopy(2, Instant.parse("2026-10-14T07:12:00Z"), COUNTS),
+    SafetyCopy(1, Instant.parse("2026-10-01T16:40:00Z"), COUNTS.copy(cinemas = 13, visits = 19, photos = 4)),
+)
+
 class SettingsViewModelTest {
 
     @get:Rule
@@ -83,10 +89,10 @@ class SettingsViewModelTest {
     @Test
     fun lastExportAndSafetyCopyComeFromTheBackupRepository() = runTest {
         backup.lastExport.value = LastExport(EXPORTED_AT, COUNTS)
-        backup.latestSafetyCopy.value = SafetyCopy(EXPORTED_AT)
+        backup.safetyCopies.value = COPIES
         val vm = viewModel()
         assertEquals(LastExport(EXPORTED_AT, COUNTS), vm.backupState.lastExport)
-        assertEquals(SafetyCopy(EXPORTED_AT), vm.backupState.safetyCopy)
+        assertEquals(COPIES, vm.backupState.safetyCopies)
     }
 
     @Test
@@ -170,7 +176,7 @@ class SettingsViewModelTest {
         assertEquals(listOf(preview), backup.committed)
         assertNull(vm.backupState.task)
         assertEquals("Backup imported · 13 cinemas, 36 halls, 27 visits, 9 photos", vm.backupState.message)
-        assertEquals(SafetyCopy(EXPORTED_AT), vm.backupState.safetyCopy)
+        assertEquals(listOf(SafetyCopy(1, EXPORTED_AT, COUNTS)), vm.backupState.safetyCopies)
     }
 
     @Test
@@ -210,14 +216,56 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun restoringTheSafetyCopyGoesThroughTheSamePreview() = runTest {
-        backup.latestSafetyCopy.value = SafetyCopy(EXPORTED_AT)
+    fun restoringOpensTheChoiceOfCopiesThenTheSamePreview() = runTest {
+        backup.safetyCopies.value = COPIES
         val vm = viewModel()
         vm.onRestoreSafetyCopy()
-        assertEquals(listOf(FakeBackupRepository.SAFETY_COPY), backup.preparedFrom)
+        assertTrue(vm.backupState.choosingSafetyCopy)
+        assertTrue(vm.backupState.isBusy)
+        assertTrue(backup.preparedFrom.isEmpty())
+
+        // The older copy: go back two imports.
+        vm.onSafetyCopyChosen(1L)
+        assertTrue(!vm.backupState.choosingSafetyCopy)
+        assertEquals(listOf(FakeBackupRepository.safetyCopySource(1L)), backup.preparedFrom)
         assertEquals(ImportSource.SAFETY_COPY, vm.backupState.preview!!.source)
         vm.onConfirmImport()
         assertEquals("Safety copy restored · 13 cinemas, 36 halls, 27 visits, 9 photos", vm.backupState.message)
+    }
+
+    @Test
+    fun closingTheChoiceRestoresNothing() = runTest {
+        backup.safetyCopies.value = COPIES
+        val vm = viewModel()
+        vm.onRestoreSafetyCopy()
+        // Nothing else can start while the choice is open.
+        vm.onExportDestinationChosen("content://downloads/1")
+        vm.onImportSourceChosen("content://downloads/2")
+        assertTrue(backup.exportedTo.isEmpty() && backup.preparedFrom.isEmpty())
+
+        vm.onCancelSafetyCopyChoice()
+        assertEquals(BackupUiState(safetyCopies = COPIES), vm.backupState)
+        vm.onSafetyCopyChosen(2L) // a late tap after closing is ignored
+        assertTrue(backup.preparedFrom.isEmpty())
+    }
+
+    @Test
+    fun withoutCopiesThereIsNothingToChoose() = runTest {
+        val vm = viewModel()
+        vm.onRestoreSafetyCopy()
+        assertTrue(!vm.backupState.choosingSafetyCopy)
+    }
+
+    @Test
+    fun aVanishedCopyShowsWhy() = runTest {
+        backup.safetyCopies.value = COPIES
+        backup.prepareFailure = BackupException(BackupError.NO_SAFETY_COPY, "This safety copy no longer exists.")
+        val vm = viewModel()
+        vm.onRestoreSafetyCopy()
+        vm.onSafetyCopyChosen(1L)
+        assertNull(vm.backupState.preview)
+        assertEquals("This safety copy no longer exists.", vm.backupState.message)
+        assertTrue(!vm.backupState.isBusy)
     }
 
     @Test
@@ -261,6 +309,13 @@ class BackupTextsTest {
             listOf("13 cinemas · 36 halls", "27 visits · 9 photos", "4 marked seats · 2 reference images"),
             previewCountLines(COUNTS),
         )
+        val utc = ZoneOffset.UTC
+        assertEquals("Before the import on 14 Oct 2026, 07:12", safetyCopyTitle(COPIES[0], utc))
+        assertEquals("13 cinemas · 27 visits · 9 photos", safetyCopyContents(COPIES[0]))
+        assertEquals("Contents unknown", safetyCopyContents(COPIES[0].copy(counts = null)))
+        assertNull(safetyCopiesSummary(emptyList(), utc))
+        assertEquals("Before the import on 1 Oct 2026, 16:40", safetyCopiesSummary(COPIES.drop(1), utc))
+        assertEquals("2 copies · newest from 14 Oct 2026, 07:12", safetyCopiesSummary(COPIES, utc))
         assertEquals("45%", percentText(0.449f))
         assertEquals("100%", percentText(1.2f))
     }
@@ -319,8 +374,31 @@ class SettingsScreenshotTest {
 
     @Test
     fun settings() {
-        show(state(BackupUiState(lastExport = LastExport(EXPORTED_AT, COUNTS), safetyCopy = SafetyCopy(Instant.parse("2026-10-01T18:40:00Z")))))
+        show(state(BackupUiState(lastExport = LastExport(EXPORTED_AT, COUNTS), safetyCopies = COPIES)))
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/settings.png")
+    }
+
+    @OptIn(ExperimentalRoborazziApi::class)
+    @Test
+    fun safetyCopyChoice() {
+        val chosen = mutableListOf<Long>()
+        val actions = object : BackupActions {
+            override fun onSafetyCopyChosen(copyId: Long) {
+                chosen += copyId
+            }
+        }
+        val state = state(BackupUiState(lastExport = LastExport(EXPORTED_AT, COUNTS), safetyCopies = COPIES, choosingSafetyCopy = true))
+        composeRule.setContent {
+            CinexTheme {
+                Box(Modifier.fillMaxSize().background(CinexTheme.colors.background)) {
+                    SettingsScreen(state, onOpenManage = {}, onOpenAllVisits = {}, actions = actions)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        captureScreenRoboImage("build/outputs/roborazzi/settings-safety-copy-choice.png")
+        composeRule.onNodeWithText("13 cinemas · 19 visits · 4 photos").assertExists().performClick()
+        assertEquals(listOf(1L), chosen)
     }
 
     @Test

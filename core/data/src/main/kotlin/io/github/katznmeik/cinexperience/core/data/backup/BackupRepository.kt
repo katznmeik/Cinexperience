@@ -2,6 +2,7 @@ package io.github.katznmeik.cinexperience.core.data.backup
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
 
@@ -19,15 +20,21 @@ data class BackupCounts(
 /** The last successful export from this device (Settings → Export backup). */
 data class LastExport(val exportedAt: Instant, val counts: BackupCounts)
 
-/** The newest automatic copy of the data taken before an import replaced it. */
-data class SafetyCopy(val createdAt: Instant)
+/** An automatic copy of the data taken right before an import replaced it. */
+data class SafetyCopy(
+    /** Identifies the copy for [BackupRepository.prepareSafetyCopyRestore]; a higher id is newer. */
+    val id: Long,
+    val createdAt: Instant,
+    /** What the copy holds; `null` if its manifest can't be read. */
+    val counts: BackupCounts?,
+)
 
 /** Where a prepared import comes from. */
 enum class ImportSource {
     /** A backup file the user picked. */
     FILE,
 
-    /** The latest automatic safety copy ([BackupRepository.latestSafetyCopy]). */
+    /** One of the automatic safety copies ([BackupRepository.safetyCopies]). */
     SAFETY_COPY,
 }
 
@@ -105,8 +112,15 @@ interface BackupRepository {
     /** The last successful export, `null` if there was none. */
     val lastExport: Flow<LastExport?>
 
-    /** The newest pre-import safety copy, `null` if there is none. */
-    val latestSafetyCopy: Flow<SafetyCopy?>
+    /**
+     * The pre-import safety copies, newest first (the newest holds the data from
+     * before the last successful import, the next one the data from before the
+     * import before that).
+     */
+    val safetyCopies: Flow<List<SafetyCopy>>
+
+    /** The newest safety copy, `null` if there is none. */
+    val latestSafetyCopy: Flow<SafetyCopy?> get() = safetyCopies.map { it.firstOrNull() }
 
     /**
      * Writes a backup of all data to [destinationUri] (a Storage Access Framework
@@ -121,8 +135,12 @@ interface BackupRepository {
      */
     suspend fun prepareImport(sourceUri: String): ImportPreview
 
-    /** Like [prepareImport], for the [latestSafetyCopy]. */
-    suspend fun prepareSafetyCopyRestore(): ImportPreview
+    /**
+     * Like [prepareImport], for the safety copy with [copyId] ([SafetyCopy.id]),
+     * or the newest one if `null`. Committing it saves a safety copy of the current
+     * data first, like any import.
+     */
+    suspend fun prepareSafetyCopyRestore(copyId: Long? = null): ImportPreview
 
     /**
      * Replaces all data with the prepared backup: first saves a safety copy of the

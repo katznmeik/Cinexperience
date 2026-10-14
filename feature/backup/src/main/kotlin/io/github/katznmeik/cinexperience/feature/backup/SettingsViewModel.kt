@@ -59,18 +59,21 @@ sealed interface BackupTask {
 /**
  * The Backup section of Settings (spec §6.7, §8).
  *
+ * @property safetyCopies the pre-import safety copies, newest first.
+ * @property choosingSafetyCopy the list of safety copies to restore from is open.
  * @property preview a validated backup waiting for the user's Cancel / Replace.
  * @property message one-off result or error message for a snackbar.
  */
 data class BackupUiState(
     val lastExport: LastExport? = null,
-    val safetyCopy: SafetyCopy? = null,
+    val safetyCopies: List<SafetyCopy> = emptyList(),
+    val choosingSafetyCopy: Boolean = false,
     val task: BackupTask? = null,
     val preview: ImportPreview? = null,
     val message: String? = null,
 ) {
     /** While true, no other backup action can start. */
-    val isBusy: Boolean get() = task != null || preview != null
+    val isBusy: Boolean get() = task != null || preview != null || choosingSafetyCopy
 }
 
 data class SettingsUiState(
@@ -97,15 +100,15 @@ class SettingsViewModel(
         .catch { emit(Result.failure(it)) }
 
     private val lastExport: Flow<LastExport?> = backupRepository.lastExport.orNullOnError()
-    private val safetyCopy: Flow<SafetyCopy?> = backupRepository.latestSafetyCopy.orNullOnError()
+    private val safetyCopies: Flow<List<SafetyCopy>> = backupRepository.safetyCopies.catch { emit(emptyList()) }
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(counts.onStart<Result<DataCounts>?> { emit(null) }, lastExport, safetyCopy, transient) { counts, last, copy, backup ->
+        combine(counts.onStart<Result<DataCounts>?> { emit(null) }, lastExport, safetyCopies, transient) { counts, last, copies, backup ->
             SettingsUiState(
                 appVersion = appVersion,
                 counts = counts?.getOrNull(),
                 countsError = counts?.isFailure == true,
-                backup = backup.copy(lastExport = last, safetyCopy = copy),
+                backup = backup.copy(lastExport = last, safetyCopies = copies),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState(appVersion))
 
@@ -137,9 +140,26 @@ class SettingsViewModel(
         if (uri != null) prepare { backupRepository.prepareImport(uri) }
     }
 
-    /** Settings → Restore safety copy. */
+    /** Settings → Restore safety copy: opens the list of copies to choose from. */
     fun onRestoreSafetyCopy() {
-        prepare { backupRepository.prepareSafetyCopyRestore() }
+        while (true) {
+            val current = uiState.value.backup
+            val local = transient.value
+            if (local.isBusy || current.safetyCopies.isEmpty()) return
+            if (transient.compareAndSet(local, local.copy(choosingSafetyCopy = true, message = null))) return
+        }
+    }
+
+    /** A copy was picked in the list: read it and show the usual preview. */
+    fun onSafetyCopyChosen(copyId: Long) {
+        if (!transient.value.choosingSafetyCopy) return
+        transient.update { it.copy(choosingSafetyCopy = false) }
+        prepare { backupRepository.prepareSafetyCopyRestore(copyId) }
+    }
+
+    /** The list of copies was closed without a choice. */
+    fun onCancelSafetyCopyChoice() {
+        transient.update { it.copy(choosingSafetyCopy = false) }
     }
 
     private fun prepare(read: suspend () -> ImportPreview) {

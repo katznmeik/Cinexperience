@@ -216,6 +216,21 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
         )
     }
 
+    /** The manifest of a backup (e.g. a safety copy's counts), or `null` if it can't be read. */
+    fun readManifestOrNull(input: InputStream): BackupManifest? = try {
+        val zip = ZipInputStream(BufferedInputStream(input, BUFFER_SIZE))
+        var manifest: BackupManifest? = null
+        while (manifest == null) {
+            val entry = zip.nextEntry ?: break
+            if (entry.name == BackupFormat.MANIFEST) manifest = parseManifest(readCapped(zip, limits.maxManifestBytes))
+        }
+        manifest
+    } catch (e: Exception) {
+        null
+    } catch (e: StackOverflowError) {
+        null
+    }
+
     /** The data of a backup we wrote ourselves (a safety copy), or `null` if it can't be read. */
     fun readDataOrNull(input: InputStream): BackupData? = try {
         val zip = ZipInputStream(BufferedInputStream(input, BUFFER_SIZE))

@@ -100,7 +100,9 @@ Don't duplicate config in module build files.
   sure a safety copy exists (`filesDir/backups/pre-import-<seq>-<time>.zip`,
   ordered by sequence, not clock; reused if the newest already holds the
   current data; a failed import deletes the copy it wrote; pruned to the newest
-  2 only after success) and replace all rows in one transaction
+  2 only after success; Settings lists both, newest first, and restores the
+  chosen one through the same prepare → preview → commit path) and replace
+  all rows in one transaction
   (`BackupRestorer`: imported files are added under names no existing file
   has, and removed again if the transaction fails). While
   `BackupRepository.isImporting` is true the UI blocks every other write

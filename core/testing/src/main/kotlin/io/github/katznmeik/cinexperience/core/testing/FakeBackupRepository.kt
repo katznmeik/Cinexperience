@@ -17,11 +17,13 @@ import java.time.Instant
  */
 class FakeBackupRepository(
     lastExport: LastExport? = null,
-    safetyCopy: SafetyCopy? = null,
+    safetyCopies: List<SafetyCopy> = emptyList(),
 ) : BackupRepository {
 
     override val lastExport = MutableStateFlow(lastExport)
-    override val latestSafetyCopy = MutableStateFlow(safetyCopy)
+
+    /** Newest first; a successful commit adds one (keeping two), like the real repository. */
+    override val safetyCopies = MutableStateFlow(safetyCopies)
 
     /** True while [commitImport] runs (e.g. held by [gate]); tests may also set it directly. */
     override val isImporting = MutableStateFlow(false)
@@ -61,8 +63,8 @@ class FakeBackupRepository(
         return preview(ImportSource.FILE)
     }
 
-    override suspend fun prepareSafetyCopyRestore(): ImportPreview {
-        preparedFrom += SAFETY_COPY
+    override suspend fun prepareSafetyCopyRestore(copyId: Long?): ImportPreview {
+        preparedFrom += safetyCopySource(copyId)
         return preview(ImportSource.SAFETY_COPY)
     }
 
@@ -79,7 +81,8 @@ class FakeBackupRepository(
             onProgress(progress)
             gate?.await()
             commitFailure?.let { throw it }
-            latestSafetyCopy.value = SafetyCopy(now)
+            val nextId = (safetyCopies.value.maxOfOrNull { it.id } ?: 0L) + 1
+            safetyCopies.value = (listOf(SafetyCopy(nextId, now, counts)) + safetyCopies.value).take(2)
             return preview.counts
         } finally {
             isImporting.value = false
@@ -91,7 +94,7 @@ class FakeBackupRepository(
     }
 
     companion object {
-        /** Recorded in [preparedFrom] for [prepareSafetyCopyRestore]. */
-        const val SAFETY_COPY: String = "safety-copy"
+        /** Recorded in [preparedFrom] for [prepareSafetyCopyRestore] of [copyId] (`null` = newest). */
+        fun safetyCopySource(copyId: Long?): String = "safety-copy:${copyId ?: "newest"}"
     }
 }

@@ -77,7 +77,7 @@ internal class RoomBackupRepository(
     private val mutex = Mutex()
     private val writer = BackupWriter(filesDir)
     private val reader = BackupReader(limits)
-    private val safetyCopies = SafetyCopies(File(filesDir, SafetyCopies.FOLDER))
+    private val copyStore = SafetyCopies(File(filesDir, SafetyCopies.FOLDER))
     private val stagingRoot = File(cacheDir, STAGING_FOLDER)
 
     /** The prepared import; guarded by [mutex]. */
@@ -93,8 +93,17 @@ internal class RoomBackupRepository(
     override val lastExport: Flow<LastExport?> =
         changes.map { lastExportStore.read() }.distinctUntilChanged().flowOn(ioDispatcher)
 
-    override val latestSafetyCopy: Flow<SafetyCopy?> =
-        changes.map { safetyCopies.latest()?.let { SafetyCopy(it.createdAt) } }.distinctUntilChanged().flowOn(ioDispatcher)
+    override val safetyCopies: Flow<List<SafetyCopy>> =
+        changes.map {
+            copyStore.all().map { copy ->
+                val manifest = try {
+                    copy.file.inputStream().use { reader.readManifestOrNull(it) }
+                } catch (e: IOException) {
+                    null
+                }
+                SafetyCopy(copy.sequence, copy.createdAt, manifest?.counts?.toModel())
+            }
+        }.distinctUntilChanged().flowOn(ioDispatcher)
 
     override suspend fun export(destinationUri: String, onProgress: (Float) -> Unit): BackupCounts = mutex.withLock {
         withContext(ioDispatcher) {
@@ -136,10 +145,12 @@ internal class RoomBackupRepository(
     override suspend fun prepareImport(sourceUri: String): ImportPreview =
         prepare(ImportSource.FILE) { documents.openInput(sourceUri) }
 
-    override suspend fun prepareSafetyCopyRestore(): ImportPreview = prepare(ImportSource.SAFETY_COPY) {
-        val copy = safetyCopies.latest()
-            ?: throw BackupException(BackupError.NO_SAFETY_COPY, "There is no safety copy to restore.")
-        copy.file.inputStream()
+    override suspend fun prepareSafetyCopyRestore(copyId: Long?): ImportPreview = prepare(ImportSource.SAFETY_COPY) {
+        val copy = if (copyId == null) copyStore.latest() else copyStore.all().firstOrNull { it.sequence == copyId }
+        copy?.file?.inputStream() ?: throw BackupException(
+            BackupError.NO_SAFETY_COPY,
+            if (copyId == null) "There is no safety copy to restore." else "This safety copy no longer exists.",
+        )
     }
 
     private suspend fun prepare(source: ImportSource, open: () -> InputStream): ImportPreview = mutex.withLock {
@@ -251,7 +262,7 @@ internal class RoomBackupRepository(
      * `null` if the newest copy already holds exactly this data (nothing written).
      */
     private fun ensureSafetyCopy(prepared: PreparedBackup, onProgress: (Float) -> Unit): File? {
-        val newest = safetyCopies.latest()
+        val newest = copyStore.latest()
         val newestData = newest?.let { copy ->
             try {
                 copy.file.inputStream().use { reader.readDataOrNull(it) }
@@ -264,7 +275,7 @@ internal class RoomBackupRepository(
             return null
         }
         val createdAt: Instant = clock.instant()
-        val target = safetyCopies.newFile(createdAt)
+        val target = copyStore.newFile(createdAt)
         val temp = File(target.parentFile, target.name + SafetyCopies.TEMP_SUFFIX)
         try {
             target.parentFile?.mkdirs()
@@ -287,7 +298,7 @@ internal class RoomBackupRepository(
     /** After a successful import; the newest copy (this import's) is always kept. */
     private fun pruneSafetyCopies() {
         try {
-            safetyCopies.prune()
+            copyStore.prune()
         } catch (e: Exception) {
             Log.w(TAG, "Pruning safety copies failed", e)
         }
