@@ -96,7 +96,9 @@ fun CinexApp(
                     TopLevelDestination.entries.forEach { tab ->
                         CinexNavigationBarItem(
                             selected = tab == shownTab,
-                            onClick = { if (!importing) navController.navigateToTab(tab, tabSwitch) },
+                            // While the bar slides away (a detail is opening) its items are ignored, or a
+                            // quick tap would switch tabs and park the new detail in the old tab's stack.
+                            onClick = { if (!importing && currentTab != null) navController.navigateToTab(tab, tabSwitch) },
                             icon = tab.icon,
                             label = tab.label,
                             modifier = Modifier.testTag(tab.testTag),
