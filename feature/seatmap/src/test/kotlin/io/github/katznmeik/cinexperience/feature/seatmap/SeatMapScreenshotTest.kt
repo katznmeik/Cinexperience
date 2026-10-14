@@ -25,7 +25,9 @@ import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.testing.SampleLayouts
+import io.github.katznmeik.cinexperience.core.ui.theme.CinexColors
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
+import io.github.katznmeik.cinexperience.core.ui.theme.DarkCinexColors
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailUiState
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailViewModel
@@ -58,11 +60,16 @@ class SeatMapScreenshotTest {
 
     private var repository = FakeCinexRepository(SampleData.storeWithSplitHall())
 
-    private fun capture(name: String, fontScale: Float? = null, content: @Composable () -> Unit) {
+    private fun capture(
+        name: String,
+        fontScale: Float? = null,
+        colors: CinexColors = DarkCinexColors,
+        content: @Composable () -> Unit,
+    ) {
         composeRule.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
-                CinexTheme {
+                CinexTheme(colors) {
                     Box(Modifier.fillMaxSize().background(CinexTheme.colors.background)) { content() }
                 }
             }
@@ -135,6 +142,26 @@ class SeatMapScreenshotTest {
         repository = FakeCinexRepository(RatedHallFixture.store())
         val state = hallState(RatedHallFixture.HALL)
         capture("hall_detail_rated") { hallDetail(state) }
+    }
+
+    /**
+     * Contrast fix for the owner to judge (M7): the rated hall with "no data" seats as
+     * before (dark fill only, 1.5:1 against the card) and as now (with the lighter rim,
+     * 3.6:1). Same map and legend in both.
+     */
+    @Test
+    fun noDataSeatContrastBeforeAndAfter() {
+        repository = FakeCinexRepository(RatedHallFixture.store())
+        val state = hallState(RatedHallFixture.HALL)
+        val before = DarkCinexColors.copy(seat = DarkCinexColors.seat.copy(noDataOutline = DarkCinexColors.seat.noData))
+        capture("seat_contrast_before", colors = before) { hallDetail(state) }
+    }
+
+    @Test
+    fun noDataSeatContrastAfter() {
+        repository = FakeCinexRepository(RatedHallFixture.store())
+        val state = hallState(RatedHallFixture.HALL)
+        capture("seat_contrast_after") { hallDetail(state) }
     }
 
     /** A seat set to "avoid" manually: the Avoid button is marked active. */
