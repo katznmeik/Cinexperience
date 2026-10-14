@@ -4,6 +4,7 @@ import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.LayoutPattern
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
@@ -160,7 +161,8 @@ class LayoutDraftTest {
         assertEquals("Row C · 3 blocks", row.title)
         assertEquals("C", row.customLabel)
         assertEquals("1", row.autoLabel)
-        assertEquals(listOf("1–2", "10–12", "13 + 1 wheelchair"), row.blocks.map { it.rangeText })
+        // The wheelchair space is numbered like every seat.
+        assertEquals(listOf("1–2", "10–12", "13–14"), row.blocks.map { it.rangeText })
         assertEquals(listOf(null, 10, null), row.blocks.map { it.startNumber })
 
         val aisle = rowSummary(layout, labels, 1)
@@ -173,7 +175,52 @@ class LayoutDraftTest {
         assertFalse(row.halfSeatOffset)
         assertEquals("1–8", back.blocks.single().rangeText)
 
-        val onlyWheelchairs = BlockSummary(0, null, null, null, wheelchairSpaces = 2)
-        assertEquals("2 wheelchairs", onlyWheelchairs.rangeText)
+        assertEquals("R", BlockSummary(0, null, null, null, fixedLabels = listOf("R")).rangeText)
+        assertEquals("–", BlockSummary(0, null, null, null).rangeText)
+    }
+
+    @Test
+    fun rowSummaryFollowsTheNumberingDirection() {
+        // Right to left: the right block is numbered first, from its rightmost seat.
+        val layout = SeatLayout.fromPatterns("SSS|SSSS", "SSSSSSW.", firstSeatId = 1)
+            .updateRow(0) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT, blockStartNumbers = listOf(10)) }
+            .updateRow(1) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+            .withFixedLabel(1, 6, "R")
+        val labels = layout.labels()
+
+        val row = rowSummary(layout, labels, 0)
+        assertEquals(NumberingDirection.RIGHT_TO_LEFT, row.numberingDirection)
+        // Blocks from the left (as stored), each with its range in numbering order.
+        assertEquals(listOf(0, 1), row.blocks.map { it.index })
+        assertEquals(listOf("10–12", "1–4"), row.blocks.map { it.rangeText })
+        assertEquals(listOf(10, null), row.blocks.map { it.startNumber })
+        // The "Starts at" fields follow the direction: right block first.
+        assertEquals(listOf("1–4", "10–12"), row.blocksInNumberingOrder.map { it.rangeText })
+        assertEquals(listOf(1, 10), row.blocksInNumberingOrder.map { it.firstNumber })
+
+        val kant = rowSummary(layout, labels, 1)
+        assertEquals("1–6 + R", kant.blocks.single().rangeText)
+        assertEquals(listOf("R"), kant.blocks.single().fixedLabels)
+    }
+
+    @Test
+    fun directionAndFixedLabelsSurviveDraftEdits() {
+        val labelled = SeatLayout.fromPatterns("SSSSSSW", "SSSSSSS", firstSeatId = 1)
+            .updateRow(0) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+            .withFixedLabel(0, 6, "R")
+        var draft = LayoutDraft.start(Hall(id = 1, cinemaId = 1, name = "Saal 4", layout = labelled, nextSeatId = 15))
+        draft = draft.insertRowCopy(0, template = 0) // a new row copies cells and direction, not the label
+        assertEquals(NumberingDirection.RIGHT_TO_LEFT, draft.layout.rows[0].numberingDirection)
+        assertEquals(listOf<String?>(null, null, null, null, null, null, null), draft.layout.rows[0].fixedLabels)
+        draft = draft.withColumnCount(9).withRowCount(4).updateRow(1) { it.copy(halfSeatOffset = true) }
+        assertEquals(NumberingDirection.RIGHT_TO_LEFT, draft.layout.rows[1].numberingDirection)
+        assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.WHEELCHAIR, "R"), draft.layout.cell(1, 6))
+        // A new kind keeps the label; painting a gap drops it.
+        draft = draft.paint(1, 6, CellType.SEAT, SeatKind.STANDARD)
+        assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.STANDARD, "R"), draft.layout.cell(1, 6))
+        assertEquals(null, draft.paint(1, 6, CellType.GAP).paint(1, 6, CellType.SEAT).layout.rows[1].fixedLabels[6])
+        // Deleting the column or the row drops it as well.
+        assertTrue(draft.withColumnCount(6).layout.rows[1].fixedLabels.all { it == null })
+        assertTrue(draft.removeRow(1).layout.rows.all { r -> r.fixedLabels.all { it == null } })
     }
 }

@@ -81,12 +81,12 @@ class DelphiLuxSeedTest {
             seatsPerRow = listOf(13, 13, 13, 13, 13, 13, 11, 0, 9, 9, 12),
             wheelchairs = 4, screenWidth = 14f, screenDistance = 1.5f,
         )
-        // Row 1: wheelchair spaces at both ends, not counted in the seat numbers.
+        // Row 1: wheelchair spaces at both ends, numbered like every seat (1, 2, 3–11, 12, 13).
         assertEquals(SeatLabel("1", 1, SeatKind.WHEELCHAIR), layout.label("1", 0))
         assertEquals(SeatLabel("1", 2, SeatKind.WHEELCHAIR), layout.label("1", 1))
-        assertEquals(SeatLabel("1", 1), layout.label("1", 2))
-        assertEquals(SeatLabel("1", 9), layout.label("1", 10))
-        assertEquals(SeatLabel("1", 4, SeatKind.WHEELCHAIR), layout.label("1", 12))
+        assertEquals(SeatLabel("1", 3), layout.label("1", 2))
+        assertEquals(SeatLabel("1", 11), layout.label("1", 10))
+        assertEquals(SeatLabel("1", 13, SeatKind.WHEELCHAIR), layout.label("1", 12))
         // Three blocks, numbered continuously.
         assertEquals(SeatLabel("2", 13), layout.label("2", 12))
         assertEquals(3, layout.labels().seats.values.filter { it.position.row == 1 }.map { it.block }.distinct().size)
@@ -109,8 +109,8 @@ class DelphiLuxSeedTest {
             wheelchairs = 3, companions = 1, screenWidth = 14f, screenDistance = 1.5f,
         )
         assertEquals(SeatLabel("1", 3, SeatKind.WHEELCHAIR), layout.label("1", 2))
-        assertEquals(SeatLabel("1", 1, SeatKind.COMPANION), layout.label("1", 3))
-        assertEquals(SeatLabel("1", 8), layout.label("1", 10))
+        assertEquals(SeatLabel("1", 4, SeatKind.COMPANION), layout.label("1", 3))
+        assertEquals(SeatLabel("1", 11), layout.label("1", 10))
         assertEquals(SeatLabel("3", 13), layout.label("3", 12))
         assertEquals(SeatLabel("12", 8), layout.label("12", 7))
         // The right block of row 12 starts at column 9.
@@ -126,9 +126,9 @@ class DelphiLuxSeedTest {
             wheelchairs = 3, screenWidth = 11.5f, screenDistance = 1.5f,
         )
         assertEquals(SeatLabel("1", 1, SeatKind.WHEELCHAIR), layout.label("1", 0))
-        assertEquals(SeatLabel("1", 1), layout.label("1", 1))
-        assertEquals(SeatLabel("1", 6), layout.label("1", 6))
-        assertEquals(SeatLabel("1", 3, SeatKind.WHEELCHAIR), layout.label("1", 8))
+        assertEquals(SeatLabel("1", 2), layout.label("1", 1))
+        assertEquals(SeatLabel("1", 7), layout.label("1", 6))
+        assertEquals(SeatLabel("1", 9, SeatKind.WHEELCHAIR), layout.label("1", 8))
         assertEquals(SeatLabel("9", 8), layout.label("9", 7))
     }
 
@@ -141,8 +141,8 @@ class DelphiLuxSeedTest {
             wheelchairs = 1, companions = 1, screenWidth = 10f, screenDistance = 2f,
         )
         assertEquals(SeatLabel("1", 1, SeatKind.WHEELCHAIR), layout.label("1", 0))
-        assertEquals(SeatLabel("1", 1, SeatKind.COMPANION), layout.label("1", 1))
-        assertEquals(SeatLabel("1", 8), layout.label("1", 8))
+        assertEquals(SeatLabel("1", 2, SeatKind.COMPANION), layout.label("1", 1))
+        assertEquals(SeatLabel("1", 9), layout.label("1", 8))
         assertEquals(SeatLabel("5", 7), layout.label("5", 6))
     }
 
@@ -155,7 +155,7 @@ class DelphiLuxSeedTest {
             wheelchairs = 1, companions = 1, sofas = 6, screenWidth = 9f, screenDistance = 2f,
         )
         assertEquals(SeatLabel("1", 7, SeatKind.COMPANION), layout.label("1", 6))
-        assertEquals(SeatLabel("1", 1, SeatKind.WHEELCHAIR), layout.label("1", 7))
+        assertEquals(SeatLabel("1", 8, SeatKind.WHEELCHAIR), layout.label("1", 7))
         assertEquals(SeatLabel("6", 1, SeatKind.SOFA), layout.label("6", 0))
         assertEquals(SeatLabel("6", 6, SeatKind.SOFA), layout.label("6", 5))
         assertEquals(3, layout.positionOf(layout.rows[5].seatIds.first())!!.column)
@@ -169,7 +169,7 @@ class DelphiLuxSeedTest {
             seatsPerRow = listOf(13, 13, 13, 13, 13, 13, 11, 6),
             wheelchairs = 4, screenWidth = 14f, screenDistance = 1.5f,
         )
-        assertEquals(SeatLabel("1", 9), layout.label("1", 10))
+        assertEquals(SeatLabel("1", 11), layout.label("1", 10))
         assertEquals(SeatLabel("2", 13), layout.label("2", 12))
         assertEquals(SeatLabel("7", 11), layout.label("7", 10))
         assertEquals(SeatLabel("8", 6), layout.label("8", 5))
@@ -185,8 +185,8 @@ class DelphiLuxSeedTest {
             wheelchairs = 1, companions = 1, screenWidth = 9f, screenDistance = 2f,
         )
         assertEquals(SeatLabel("1", 5, SeatKind.COMPANION), layout.label("1", 4))
-        assertEquals(SeatLabel("1", 1, SeatKind.WHEELCHAIR), layout.label("1", 5))
-        assertEquals(SeatLabel("1", 6), layout.label("1", 6))
+        assertEquals(SeatLabel("1", 6, SeatKind.WHEELCHAIR), layout.label("1", 5))
+        assertEquals(SeatLabel("1", 7), layout.label("1", 6))
         assertEquals(SeatLabel("3", 7), layout.label("3", 6))
         assertEquals(7, layout.positionOf(layout.rows[2].seatIds[5])!!.column)
     }

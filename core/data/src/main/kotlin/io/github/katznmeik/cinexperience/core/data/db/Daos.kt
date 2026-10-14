@@ -121,6 +121,9 @@ internal interface VisitDao {
     @Query("SELECT MAX(seat_id) FROM visit WHERE hall_id = :hallId")
     suspend fun maxSeatId(hallId: Long): Int?
 
+    @Query("SELECT COUNT(*) FROM visit WHERE hall_id = :hallId")
+    suspend fun countForHall(hallId: Long): Int
+
     @Query(
         """
         SELECT visit.*, hall.name AS hall_name, hall.layout_json AS hall_layout_json,
@@ -147,6 +150,10 @@ internal interface SeatOverrideDao {
 
     @Query("SELECT MAX(seat_id) FROM seat_override WHERE hall_id = :hallId")
     suspend fun maxSeatId(hallId: Long): Int?
+
+    /** Stored overrides of the hall: every one has a colour or is the favourite (empty ones aren't stored). */
+    @Query("SELECT COUNT(*) FROM seat_override WHERE hall_id = :hallId")
+    suspend fun countForHall(hallId: Long): Int
 }
 
 @Dao

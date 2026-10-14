@@ -66,4 +66,16 @@ class SeatNumberTextsTest {
             assertTrue("$number: $width px", width <= seatSize * SEAT_NUMBER_MAX_WIDTH + 1f)
         }
     }
+
+    @Test
+    fun fixedLabelsFitTheSeatToo() {
+        val texts = numberTexts()
+        // A one-letter label is drawn like a one-digit number.
+        assertEquals(texts.standardFontSize, texts["R"].fontSize, 0.001f)
+        // The longest labels (4 characters, wide letters) shrink on their own until they fit.
+        for (label in listOf("R", "R1", "WWWW", "R12a", "MMMM")) {
+            val width = texts[label].layout.size.width
+            assertTrue("$label: $width px", width <= seatSize * SEAT_NUMBER_MAX_WIDTH + 1f)
+        }
+    }
 }

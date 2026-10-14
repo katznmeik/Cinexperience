@@ -3,9 +3,11 @@ package io.github.katznmeik.cinexperience.core.data
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.LayoutCell
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
+import io.github.katznmeik.cinexperience.core.model.labels
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -95,7 +97,7 @@ class LayoutJsonTest {
 
     @Test
     fun invalidLayoutsAreRejected() {
-        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"S"}]}""")
+        assertInvalid("""{"formatVersion":4,"rows":[{"cells":"S"}]}""")
         assertInvalid("""{"formatVersion":2,"rows":[{"cells":"SX"}]}""")
         assertInvalid("""{"formatVersion":0,"rows":[{"cells":"S"}]}""")
         assertInvalid("""{"formatVersion":1,"rows":[{"cells":"SX"}]}""")
@@ -104,5 +106,85 @@ class LayoutJsonTest {
         assertInvalid("""{"formatVersion":1,"rows":[{"cells":"SS"},{"cells":"S"}]}""")
         assertInvalid("""{"formatVersion":1,"nextSeatId":1,"rows":[{"cells":"S","seatIds":[1]}]}""")
         assertInvalid("""{"formatVersion":1,"rows":[]}""")
+    }
+
+    // ---- Version 3: numbering direction and fixed seat labels ----
+
+    private val kantRow = layoutOf("SSSSSSW", "SSSSSSS")
+        .updateRow(0) { it.copy(label = "8", numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+        .withFixedLabel(0, 6, "R")
+
+    @Test
+    fun directionAndSeatLabelsUseVersion3AndRoundTrip() {
+        val json = LayoutJson.encode(kantRow)
+        assertTrue(json, json.contains("\"formatVersion\":3"))
+        assertTrue(json, json.contains("\"direction\":\"RIGHT_TO_LEFT\""))
+        assertTrue(json, json.contains("\"seatLabels\":[null,null,null,null,null,null,\"R\"]"))
+        // Defaults are not written: the second row has neither field.
+        assertTrue(json, json.contains("{\"cells\":\"SSSSSSS\",\"seatIds\":[8,9,10,11,12,13,14]}"))
+        assertEquals(kantRow, LayoutJson.decode(json))
+        assertEquals(listOf("6", "5", "4", "3", "2", "1", "R"), kantRow.rows[0].seatIds.map { LayoutJson.decode(json).labels().labelOf(it)!!.seat })
+    }
+
+    @Test
+    fun theLowestVersionThatHoldsTheLayoutIsWritten() {
+        val plain = layoutOf("SS|SS")
+        assertEquals(1, LayoutJson.minimumVersion(plain))
+        assertEquals(2, LayoutJson.minimumVersion(plain.withSeatKind(0, 0, SeatKind.WHEELCHAIR)))
+        val rightToLeft = plain.updateRow(0) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+        assertEquals(3, LayoutJson.minimumVersion(rightToLeft))
+        assertEquals(3, LayoutJson.minimumVersion(plain.withFixedLabel(0, 1, "R")))
+        // Back to the defaults: back to version 1, byte for byte.
+        val reverted = rightToLeft.updateRow(0) { it.copy(numberingDirection = NumberingDirection.LEFT_TO_RIGHT) }
+        assertEquals(LayoutJson.encode(plain), LayoutJson.encode(reverted))
+        assertEquals(LayoutJson.encode(plain), LayoutJson.encode(plain.withFixedLabel(0, 1, "R").withFixedLabel(0, 1, null)))
+    }
+
+    @Test
+    fun storedLayoutsOfOlderVersionsReadUnchangedExceptForWheelchairNumbers() {
+        // A version 2 layout as the app stored it before: wheelchair spaces now carry numbers.
+        val v2 = """{"formatVersion":2,"nextSeatId":12,"rows":[{"cells":"W.W|SS|W","seatIds":[1,2,3,4,5]},""" +
+            """{"cells":"SSS||SSS","seatIds":[6,7,8,9,10,11],"numbering":"RESTART_PER_BLOCK"}]}"""
+        val layout = LayoutJson.decode(v2)
+        assertEquals(NumberingDirection.LEFT_TO_RIGHT, layout.rows[0].numberingDirection)
+        assertEquals(listOf<String?>(null, null, null, null, null), layout.rows[0].fixedLabels)
+        val labels = layout.labels()
+        assertEquals(listOf("1", "2", "3", "4", "5"), layout.rows[0].seatIds.map { labels.labelOf(it)!!.seat })
+        assertEquals(listOf("1", "2", "3", "1", "2", "3"), layout.rows[1].seatIds.map { labels.labelOf(it)!!.seat })
+        // Writing it again gives the same JSON (still version 2).
+        assertEquals(v2, LayoutJson.encode(layout))
+    }
+
+    @Test
+    fun seedStyleLayoutsMayUseTheNewFields() {
+        val layout = LayoutJson.decode(
+            """{"formatVersion":3,"rows":[{"label":"1","cells":"WSSSSSS","seatLabels":["R",null,null,null,null,null,null]},""" +
+                """{"label":"2","cells":"SS||SSS","direction":"RIGHT_TO_LEFT","blockStarts":[null,4]}]}""",
+        )
+        val labels = layout.labels()
+        assertEquals(listOf("R", "1", "2", "3", "4", "5", "6"), layout.rows[0].seatIds.map { labels.labelOf(it)!!.seat })
+        assertEquals(listOf("8", "7", "6", "5", "4"), layout.rows[1].seatIds.map { labels.labelOf(it)!!.seat })
+        assertEquals(LayoutCell.Seat(SeatId(1), SeatKind.WHEELCHAIR, "R"), layout.cell(0, 0))
+        // Reading is lenient about the version, as for seat kinds.
+        val lenient = LayoutJson.decode("""{"formatVersion":1,"rows":[{"cells":"SS","direction":"RIGHT_TO_LEFT"}]}""")
+        assertEquals(NumberingDirection.RIGHT_TO_LEFT, lenient.rows[0].numberingDirection)
+    }
+
+    @Test
+    fun invalidDirectionsAndSeatLabelsAreRejected() {
+        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"SS","direction":"BACKWARDS"}]}""")
+        // One label per seat of any kind, gaps and aisles don't count.
+        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"S.W","seatLabels":["R"]}]}""")
+        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"S.W","seatLabels":["R",null,null]}]}""")
+        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null,""]}]}""")
+        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null," "]}]}""")
+        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null,"ABCDE"]}]}""")
+        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null," R"]}]}""")
+        // Valid: 4 characters; only nulls (written back without the field, as version 2).
+        val fourCharacters = LayoutJson.decode("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null,"R12a"]}]}""")
+        assertEquals("R12a", (fourCharacters.cell(0, 1) as LayoutCell.Seat).fixedLabel)
+        val onlyNulls = LayoutJson.decode("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null,null]}]}""")
+        assertEquals(2, LayoutJson.minimumVersion(onlyNulls))
+        assertTrue(!LayoutJson.encode(onlyNulls).contains("seatLabels"))
     }
 }

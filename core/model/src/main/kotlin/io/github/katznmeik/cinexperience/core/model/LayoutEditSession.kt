@@ -12,7 +12,12 @@ package io.github.katznmeik.cinexperience.core.model
  * - **Toggling restores ids.** When a cell that held one of the *original*
  *   layout's seats is turned into a gap or aisle and later back into a seat (at
  *   the same physical position, which follows inserted and removed rows and
- *   columns), it gets its original id back, so its visits stay attached.
+ *   columns), it gets its original id back, so its visits stay attached. It gets
+ *   the painted kind and no fixed label: painting a seat over drops its
+ *   [LayoutCell.Seat.fixedLabel] (undo in the editor brings it back).
+ * - **Row settings stay with their rows.** Inserting or removing rows and
+ *   columns keeps every row's label, numbering, numbering direction, block starts
+ *   and offset, and every seat's kind and fixed label.
  * - [removedSeatsWithData] gives the §6.5 warning for the current state.
  *
  * Start with [Hall.startLayoutEdit] (or [start]) on the hall as currently stored,
@@ -82,7 +87,7 @@ class LayoutEditSession private constructor(
     fun cycleCell(row: Int, column: Int): LayoutEditSession =
         setCellType(row, column, requireLayout().cell(row, column).type.next())
 
-    /** Changes a row's label, numbering, block starts or offset (not its cells). */
+    /** Changes a row's label, numbering, numbering direction, block starts or offset (not its cells). */
     fun updateRow(index: Int, transform: (LayoutRow) -> LayoutRow): LayoutEditSession =
         copyWith(requireLayout().updateRow(index, transform), ghosts)
 

@@ -11,6 +11,7 @@ import io.github.katznmeik.cinexperience.core.model.CellPosition
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
@@ -72,7 +73,10 @@ data class LayoutEditorUiState(
     val screenSelected: Boolean = false,
     /** Text of the row label field (may differ from the stored label while typing). */
     val labelInput: String = "",
-    /** Text of the block start fields, one per block of the selected row. */
+    /**
+     * Text of the block start fields, one per block of the selected row, indexed
+     * like [RowSummary.blocks] (from the left, whatever the numbering direction).
+     */
     val blockStartInputs: List<String> = emptyList(),
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
@@ -105,8 +109,12 @@ data class LayoutEditorUiState(
  * progress is not restored after process death (the editor then starts from the
  * stored layout again).
  *
- * Undo: every tap, paint stroke, handle drag, stepper tap or row setting is one
- * step; typing in one text field is one step.
+ * Undo: every tap, paint stroke, handle drag, stepper tap or row setting (label,
+ * numbering, numbering direction, offset, block start) is one step; typing in one
+ * text field is one step. Fixed seat labels (`LayoutCell.Seat.fixedLabel`, from
+ * the seed) can't be set here; they stay on their seats through every edit, also a
+ * change of seat type, and go when the seat is painted as a gap or aisle or its row
+ * or column is deleted (undo brings them back).
  *
  * Reference screenshots are copied into app storage when picked; on save the
  * replaced one is deleted, on discard the ones picked in this session are.
@@ -297,6 +305,12 @@ class LayoutEditorViewModel(
     fun setNumbering(numbering: SeatNumbering) {
         val row = state.selectedRow ?: return
         edit { it.updateRow(row) { r -> r.copy(numbering = numbering) } }
+    }
+
+    /** The selected row's numbering direction (spec §6.5); block starts stay with their blocks. */
+    fun setNumberingDirection(direction: NumberingDirection) {
+        val row = state.selectedRow ?: return
+        edit { it.updateRow(row) { r -> r.copy(numberingDirection = direction) } }
     }
 
     fun setHalfSeatOffset(enabled: Boolean) {

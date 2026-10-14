@@ -7,6 +7,7 @@ import io.github.katznmeik.cinexperience.core.model.Cinema
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.LayoutPattern
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatKind
@@ -124,7 +125,7 @@ class LayoutEditorViewModelTest {
         assertEquals(LayoutCell.Seat(SeatId(9), SeatKind.WHEELCHAIR), vm.draft.layout.cell(2, 0))
         assertEquals(LayoutCell.Seat(SeatId(10), SeatKind.COMPANION), vm.draft.layout.cell(2, 1))
         assertEquals(SeatLabel("3", 1, SeatKind.WHEELCHAIR), vm.state.labels!!.labelOf(SeatId(9)))
-        assertEquals(SeatLabel("3", 1, SeatKind.COMPANION), vm.state.labels!!.labelOf(SeatId(10)))
+        assertEquals(SeatLabel("3", 2, SeatKind.COMPANION), vm.state.labels!!.labelOf(SeatId(10)))
         vm.undo()
         assertEquals(LayoutCell.Seat(SeatId(10)), vm.draft.layout.cell(2, 1))
     }
@@ -158,7 +159,7 @@ class LayoutEditorViewModelTest {
         assertEquals(2, vm.state.row!!.blocks.size)
         assertEquals(listOf("", ""), vm.state.blockStartInputs)
         vm.setNumbering(SeatNumbering.RESTART_PER_BLOCK)
-        assertEquals(listOf(1, 2, 1), vm.state.labels!!.seats.values.filter { it.position.row == 1 }.map { it.label.number })
+        assertEquals(listOf(1, 2, 1), vm.state.labels!!.seats.values.filter { it.position.row == 1 }.map { it.number })
         vm.setBlockStart(1, "1a0")
         assertEquals(listOf("", "10"), vm.state.blockStartInputs)
         assertEquals(listOf("1–2", "10"), vm.state.row!!.blocks.map { it.rangeText })
@@ -409,24 +410,125 @@ class LayoutEditorViewModelTest {
             .map { it.label.seatNumberText }
         assertEquals(listOf("1", "2", "3", "4"), numbers(0))
 
-        // Painting: an aisle splits the row, a wheelchair space has no number.
+        // Painting: an aisle splits the row, a wheelchair space is numbered like every seat.
         vm.selectTool(CellType.AISLE)
         vm.tapCell(0, 1)
         assertEquals(listOf("1", "2", "3"), numbers(0))
         vm.selectSeatKind(SeatKind.WHEELCHAIR)
         vm.tapCell(0, 3)
-        assertEquals(listOf("1", "2", null), numbers(0))
+        assertEquals(listOf("1", "2", "3"), numbers(0))
 
         // Block numbering and start numbers.
         vm.selectRow(0)
         vm.setNumbering(SeatNumbering.RESTART_PER_BLOCK)
-        assertEquals(listOf("1", "1", null), numbers(0))
+        assertEquals(listOf("1", "1", "2"), numbers(0))
         vm.setBlockStart(1, "12")
-        assertEquals(listOf("1", "12", null), numbers(0))
+        assertEquals(listOf("1", "12", "13"), numbers(0))
 
         // Undo brings the numbers back as well.
         vm.undo()
-        assertEquals(listOf("1", "1", null), numbers(0))
+        assertEquals(listOf("1", "1", "2"), numbers(0))
+    }
+
+    @Test
+    fun numberingDirectionIsARowSettingWithUndo() {
+        val vm = viewModel()
+        fun numbers(row: Int) = vm.state.labels!!.seats.values
+            .filter { it.position.row == row }
+            .sortedBy { it.position.column }
+            .map { it.label.seatNumberText }
+        vm.selectTool(CellType.AISLE)
+        vm.tapCell(1, 1) // row 2: S | S S
+        vm.selectRow(1)
+        assertEquals(NumberingDirection.LEFT_TO_RIGHT, vm.state.row!!.numberingDirection)
+
+        // Right to left: numbers update live, from the rightmost seat.
+        vm.setNumberingDirection(NumberingDirection.RIGHT_TO_LEFT)
+        assertEquals(NumberingDirection.RIGHT_TO_LEFT, vm.draft.layout.rows[1].numberingDirection)
+        assertEquals(listOf("3", "2", "1"), numbers(1))
+        assertEquals(listOf("1", "2", "3", "4"), numbers(0)) // other rows keep theirs
+        assertTrue(vm.state.hasUnsavedChanges)
+        // The block fields follow the direction: the right block (index 1) comes first.
+        assertEquals(listOf(1, 0), vm.state.row!!.blocksInNumberingOrder.map { it.index })
+        assertEquals(listOf("1–2", "3"), vm.state.row!!.blocksInNumberingOrder.map { it.rangeText })
+
+        // A block start is still kept by its block (counted from the left).
+        vm.setBlockStart(0, "7")
+        assertEquals(listOf("7", ""), vm.state.blockStartInputs)
+        assertEquals(listOf("7", "2", "1"), numbers(1))
+        vm.setNumberingDirection(NumberingDirection.LEFT_TO_RIGHT)
+        assertEquals(listOf("7", "8", "9"), numbers(1))
+        assertEquals(listOf("7", ""), vm.state.blockStartInputs)
+
+        // Each change is one undo step; setting the same direction again is none.
+        vm.undo()
+        assertEquals(listOf("7", "2", "1"), numbers(1))
+        vm.setNumberingDirection(NumberingDirection.RIGHT_TO_LEFT)
+        vm.undo()
+        assertEquals(listOf("3", "2", "1"), numbers(1))
+        assertEquals(listOf("", ""), vm.state.blockStartInputs)
+        vm.undo()
+        assertEquals(listOf("1", "2", "3"), numbers(1))
+        vm.redo()
+        assertEquals(listOf("3", "2", "1"), numbers(1))
+
+        // Saved with the layout; discarding leaves the stored hall untouched.
+        vm.save()
+        assertEquals(NumberingDirection.RIGHT_TO_LEFT, storedHall().layout!!.rows[1].numberingDirection)
+    }
+
+    @Test
+    fun discardDropsADirectionChange() {
+        val vm = viewModel()
+        vm.selectRow(0)
+        vm.setNumberingDirection(NumberingDirection.RIGHT_TO_LEFT)
+        assertTrue(vm.state.hasUnsavedChanges)
+        vm.requestDiscard()
+        assertEquals(EditorDialog.ConfirmDiscard, vm.state.dialog)
+        vm.discard()
+        assertTrue(vm.state.isClosed)
+        assertEquals(NumberingDirection.LEFT_TO_RIGHT, storedHall().layout!!.rows[0].numberingDirection)
+    }
+
+    @Test
+    fun fixedLabelsAreShownAndKeptThroughEdits() {
+        val kant = SeatLayout.fromPatterns("SSSSSSW", "SSSSSSS", firstSeatId = 1)
+            .updateRow(0) { it.copy(label = "8", numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+            .withFixedLabel(0, 6, "R")
+        repository.store.value = repository.store.value.copy(
+            halls = listOf(hall.copy(layout = kant, nextSeatId = 15)),
+            visits = emptyList(),
+        )
+        val vm = viewModel()
+        fun texts(row: Int) = vm.state.labels!!.seats.values
+            .filter { it.position.row == row }
+            .sortedBy { it.position.column }
+            .map { it.label.seatNumberText }
+        assertEquals(listOf("6", "5", "4", "3", "2", "1", "R"), texts(0))
+        vm.selectRow(0)
+        assertEquals("1–6 + R", vm.state.row!!.blocks.single().rangeText)
+
+        // Rows and columns added around it, another kind: the label stays on its seat.
+        vm.insertRowAbove()
+        vm.changeColumnCount(1)
+        vm.selectSeatKind(SeatKind.COMPANION)
+        vm.tapCell(1, 6)
+        assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.COMPANION, "R"), vm.draft.layout.cell(1, 6))
+        assertEquals(listOf("7", "6", "5", "4", "3", "2", "R", "1"), texts(1))
+
+        // Painted over: gone; undo brings it back.
+        vm.selectTool(CellType.GAP)
+        vm.tapCell(1, 6)
+        vm.selectTool(CellType.SEAT)
+        vm.tapCell(1, 6)
+        assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.COMPANION), vm.draft.layout.cell(1, 6))
+        vm.undo()
+        vm.undo()
+        assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.COMPANION, "R"), vm.draft.layout.cell(1, 6))
+
+        // Saved as it is.
+        vm.save()
+        assertEquals("R", (storedHall().layout!!.cell(1, 6) as LayoutCell.Seat).fixedLabel)
     }
 
     @Test

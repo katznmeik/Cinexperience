@@ -796,7 +796,8 @@ private class EditorGridDrawing(
                 when (val cell = layout.cell(row, column)) {
                     is LayoutCell.Seat -> {
                         seats.addRoundRect(seatRoundRect(rect.deflate(0.75f * dp)))
-                        // Numbers come from the derived labels, so they follow every edit.
+                        // Numbers (and fixed labels) come from the derived labels, so they follow
+                        // every edit, also of the row's numbering direction.
                         marks += SeatMarks(rect, cell.kind, labels.labelOf(cell.id)?.seatNumberText)
                     }
                     LayoutCell.Gap -> gaps.addRoundRect(RoundRect(rect.deflate(0.5f * dp), CornerRadius(3f * dp)))
@@ -810,8 +811,9 @@ private class EditorGridDrawing(
     }
 
     /**
-     * With [showNumbers], numbered seats show their number (companion and sofa places
-     * their symbol above it); otherwise only the kind symbols are drawn. Over a
+     * With [showNumbers], seats show their number or fixed label (wheelchair spaces,
+     * companion and sofa places their symbol above it); otherwise only the kind
+     * symbols are drawn. Over a
      * reference screenshot ([overReference]) numbers and symbols get a dark halo.
      * Numbers and symbols outside [visible] (the drawing inside the canvas) are skipped.
      */

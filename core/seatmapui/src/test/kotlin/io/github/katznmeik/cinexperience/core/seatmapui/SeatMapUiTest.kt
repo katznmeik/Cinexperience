@@ -112,7 +112,7 @@ class SeatMapUiTest {
         }
         composeRule.onNodeWithContentDescription("Row 10").performClick()
         composeRule.onNodeWithContentDescription("Row 10").assertIsSelected()
-        composeRule.onNodeWithContentDescription("Row 10, Wheelchair 2, right block").performClick()
+        composeRule.onNodeWithContentDescription("Row 10, Seat 2, wheelchair space, right block").performClick()
         composeRule.onNodeWithContentDescription("Row 10, Seat 3, sofa, centre block").performClick()
         val row10 = SampleLayouts.splitHall.rows[9].seatIds
         assertEquals(listOf(row10.last(), row10[4]), chosen)

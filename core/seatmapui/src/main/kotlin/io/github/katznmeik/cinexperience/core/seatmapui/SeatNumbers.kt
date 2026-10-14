@@ -34,15 +34,16 @@ import io.github.katznmeik.cinexperience.core.ui.theme.CinexColors
  */
 
 /**
- * The number drawn inside a seat: standard, companion and sofa places show their
- * seat number; wheelchair spaces have none (they keep their symbol).
+ * The text drawn inside a seat: its number, or its fixed label ("R"). Every kind
+ * of place has one (spec §4.3); wheelchair spaces, companion seats and sofa
+ * places show their symbol in the marks band above it.
  */
-val SeatLabel.seatNumberText: String?
-    get() = if (kind.isNumbered) number.toString() else null
+val SeatLabel.seatNumberText: String
+    get() = seat
 
-/** The number text of every numbered seat, from the derived labels ([io.github.katznmeik.cinexperience.core.model.labels]). */
+/** The number text of every seat, from the derived labels ([io.github.katznmeik.cinexperience.core.model.labels]). */
 fun LayoutLabels.seatNumbers(): Map<SeatId, String> =
-    buildMap { seats.forEach { (id, info) -> info.label.seatNumberText?.let { put(id, it) } } }
+    buildMap { seats.forEach { (id, info) -> put(id, info.label.seatNumberText) } }
 
 /** Font size of a seat number of up to two digits, as a fraction of the seat's width. */
 const val SEAT_NUMBER_SIZE: Float = 0.54f
@@ -70,7 +71,7 @@ private const val DIGIT_HEIGHT = 0.72f
 private const val NUMBER_CENTRE = 0.5f
 private const val NUMBER_CENTRE_BELOW_MARKS = 0.69f
 
-/** The marks band at the top of a numbered seat: top edge, height and side margin, as fractions of the seat. */
+/** The marks band at the top of a seat showing its number: top edge, height and side margin, as fractions of the seat. */
 private const val MARKS_TOP = 0.07f
 private const val MARKS_HEIGHT = 0.38f
 private const val MARKS_SIDE = 0.08f
@@ -116,11 +117,17 @@ class SeatNumberTexts(
     }
 
     operator fun get(text: String): Measured = cache.getOrPut(text) {
-        val measured = measure(text, fontSizeFor(text.length))
-        val width = measured.layout.size.width
+        var measured = measure(text, fontSizeFor(text.length))
         // Digits are never wider than the widest digit, so all numbers of one length keep
-        // one size; anything else (not a seat number) is shrunk on its own if it must.
-        if (width <= maxWidth || text.all { it in '0'..'9' }) measured else measure(text, measured.fontSize * maxWidth / width)
+        // one size; anything else (a fixed label like "R") is shrunk on its own if it must.
+        // Text doesn't scale exactly with its font size, so the result is measured again.
+        if (text.all { it in '0'..'9' }) return@getOrPut measured
+        repeat(MAX_SHRINK_STEPS) {
+            val width = measured.layout.size.width
+            if (width <= maxWidth) return@getOrPut measured
+            measured = measure(text, measured.fontSize * maxWidth / width)
+        }
+        measured
     }
 
     private fun measure(text: String, fontPx: Float): Measured {
@@ -137,6 +144,9 @@ class SeatNumberTexts(
     companion object {
         /** The seat number style: [base] (the theme's label style) in semibold. */
         fun style(base: TextStyle): TextStyle = base.copy(fontWeight = FontWeight.SemiBold)
+
+        /** How often a too wide fixed label is measured again at a smaller size. */
+        private const val MAX_SHRINK_STEPS = 4
     }
 }
 
@@ -144,10 +154,10 @@ class SeatNumberTexts(
 /** Width of a number's halo, as a fraction of its font size (see [NumberedSeat]). */
 const val SEAT_NUMBER_HALO: Float = 0.24f
 
-/** A symbol in the marks band of a numbered seat. */
+/** A symbol in the marks band of a seat showing its number. */
 internal enum class SeatMark { KIND, AVOID, FAVOURITE }
 
-/** The marks a numbered seat of [kind] in [visual] carries, left to right. */
+/** The marks a seat of [kind] in [visual] carries above its number, left to right. */
 internal fun seatMarks(kind: SeatKind, visual: SeatVisual): List<SeatMark> = buildList {
     if (kind != SeatKind.STANDARD) add(SeatMark.KIND)
     if (visual.tone == SeatTone.AVOID) add(SeatMark.AVOID)
@@ -172,10 +182,11 @@ internal fun marksBand(rect: Rect, count: Int): List<Rect> {
 }
 
 /**
- * A numbered seat's number and marks (spec §5, §7), laid out once per layout and
- * seat states, so drawing it every frame allocates nothing: the seat kind symbol
- * (companion, sofa), the avoid × and the favourite ★ side by side in a band at
- * the top of [rect], the [number] below them (centred when there are no marks).
+ * A seat's number and marks (spec §5, §7), laid out once per layout and seat
+ * states, so drawing it every frame allocates nothing: the seat kind symbol
+ * (wheelchair, companion, sofa), the avoid × and the favourite ★ side by side in
+ * a band at the top of [rect], the [number] (or fixed label) below them (centred
+ * when there are no marks).
  * The favourite also gets its light outline. The fill (and the "no data" rim) is
  * drawn by the caller.
  */

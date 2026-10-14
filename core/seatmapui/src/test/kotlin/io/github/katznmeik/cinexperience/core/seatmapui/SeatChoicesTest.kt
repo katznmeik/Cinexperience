@@ -1,9 +1,9 @@
 package io.github.katznmeik.cinexperience.core.seatmapui
 
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatColourSource
 import io.github.katznmeik.cinexperience.core.model.SeatId
-import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
@@ -26,8 +26,22 @@ class SeatChoicesTest {
         assertEquals(listOf(0, 2), choices.map { it.rowIndex })
         assertEquals(listOf("1", "2", "1", "2"), choices[0].seats.map { it.shortText })
         assertEquals(listOf(0, 0, 1, 1), choices[0].seats.map { it.block })
-        assertEquals(listOf("W1", "1", "2", "3"), choices[1].seats.map { it.shortText })
-        assertEquals("Row 2, Seat 1, companion seat", choices[1].seats[1].label.description)
+        assertEquals(listOf("1", "2", "3", "4"), choices[1].seats.map { it.shortText })
+        assertEquals("Row 2, Seat 1, wheelchair space", choices[1].seats[0].label.description)
+        assertEquals("Row 2, Seat 2, companion seat", choices[1].seats[1].label.description)
+    }
+
+    @Test
+    fun aRightToLeftRowIsOfferedAsDrawnWithItsFixedLabel() {
+        // Kant Kino, Saal 4, row 8: drawn left to right 6 5 4 3 2 1 R.
+        val kant = SeatLayout.fromPatterns("SSSSSSW", firstSeatId = 1)
+            .updateRow(0) { it.copy(label = "8", numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+            .withFixedLabel(0, 6, "R")
+        val row = seatChoices(kant).single()
+        assertEquals(listOf("6", "5", "4", "3", "2", "1", "R"), row.seats.map { it.shortText })
+        assertEquals("Row 8, Seat R, wheelchair space", row.descriptionOf(row.seats.last()))
+        assertEquals(SeatId(7), seatChoices(kant).findSeat("8", "r"))
+        assertEquals(SeatId(1), seatChoices(kant).findSeat("8", " 6 "))
     }
 
     @Test
@@ -52,13 +66,13 @@ class SeatChoicesTest {
     @Test
     fun findSeatByRowAndNumber() {
         val choices = seatChoices(layout.labels())
-        assertEquals(SeatId(1), choices.findSeat("A", 1)) // restart: the first "A 1" wins
-        assertEquals(SeatId(2), choices.findSeat(" a ", 2)) // trimmed, any case
-        assertEquals(SeatId(5), choices.findSeat("2", 1, SeatKind.WHEELCHAIR))
-        assertEquals(SeatId(6), choices.findSeat("2", 1))
-        assertEquals(SeatId(8), choices.findSeat("2", 3, SeatKind.SOFA))
-        assertNull(choices.findSeat("B", 1))
-        assertNull(choices.findSeat("2", 2, SeatKind.WHEELCHAIR))
+        assertEquals(SeatId(1), choices.findSeat("A", "1")) // restart: the first "A 1" wins
+        assertEquals(SeatId(2), choices.findSeat(" a ", "2")) // trimmed, any case
+        assertEquals(SeatId(5), choices.findSeat("2", "1")) // the wheelchair space is seat 1
+        assertEquals(SeatId(6), choices.findSeat("2", "2"))
+        assertEquals(SeatId(8), choices.findSeat("2", "4"))
+        assertNull(choices.findSeat("B", "1"))
+        assertNull(choices.findSeat("2", "5"))
     }
 
     @Test

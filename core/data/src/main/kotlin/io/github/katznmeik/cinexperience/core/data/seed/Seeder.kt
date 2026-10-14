@@ -31,10 +31,12 @@ import java.util.Locale
  *   *new*, i.e. differs from the value the seed supplied last time (kept in
  *   `seed_snapshot`). So a value the user cleared stays cleared until the seed
  *   ships a different one (e.g. a corrected address or a newly transcribed layout).
+ *   The one exception is an untouched seed layout (see below).
  * - **Screen offset.** `screen_offset` is not nullable; its "empty" value is 0
  *   (centred), the default every hall has until someone moves the screen. So
  *   the same rule applies with 0 in place of null: a hall's non-zero offset is
- *   never touched; an offset of 0 is filled with the seed's non-zero offset when
+ *   never touched (not even when its layout is replaced, see below); an offset
+ *   of 0 is filled with the seed's non-zero offset when
  *   that value is new (snapshot field `screenOffset`; a missing or 0 seed offset
  *   is recorded as null). Trade-off: a user who centred a screen on purpose
  *   looks the same as one who never moved it, so a *changed* seed offset fills
@@ -42,8 +44,26 @@ import java.util.Locale
  *   unchanged seed offset never does. A separate "set by the user" flag would
  *   need another column for a case that Yorck's plans (which don't show the
  *   offset, spec §9) make unlikely.
- * - **Seat ids.** A seed layout's ids start at 1; when it fills an existing hall
- *   it is shifted above the hall's seat id mark so ids are never reused.
+ * - **Untouched seed layouts are updated** (the one exception, spec §9). When the
+ *   seed ships a *different* layout for a hall whose stored layout is still
+ *   exactly the one the previous seed supplied (snapshot field `layout`), and the
+ *   hall has no visits (with or without a seat) and no seat overrides (colours or
+ *   favourite), the stored layout is replaced by the new one. "Exactly" compares
+ *   the structure, not the raw seat ids ([SeatLayout.hasSameStructureAs]): a seed
+ *   layout that filled an existing hall was shifted above that hall's id mark.
+ *   Otherwise the stored layout is kept, and the user can redraw it.
+ * - **Screen geometry with a replaced layout.** The screen width and distance are
+ *   replaced together with the layout, each only while it still holds the value
+ *   the previous seed supplied (snapshot fields `screenWidth`, `screenDistance`)
+ *   and the new seed has one. A value the user changed is kept: both are measured
+ *   in seat widths and row depths, so they stay meaningful for the new grid, and
+ *   a changed screen alone doesn't keep the hall from the corrected seat numbers.
+ *   The screen offset follows its own rule above; names, notes and the reference
+ *   screenshot are never touched. Seeding the same seed again changes nothing:
+ *   the snapshot then holds the new layout.
+ * - **Seat ids.** A seed layout's ids start at 1; when it fills or replaces the
+ *   layout of an existing hall it is shifted above the hall's seat id mark, so
+ *   ids are never reused.
  */
 internal class Seeder(
     private val db: CinexDatabase,
@@ -127,27 +147,47 @@ internal class Seeder(
                     // Adopting a user-added hall only links it to the seed; it stays deletable.
                     var updated = matchedHall.copy(
                         seedKey = key,
-                        screenWidth = snapshots.fill(HALL, key, "screenWidth", matchedHall.screenWidth?.toString(), seedHall.screenWidth?.toString())
+                        screenWidth = snapshots.fill(HALL, key, SCREEN_WIDTH, matchedHall.screenWidth?.toString(), seedHall.screenWidth?.toString())
                             ?.toFloat(),
-                        screenDistance = snapshots.fill(HALL, key, "screenDistance", matchedHall.screenDistance?.toString(), seedHall.screenDistance?.toString())
+                        screenDistance = snapshots.fill(HALL, key, SCREEN_DISTANCE, matchedHall.screenDistance?.toString(), seedHall.screenDistance?.toString())
                             ?.toFloat(),
                         screenOffset = snapshots.fill(HALL, key, SCREEN_OFFSET, matchedHall.screenOffset.offsetOrNull(), seedOffset)
                             ?.toFloat() ?: ScreenOffsetRules.CENTRED,
                     )
-                    val fillLayout = snapshots.fill(HALL, key, "layout", matchedHall.layoutJson, seedLayoutJson)
+                    val fillLayout = snapshots.fill(HALL, key, LAYOUT, matchedHall.layoutJson, seedLayoutJson)
                     if (matchedHall.layoutJson == null && fillLayout != null && seedLayout != null) {
                         val mark = db.seatIdMark(matchedHall, null)
                         val shifted = seedLayout.withIdsShiftedBy(mark - SeatLayout.FIRST_SEAT_ID)
                         updated = updated.copy(layoutJson = LayoutJson.encode(shifted), nextSeatId = shifted.nextSeatId)
+                    } else if (seedLayout != null && replacesUntouchedLayout(matchedHall, key, seedLayout, snapshots)) {
+                        val stored = matchedHall.layoutJson?.let(LayoutJson::decodeOrNull)
+                        val mark = db.seatIdMark(matchedHall, stored)
+                        val shifted = seedLayout.withIdsShiftedBy(mark - SeatLayout.FIRST_SEAT_ID)
+                        // A stored value that is still the previous seed's follows the new seed;
+                        // anything else keeps what the fill rule gave (the user's value, or a filled gap).
+                        fun screenValue(field: String, stored: Float?, filled: Float?, seedValue: Float?): Float? =
+                            if (seedValue != null && stored != null && stored.toString() == snapshots.previous(HALL, key, field)) {
+                                seedValue
+                            } else {
+                                filled
+                            }
+                        updated = updated.copy(
+                            layoutJson = LayoutJson.encode(shifted),
+                            nextSeatId = shifted.nextSeatId,
+                            screenWidth = screenValue(SCREEN_WIDTH, matchedHall.screenWidth, updated.screenWidth, seedHall.screenWidth),
+                            screenDistance = screenValue(
+                                SCREEN_DISTANCE, matchedHall.screenDistance, updated.screenDistance, seedHall.screenDistance,
+                            ),
+                        )
                     }
                     if (updated != matchedHall) {
                         hallDao.update(updated)
                         halls[halls.indexOf(matchedHall)] = updated
                     }
                 }
-                snapshots.record(HALL, key, "layout", seedLayoutJson)
-                snapshots.record(HALL, key, "screenWidth", seedHall.screenWidth?.toString())
-                snapshots.record(HALL, key, "screenDistance", seedHall.screenDistance?.toString())
+                snapshots.record(HALL, key, LAYOUT, seedLayoutJson)
+                snapshots.record(HALL, key, SCREEN_WIDTH, seedHall.screenWidth?.toString())
+                snapshots.record(HALL, key, SCREEN_DISTANCE, seedHall.screenDistance?.toString())
                 snapshots.record(HALL, key, SCREEN_OFFSET, seedOffset)
             }
         }
@@ -160,10 +200,27 @@ internal class Seeder(
     private fun sameName(a: String, b: String): Boolean =
         a.trim().lowercase(Locale.ROOT) == b.trim().lowercase(Locale.ROOT)
 
+    /**
+     * Whether [hall]'s stored layout is an untouched layout of the previous seed
+     * that [seedLayout] (a different one) replaces: see "Untouched seed layouts are
+     * updated" in the class doc. Only for a hall that was already linked to [key]
+     * before this run (an adopted user hall has no seed layout yet).
+     */
+    private suspend fun replacesUntouchedLayout(hall: HallEntity, key: String, seedLayout: SeatLayout, snapshots: Snapshots): Boolean {
+        if (hall.seedKey != key) return false
+        val stored = hall.layoutJson?.let(LayoutJson::decodeOrNull) ?: return false
+        val previous = snapshots.previous(HALL, key, LAYOUT)?.let(LayoutJson::decodeOrNull) ?: return false
+        if (seedLayout.hasSameStructureAs(previous) || !stored.hasSameStructureAs(previous)) return false
+        return db.visitDao().countForHall(hall.id) == 0 && db.seatOverrideDao().countForHall(hall.id) == 0
+    }
+
     /** The values the seed supplied last time, per (kind, seed key, field). */
     private class Snapshots(existing: List<SeedSnapshotEntity>) {
         private val last = existing.associateBy({ Triple(it.kind, it.seedKey, it.field) }, { it.value })
         private val changed = LinkedHashMap<Triple<String, String, String>, String?>()
+
+        /** The value the previous seed supplied for a field; `null` if none (or never seeded). */
+        fun previous(kind: String, key: String, field: String): String? = last[Triple(kind, key, field)]
 
         /**
          * The value a field should have: [current] if set; otherwise [seedValue] if
@@ -189,6 +246,9 @@ internal class Seeder(
         const val KEY_SEED_VERSION: String = "seed_version"
         private const val CINEMA = "cinema"
         private const val HALL = "hall"
+        private const val LAYOUT = "layout"
+        private const val SCREEN_WIDTH = "screenWidth"
+        private const val SCREEN_DISTANCE = "screenDistance"
         private const val SCREEN_OFFSET = "screenOffset"
     }
 }

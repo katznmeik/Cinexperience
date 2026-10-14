@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class LayoutEditSessionTest {
@@ -100,6 +101,35 @@ class LayoutEditSessionTest {
         assertTrue(original.seatIds.all { it in layout.seatIds })
         val shrunk = session.resize(1, 1)
         assertEquals(setOf(SeatId(1)), shrunk.layout!!.seatIds)
+    }
+
+    @Test
+    fun directionAndFixedLabelsSurviveEveryOperation() {
+        val labelled = layoutOf("SSS", "SSW")
+            .updateRow(1) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+            .withFixedLabel(1, 2, "R") // seat 6
+        var session = LayoutEditSession.start(labelled, hallNextSeatId = 7)
+            .insertRow(0).insertColumn(0).removeRow(0).insertColumn(4, fill = CellType.GAP).resize(3, 5)
+        var layout = session.layout!!
+        assertEquals(NumberingDirection.RIGHT_TO_LEFT, layout.rows[1].numberingDirection)
+        assertEquals(LayoutCell.Seat(SeatId(6), SeatKind.WHEELCHAIR, "R"), layout.cell(1, 3))
+        assertEquals(listOf("R", "1", "2", "3"), layout.rows[1].seatIds.map { layout.labels().labelOf(it)!!.seat }.reversed())
+
+        // Changing the kind keeps the label; painting the same kind is a no-op.
+        session = session.setSeat(1, 3, SeatKind.STANDARD)
+        assertEquals(LayoutCell.Seat(SeatId(6), SeatKind.STANDARD, "R"), session.layout!!.cell(1, 3))
+        assertSame(session, session.setSeat(1, 3, SeatKind.STANDARD))
+
+        // Painting the seat over drops the label; painting it back restores the id only.
+        session = session.setCellType(1, 3, CellType.GAP).setSeat(1, 3, SeatKind.WHEELCHAIR)
+        layout = session.layout!!
+        assertEquals(LayoutCell.Seat(SeatId(6), SeatKind.WHEELCHAIR), layout.cell(1, 3))
+        assertTrue(session.hasChanges)
+
+        // Only the direction changed: a change, and no seat is removed.
+        val turned = LayoutEditSession.start(labelled, 7).updateRow(0) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+        assertTrue(turned.hasChanges)
+        assertTrue(turned.removedSeatsWithData(labelled.seatIds).isEmpty())
     }
 
     @Test

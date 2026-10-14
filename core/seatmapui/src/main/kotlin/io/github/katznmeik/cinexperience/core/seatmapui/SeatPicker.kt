@@ -29,11 +29,15 @@ import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 /** One seat the [SeatPicker] offers. */
 data class SeatChoice(val seatId: SeatId, val label: SeatLabel, val block: Int) {
-    /** Short chip text: the seat number, or "W2" for the second wheelchair space. */
-    val shortText: String get() = if (label.kind == SeatKind.WHEELCHAIR) "W${label.number}" else label.number.toString()
+    /** Short chip text: the seat's number, or its fixed label ("R"); a special kind adds its icon. */
+    val shortText: String get() = label.seat
 }
 
-/** One grid row with its seats, left to right. */
+/**
+ * One grid row with its seats, left to right as drawn on the map (whatever the
+ * row's numbering direction, so a right-to-left row reads "6 5 4 3 2 1 R" like
+ * the map and Yorck's plan above it).
+ */
 data class SeatRowChoice(val rowIndex: Int, val label: String, val seats: List<SeatChoice>) {
     /** The row's blocks (split by aisles), left to right, each with its seats. */
     val blocks: List<List<SeatChoice>> get() = seats.groupBy { it.block }.toSortedMap().values.toList()
@@ -80,12 +84,16 @@ fun seatChoices(labels: LayoutLabels): List<SeatRowChoice> =
 
 fun seatChoices(layout: SeatLayout): List<SeatRowChoice> = seatChoices(layout.labels())
 
-/** The first seat in a row labelled [rowLabel] whose label matches [number] and [kind]. */
-fun List<SeatRowChoice>.findSeat(rowLabel: String, number: Int, kind: SeatKind = SeatKind.STANDARD): SeatId? =
+/**
+ * The first seat in a row labelled [rowLabel] whose seat label is [seat] (a
+ * number like "10", or a fixed label like "R"). Both are trimmed and compared
+ * ignoring case; every kind of place is numbered, so the kind doesn't matter.
+ */
+fun List<SeatRowChoice>.findSeat(rowLabel: String, seat: String): SeatId? =
     asSequence()
         .filter { it.label.equals(rowLabel.trim(), ignoreCase = true) }
         .flatMap { it.seats }
-        .firstOrNull { it.label.number == number && (it.label.kind == SeatKind.WHEELCHAIR) == (kind == SeatKind.WHEELCHAIR) }
+        .firstOrNull { it.label.seat.equals(seat.trim(), ignoreCase = true) }
         ?.seatId
 
 /**

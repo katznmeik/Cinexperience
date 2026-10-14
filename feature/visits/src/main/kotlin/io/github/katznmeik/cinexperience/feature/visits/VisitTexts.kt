@@ -18,7 +18,7 @@ internal val HallCategory.formLabel: String
         else -> displayName
     }
 
-/** "Row 7 · Seat 10", "Row 1 · Wheelchair 2". */
+/** "Row 7 · Seat 10", "Row 8 · Seat R" (every kind of place has a seat number or fixed label). */
 internal val SeatLabel.shortText: String get() = displayText.replace(", ", " · ")
 
 /** Title shown for a visit without film title. */
