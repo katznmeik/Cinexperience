@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
+import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
@@ -36,6 +37,7 @@ private class FakeAppContainer(repository: FakeCinexRepository) : AppContainer {
     override val visitRepository = repository
     override val seatOverrideRepository = repository
     override val referenceImageStore = FakeReferenceImageStore()
+    override val visitPhotoStore = FakeVisitPhotoStore()
 }
 
 /**

@@ -115,6 +115,9 @@ internal interface VisitDao {
     @Query("DELETE FROM visit WHERE id = :id")
     suspend fun delete(id: Long): Int
 
+    @Query("SELECT photo_path FROM visit WHERE photo_path IS NOT NULL")
+    suspend fun photoPaths(): List<String>
+
     @Query("SELECT MAX(seat_id) FROM visit WHERE hall_id = :hallId")
     suspend fun maxSeatId(hallId: Long): Int?
 

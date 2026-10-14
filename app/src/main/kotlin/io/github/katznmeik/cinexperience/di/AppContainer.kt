@@ -3,6 +3,7 @@ package io.github.katznmeik.cinexperience.di
 import android.content.Context
 import io.github.katznmeik.cinexperience.core.data.DataContainer
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
+import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
@@ -16,7 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Manual dependency injection (no Hilt, spec §10). The container owns the
  * app-wide singletons — the Room database, the repositories from core:data and
- * the reference screenshot store — and hands them to ViewModel factories in the
+ * the reference screenshot and visit photo stores — and hands them to ViewModel factories in the
  * feature modules.
  */
 interface AppContainer {
@@ -29,6 +30,7 @@ interface AppContainer {
     val visitRepository: VisitRepository
     val seatOverrideRepository: SeatOverrideRepository
     val referenceImageStore: ReferenceImageStore
+    val visitPhotoStore: VisitPhotoStore
 
     /** Housekeeping when the app starts (once per process), off the main thread. */
     fun onAppStart() {}
@@ -52,12 +54,16 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val visitRepository: VisitRepository get() = data.visitRepository
     override val seatOverrideRepository: SeatOverrideRepository get() = data.seatOverrideRepository
     override val referenceImageStore: ReferenceImageStore get() = data.referenceImageStore
+    override val visitPhotoStore: VisitPhotoStore get() = data.visitPhotoStore
 
     private val started = AtomicBoolean(false)
 
-    /** Deletes reference screenshots that no hall uses any more (left by an editor that never saved). */
+    /**
+     * Deletes reference screenshots and visit photos that nothing uses any more
+     * (left by an editor or visit form that never saved, or by deleted halls).
+     */
     override fun onAppStart() {
         if (!started.compareAndSet(false, true)) return
-        applicationScope.launch { data.sweepOrphanReferenceImages() }
+        applicationScope.launch { data.sweepOrphanFiles() }
     }
 }

@@ -4,7 +4,9 @@ import android.content.Context
 import android.util.Log
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
 import io.github.katznmeik.cinexperience.core.data.files.FileReferenceImageStore
+import io.github.katznmeik.cinexperience.core.data.files.FileVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
+import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomCinemaRepository
@@ -76,6 +78,16 @@ class DataContainer(
     /** Reference screenshots of the layout editor (spec §6.5), in app-private storage. */
     val referenceImageStore: ReferenceImageStore by lazy { FileReferenceImageStore(appContext, ioDispatcher) }
 
+    /** Visit photos (spec §4.4), in app-private storage. */
+    val visitPhotoStore: VisitPhotoStore by lazy { FileVisitPhotoStore(appContext, ioDispatcher) }
+
+    /**
+     * The startup sweep: [sweepOrphanReferenceImages] and [sweepOrphanVisitPhotos].
+     * Returns the total number of deleted files.
+     */
+    suspend fun sweepOrphanFiles(now: Long = System.currentTimeMillis()): Int =
+        sweepOrphanReferenceImages(now) + sweepOrphanVisitPhotos(now)
+
     /**
      * Deletes reference screenshots that no hall points to, e.g. left behind when
      * the app was closed while an editor had an unsaved screenshot. Run once at app
@@ -96,10 +108,29 @@ class DataContainer(
             }
         }
 
+    /**
+     * Deletes visit photos that no visit points to (e.g. left by a visit form that
+     * was closed by the system before saving, or by visits deleted together with
+     * their hall or cinema) and leftover camera captures. Same age rule and error
+     * handling as [sweepOrphanReferenceImages].
+     */
+    suspend fun sweepOrphanVisitPhotos(now: Long = System.currentTimeMillis()): Int =
+        withContext(ioDispatcher) {
+            try {
+                val referenced = database.visitDao().photoPaths().toSet()
+                visitPhotoStore.deleteOrphans(referenced, modifiedBefore = now - ORPHAN_MIN_AGE_MS)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Sweeping visit photos failed", e)
+                0
+            }
+        }
+
     companion object {
         private const val TAG = "CinexData"
 
-        /** Minimum age of an unreferenced reference screenshot before the sweep deletes it. */
+        /** Minimum age of an unreferenced reference screenshot or visit photo before the sweep deletes it. */
         const val ORPHAN_MIN_AGE_MS: Long = 60 * 60 * 1000L
     }
 }
