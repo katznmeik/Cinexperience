@@ -249,7 +249,7 @@ private fun VisitHistory(visits: List<HallVisitRow>, onAddVisit: () -> Unit, onO
     }
 }
 
-/** Second line of a visit row: "12 Sep 2026 · Row G · Seat 10 · OmU"; missing parts are left out. */
+/** Second line of a visit row: "12 Sep 2026 · Row 7 · Seat 10 · OmU"; missing parts are left out. */
 internal fun HallVisitRow.detailText(): String = listOfNotNull(
     dateText(date),
     seatLabel?.displayText?.replace(", ", " · "),

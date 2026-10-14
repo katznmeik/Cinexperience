@@ -34,7 +34,7 @@ class VisitEditViewModelTest {
     private val photos = FakeVisitPhotoStore()
     private val today = LocalDate.of(2026, 10, 14)
 
-    /** Row G, seat 6 of the split hall (Delphi LUX Saal 1). */
+    /** Row 7, seat 6 of the split hall (Delphi LUX Saal 1). */
     private val seatG6 = SampleLayouts.splitHall.rows[6].seatIds[9]
 
     private fun viewModel(mode: VisitEditMode) = VisitEditViewModel(mode, repository, repository, photos, today = { today })
@@ -119,7 +119,7 @@ class VisitEditViewModelTest {
     fun changingTheHallOrCinemaClearsTheSeat() {
         val vm = add()
         vm.pickSeat(seatG6)
-        assertEquals(SeatLabel("G", 6), vm.state.seatLabel)
+        assertEquals(SeatLabel("7", 6), vm.state.seatLabel)
 
         vm.selectCinema(SampleData.DELPHI_LUX) // the hall's own cinema: nothing changes
         assertEquals(seatG6, vm.state.form.seatId)
@@ -250,7 +250,7 @@ class VisitEditViewModelTest {
             assertTrue(isEdit)
             assertEquals("Dune", form.filmTitle)
             assertEquals("Great sound", form.note)
-            assertEquals(SeatLabel("G", 6), seatLabel)
+            assertEquals(SeatLabel("7", 6), seatLabel)
             assertEquals("Saal 1", hallName)
             assertFalse(hasUnsavedChanges)
         }

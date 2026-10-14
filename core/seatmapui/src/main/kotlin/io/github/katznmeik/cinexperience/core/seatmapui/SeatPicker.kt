@@ -43,7 +43,7 @@ data class SeatRowChoice(val rowIndex: Int, val label: String, val seats: List<S
 
     /**
      * What a screen reader announces for [seat]: its full label, plus the block in
-     * split rows, where numbers may repeat ("Row G, Seat 1, left block").
+     * split rows, where numbers may repeat ("Row 7, Seat 1, left block").
      */
     fun descriptionOf(seat: SeatChoice): String {
         val index = blocks.indexOfFirst { block -> block.any { it.seatId == seat.seatId } }

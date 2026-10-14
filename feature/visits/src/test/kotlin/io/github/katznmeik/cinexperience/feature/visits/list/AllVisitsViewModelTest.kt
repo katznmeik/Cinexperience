@@ -30,8 +30,8 @@ class AllVisitsViewModelTest {
         assertEquals(listOf(9_001L, 9_004, 9_002, 9_005, 9_003), state.visits.map { it.visit.id })
         val first = state.visits.first()
         assertEquals("delphi LUX · Saal 1", first.placeText())
-        assertEquals("3 Oct 2026 · Row G · Seat 10 · OmU", first.detailText())
-        assertEquals("30 Aug 2026 · Row E · Seat 3", state.visits.last().detailText())
+        assertEquals("3 Oct 2026 · Row 7 · Seat 10 · OmU", first.detailText())
+        assertEquals("30 Aug 2026 · Row 5 · Seat 3", state.visits.last().detailText())
         assertEquals("5 Sep 2026 · German dub", state.visits[3].detailText())
     }
 

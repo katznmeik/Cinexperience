@@ -101,7 +101,7 @@ class VisitsScreenshotTest {
     fun seatPicker() {
         val vm = form(VisitEditMode.Add(SampleData.DELPHI_LUX_SAAL_1)) {
             openSeatPicker()
-            tapPickerSeat(SampleLayouts.splitHall.rows[6].seatIds[13]) // row G, seat 10
+            tapPickerSeat(SampleLayouts.splitHall.rows[6].seatIds[13]) // row 7, seat 10
         }
         val state = vm.uiState.value
         capture("seat_picker") { VisitEditScreen(state, photo = null, actions = noActions) }

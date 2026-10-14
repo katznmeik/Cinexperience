@@ -52,10 +52,10 @@ class HallDetailViewModelTest {
     @Test
     fun tappingASeatSelectsItAndTappingAgainClearsIt() = runTest {
         val (vm, state) = loaded(SampleData.DELPHI_LUX_SAAL_1)
-        val seat = SampleLayouts.splitHall.rows[6].seatIds[8] // row G, centre block
+        val seat = SampleLayouts.splitHall.rows[6].seatIds[8] // row 7, centre block
         vm.onSeatClick(seat)
         val selected = assertNotNullSeat(state().selectedSeat)
-        assertEquals(SeatLabel("G", 5), selected.label)
+        assertEquals(SeatLabel("7", 5), selected.label)
         assertNotNull(selected.viewingAngle) // the hall has screen width and distance
         vm.onSeatClick(seat)
         assertNull(state().selectedSeat)
@@ -99,7 +99,7 @@ class HallDetailViewModelTest {
 
     @Test
     fun listsTheVisitsNewestFirstWithSeatLabels() = runTest {
-        val seat = SampleLayouts.splitHall.rows[6].seatIds[13] // row G, seat 10
+        val seat = SampleLayouts.splitHall.rows[6].seatIds[13] // row 7, seat 10
         val newest = Visit(
             id = 800,
             hallId = SampleData.DELPHI_LUX_SAAL_1,
@@ -117,8 +117,8 @@ class HallDetailViewModelTest {
         assertEquals(listOf(800L, 801L), visits.take(2).map { it.visitId })
         assertEquals(visits.sortedByDescending { it.date }.map { it.date }, visits.map { it.date })
         with(visits[0]) {
-            assertEquals(SeatLabel("G", 10), seatLabel)
-            assertEquals("3 Oct 2026 · Row G · Seat 10 · OmU", detailText())
+            assertEquals(SeatLabel("7", 10), seatLabel)
+            assertEquals("3 Oct 2026 · Row 7 · Seat 10 · OmU", detailText())
         }
         assertNull(visits[1].seatLabel) // its seat is no longer in the layout
         assertEquals("2 Oct 2026", visits[1].detailText())

@@ -44,7 +44,7 @@ internal fun AllVisitsEntry(viewModel: AllVisitsViewModel, onBack: () -> Unit, o
 /** Second line of a visit row: "delphi LUX · Saal 1". */
 internal fun VisitListItem.placeText(): String = "$cinemaName · $hallName"
 
-/** Third line: "12 Sep 2026 · Row G · Seat 10 · OmU"; parts that are missing are left out. */
+/** Third line: "12 Sep 2026 · Row 7 · Seat 10 · OmU"; parts that are missing are left out. */
 internal fun VisitListItem.detailText(): String = listOfNotNull(
     dateText(visit.date),
     seatLabel?.shortText,

@@ -59,10 +59,10 @@ class VisitFormUiTest {
 
         composeRule.onNodeWithText("Pick on map").performClick()
         composeRule.onNodeWithText("YOUR SEAT").assertExists()
-        composeRule.onNodeWithContentDescription("Row G").performScrollTo().performClick()
-        composeRule.onNodeWithContentDescription("Row G, Seat 10, centre block").performScrollTo().performClick()
+        composeRule.onNodeWithContentDescription("Row 7").performScrollTo().performClick()
+        composeRule.onNodeWithContentDescription("Row 7, Seat 10, centre block").performScrollTo().performClick()
         composeRule.onNodeWithText("Use seat").performClick()
-        composeRule.onNodeWithText("ROW G · SEAT 10").assertExists()
+        composeRule.onNodeWithText("ROW 7 · SEAT 10").assertExists()
 
         // Tapping the selected star again clears the rating.
         composeRule.onNodeWithContentDescription("Seat rating: 4 stars").performScrollTo().performClick()

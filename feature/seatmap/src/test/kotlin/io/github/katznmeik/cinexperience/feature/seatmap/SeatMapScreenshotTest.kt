@@ -84,9 +84,9 @@ class SeatMapScreenshotTest {
 
     @Test
     fun hallDetailWithSelectedSeat() {
-        val seat = SampleLayouts.splitHall.rows[6].seatIds[9] // row G, centre block
+        val seat = SampleLayouts.splitHall.rows[6].seatIds[9] // row 7, centre block
         val state = hallState(SampleData.DELPHI_LUX_SAAL_1) { it.onSeatClick(seat) }
-        check((state as HallDetailUiState.Loaded).selectedSeat?.label == SeatLabel("G", 6))
+        check((state as HallDetailUiState.Loaded).selectedSeat?.label == SeatLabel("7", 6))
         capture("hall_detail_selected_seat") { hallDetail(state) }
     }
 
@@ -133,7 +133,7 @@ class SeatMapScreenshotTest {
     @Test
     fun layoutEditorWithSelectedRow() {
         val vm = LayoutEditorViewModel(SampleData.DELPHI_LUX_SAAL_1, repository, FakeReferenceImageStore())
-        vm.selectRow(3) // the staggered row D
+        vm.selectRow(3) // the staggered row 4
         val state = vm.uiState.value
         capture("layout_editor_row_selected") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
     }

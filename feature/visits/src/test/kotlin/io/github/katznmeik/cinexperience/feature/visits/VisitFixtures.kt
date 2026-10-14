@@ -20,8 +20,8 @@ import java.time.LocalDate
 internal object VisitFixtures {
     const val EDITED_VISIT = 9_001L
 
-    private val rowG = SampleLayouts.splitHall.rows[6].seatIds
-    private val rowE = SampleLayouts.splitHall.rows[4].seatIds
+    private val row7 = SampleLayouts.splitHall.rows[6].seatIds
+    private val row5 = SampleLayouts.splitHall.rows[4].seatIds
 
     val visits: List<Visit> = listOf(
         Visit(
@@ -29,12 +29,12 @@ internal object VisitFixtures {
             hallId = SampleData.DELPHI_LUX_SAAL_1,
             date = LocalDate.of(2026, 10, 3),
             filmTitle = "Perfect Days",
-            seatId = rowG[13], // row G, seat 10
+            seatId = row7[13], // row 7, seat 10
             screeningFormat = ScreeningFormat.OMU,
             seatRating = Rating(4),
             hallRatings = HallRatings(sound = Rating(5), picture = Rating(4), screenSize = Rating(4), legroom = Rating(3)),
             cinemaRatings = CinemaRatings(atmosphere = Rating(5), popcorn = Rating(3)),
-            note = "Row G is perfect: centred, eye level with the screen.",
+            note = "Row 7 is perfect: centred, eye level with the screen.",
             photoPath = "photos/visit-fixture.jpg",
         ),
         Visit(
@@ -42,7 +42,7 @@ internal object VisitFixtures {
             hallId = SampleData.DELPHI_LUX_SAAL_1,
             date = LocalDate.of(2026, 9, 19),
             filmTitle = "The Brutalist",
-            seatId = rowE[10],
+            seatId = row5[10],
             screeningFormat = ScreeningFormat.SEVENTY_MM,
             seatRating = Rating(5),
         ),
@@ -50,7 +50,7 @@ internal object VisitFixtures {
             id = 9_003,
             hallId = SampleData.DELPHI_LUX_SAAL_1,
             date = LocalDate.of(2026, 8, 30),
-            seatId = rowE[2],
+            seatId = row5[2],
             seatRating = Rating(2),
         ),
         Visit(

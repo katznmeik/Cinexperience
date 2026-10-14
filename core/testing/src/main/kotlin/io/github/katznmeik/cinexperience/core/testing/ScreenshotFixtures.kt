@@ -144,10 +144,10 @@ object SampleData {
 /** Invented but realistic layouts for screenshots and tests (see [SampleData]). */
 object SampleLayouts {
     /**
-     * A 10-row hall in three blocks split by two aisles, rows labelled A–J: short
-     * front rows, a staggered row D (half-seat offset), seat numbers restarting in
-     * every block, and a back row with wheelchair spaces, companion seats and sofa
-     * places. 183 seats.
+     * A 10-row hall in three blocks split by two aisles, rows numbered 1–10 (the
+     * default labels; Yorck numbers rows and seats): short front rows, a staggered
+     * row 4 (half-seat offset), seat numbers restarting in every block, and a back
+     * row with wheelchair spaces, companion seats and sofa places. 183 seats.
      */
     val splitHall: SeatLayout = SeatLayout.fromPatterns(
         "..SS|SSSSSSSSSSSS|SS..",
@@ -165,7 +165,6 @@ object SampleLayouts {
         (0 until layout.rowCount).fold(layout) { acc, row ->
             acc.updateRow(row) {
                 it.copy(
-                    label = "ABCDEFGHIJ"[row].toString(),
                     numbering = SeatNumbering.RESTART_PER_BLOCK,
                     halfSeatOffset = row == 3,
                 )

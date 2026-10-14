@@ -76,12 +76,12 @@ class SeatMapUiTest {
         composeRule.setContent {
             CinexTheme { SeatPicker(choices, selectedSeatId = null, onSeatSelected = { chosen += it }) }
         }
-        composeRule.onNodeWithContentDescription("Row J").performClick()
-        composeRule.onNodeWithContentDescription("Row J").assertIsSelected()
-        composeRule.onNodeWithContentDescription("Row J, Wheelchair 2, right block").performClick()
-        composeRule.onNodeWithContentDescription("Row J, Seat 3, sofa, centre block").performClick()
-        val rowJ = SampleLayouts.splitHall.rows[9].seatIds
-        assertEquals(listOf(rowJ.last(), rowJ[4]), chosen)
+        composeRule.onNodeWithContentDescription("Row 10").performClick()
+        composeRule.onNodeWithContentDescription("Row 10").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Row 10, Wheelchair 2, right block").performClick()
+        composeRule.onNodeWithContentDescription("Row 10, Seat 3, sofa, centre block").performClick()
+        val row10 = SampleLayouts.splitHall.rows[9].seatIds
+        assertEquals(listOf(row10.last(), row10[4]), chosen)
         // Split rows show a caption per block.
         composeRule.onNodeWithText("Centre").assertExists()
     }
@@ -93,10 +93,10 @@ class SeatMapUiTest {
         composeRule.setContent {
             CinexTheme { SeatPicker(choices, selectedSeatId = selected, onSeatSelected = {}) }
         }
-        composeRule.onNodeWithContentDescription("Row A").assertIsSelected()
-        selected = SampleLayouts.splitHall.rows[6].seatIds[13] // tapped on the map: row G, seat 10
+        composeRule.onNodeWithContentDescription("Row 1").assertIsSelected()
+        selected = SampleLayouts.splitHall.rows[6].seatIds[13] // tapped on the map: row 7, seat 10
         composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Row G").assertIsSelected()
-        composeRule.onNodeWithContentDescription("Row G, Seat 10, centre block").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Row 7").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Row 7, Seat 10, centre block").assertIsSelected()
     }
 }
