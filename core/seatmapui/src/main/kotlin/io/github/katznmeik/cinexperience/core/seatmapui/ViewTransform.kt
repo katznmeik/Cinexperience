@@ -28,7 +28,9 @@ data class ViewTransform(val scale: Float, val offset: Offset) {
 
 /**
  * Zoom limits for one viewport and content: the map starts fitted to the
- * viewport's width (but never magnified beyond [maxFitScale]), can be zoomed out
+ * viewport's width (but never magnified beyond [maxFitScale]; with `fitHeight`
+ * in [of] also no taller than the viewport, so the whole content is in view),
+ * can be zoomed out
  * until all content is visible and in up to [maxScale]; it can never be panned
  * further than the content's edges.
  *
@@ -46,7 +48,10 @@ data class ViewBounds(
     val maxScale: Float,
     val topInset: Float = 0f,
 ) {
-    /** Fitted to the viewport's width, horizontally centred, top aligned (below [topInset]). */
+    /**
+     * At [fitScale] (fitted to the viewport's width, or to its height when that is
+     * smaller, see [of]), horizontally centred, top aligned (below [topInset]).
+     */
     fun fitted(): ViewTransform = clamp(
         ViewTransform(
             fitScale,
@@ -102,13 +107,25 @@ data class ViewBounds(
          * @param maxFitScale the fitted view never magnifies more than this (tiny halls).
          * @param maxZoomScale lower bound of the maximum zoom, e.g. "a seat is ~48 dp wide".
          * @param topInset screen px kept free above the content (see [ViewBounds]).
+         * @param fitHeight the fitted view shows the whole content: fitted to the
+         *   viewport's width or, for content taller than the viewport at that zoom,
+         *   to its height (then horizontally centred). Otherwise it is fitted to the
+         *   width only and content below the viewport is reached by panning.
          */
-        fun of(viewport: Size, content: Rect, maxFitScale: Float, maxZoomScale: Float, topInset: Float = 0f): ViewBounds {
+        fun of(
+            viewport: Size,
+            content: Rect,
+            maxFitScale: Float,
+            maxZoomScale: Float,
+            topInset: Float = 0f,
+            fitHeight: Boolean = false,
+        ): ViewBounds {
             val safeWidth = max(content.width, 1f)
             val safeHeight = max(content.height, 1f)
-            val fit = min(viewport.width / safeWidth, maxFitScale).coerceAtLeast(MIN_SCALE)
-            val all = min(fit, (viewport.height - topInset) / safeHeight).coerceAtLeast(MIN_SCALE)
-            return ViewBounds(viewport, content, fit, all, max(fit * 4f, maxZoomScale), topInset)
+            val widthFit = min(viewport.width / safeWidth, maxFitScale).coerceAtLeast(MIN_SCALE)
+            val all = min(widthFit, (viewport.height - topInset) / safeHeight).coerceAtLeast(MIN_SCALE)
+            val fit = if (fitHeight) all else widthFit
+            return ViewBounds(viewport, content, fit, all, max(widthFit * 4f, maxZoomScale), topInset)
         }
 
         private const val MIN_SCALE = 0.01f

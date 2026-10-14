@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -122,6 +123,11 @@ val MAX_ZOOM_SEAT_SIZE: Dp = 44.dp
  * @param onSeatClick called with the tapped seat; `null` makes the map display-only.
  * @param onChooseSeatByLabel accessibility alternative to tapping a seat: shown to
  *   screen readers as a custom action (e.g. opening a [SeatPicker]).
+ * @param maxHeight the map is never taller than this; see [windowSeatMapMaxHeight].
+ * @param fitWholeHall for a hall taller than [maxHeight] at the width-fitted zoom:
+ *   `true` fits the whole hall into the map at first (smaller, horizontally
+ *   centred), so every row is visible without panning; `false` keeps it fitted
+ *   to the width and the back rows are reached by panning.
  */
 @Composable
 fun SeatMap(
@@ -136,7 +142,8 @@ fun SeatMap(
     selectedSeatId: SeatId? = null,
     onSeatClick: ((SeatId) -> Unit)? = null,
     onChooseSeatByLabel: (() -> Unit)? = null,
-    maxHeight: Dp = 520.dp,
+    maxHeight: Dp = DEFAULT_SEAT_MAP_MAX_HEIGHT,
+    fitWholeHall: Boolean = false,
     viewState: SeatMapViewState = rememberSeatMapViewState(),
 ) {
     val density = LocalDensity.current
@@ -182,7 +189,9 @@ fun SeatMap(
 
     val currentGeometry by rememberUpdatedState(geometry)
     val currentOnSeatClick by rememberUpdatedState(onSeatClick)
-    fun bounds(size: Size) = ViewBounds.of(size, currentGeometry.contentBounds, MAX_FIT_SCALE, maxZoomScale)
+    val currentFitWholeHall by rememberUpdatedState(fitWholeHall)
+    fun bounds(size: Size) =
+        ViewBounds.of(size, currentGeometry.contentBounds, MAX_FIT_SCALE, maxZoomScale, fitHeight = currentFitWholeHall)
 
     val selectedLabel = selectedSeatId?.let { labels.labelOf(it) }
     Spacer(
@@ -245,7 +254,9 @@ fun SeatMap(
                 )
             }
             .drawBehind {
-                val transform = viewState.transformFor(ViewBounds.of(size, geometry.contentBounds, MAX_FIT_SCALE, maxZoomScale))
+                val transform = viewState.transformFor(
+                    ViewBounds.of(size, geometry.contentBounds, MAX_FIT_SCALE, maxZoomScale, fitHeight = fitWholeHall),
+                )
                 // The part of the content inside the canvas: seats outside it are skipped.
                 val visible = Rect(transform.toContent(Offset.Zero), transform.toContent(Offset(size.width, size.height)))
                 withTransform({
@@ -256,6 +267,32 @@ fun SeatMap(
                 }
             },
     )
+}
+
+/** A [SeatMap]'s default maximum height. */
+val DEFAULT_SEAT_MAP_MAX_HEIGHT: Dp = 520.dp
+
+/**
+ * What the app's fixed bars take from the window around a page that scrolls
+ * under them: the status bar (24–40 dp), the bottom navigation bar (76 dp) with
+ * the system navigation bar below it (24–48 dp), plus a map card's padding.
+ */
+private val WINDOW_CHROME_HEIGHT: Dp = 200.dp
+
+/**
+ * Maximum height of a [SeatMap] that is the main content of a page (the hall
+ * detail, spec §6.3), for a window [windowHeight] tall: as tall as the space
+ * between the app's fixed bars, so the whole map can be in view at once, but
+ * never less than [DEFAULT_SEAT_MAP_MAX_HEIGHT] (short or landscape windows
+ * scroll the page, as before).
+ */
+fun seatMapMaxHeightFor(windowHeight: Dp): Dp = (windowHeight - WINDOW_CHROME_HEIGHT).coerceAtLeast(DEFAULT_SEAT_MAP_MAX_HEIGHT)
+
+/** [seatMapMaxHeightFor] the current window. */
+@Composable
+fun windowSeatMapMaxHeight(): Dp {
+    val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+    return seatMapMaxHeightFor(windowHeight)
 }
 
 /** The caption under the seat map's screen bar. */

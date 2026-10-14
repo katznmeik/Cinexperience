@@ -74,6 +74,7 @@ import io.github.katznmeik.cinexperience.core.seatmapui.seatDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.seatMapDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.seatStatesDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.viewingAngleText
+import io.github.katznmeik.cinexperience.core.seatmapui.windowSeatMapMaxHeight
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
@@ -324,6 +325,9 @@ private fun ColumnScope.MapContent(
         selectedSeatId = state.selectedSeat?.seatId,
         onSeatClick = onSeatClick,
         onChooseSeatByLabel = { showPicker = true },
+        // Tall, narrow halls (e.g. a hall of double sofas) are shown whole, as tall as the window allows.
+        maxHeight = windowSeatMapMaxHeight(),
+        fitWholeHall = true,
         modifier = Modifier.fillMaxWidth(),
     )
     SeatLegend(Modifier.padding(top = 14.dp))

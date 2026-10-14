@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-14 (rev. 19)
+**Last updated:** 2026-10-14 (rev. 20)
 
 ---
 
@@ -188,6 +188,10 @@ Bottom navigation with three tabs: **Cinemas**, **Rankings**, **Settings**.
   average seat rating, visits in that seat, approximate viewing angle to the
   screen (derived from screen width, distance and offset), colour override (Auto / Great /
   OK / Avoid), mark/remove favourite.
+  The map may be as tall as the window between the app's bars (window height
+  minus 200 dp, at least 520 dp); a hall still taller than that at the
+  width-fitted zoom (e.g. Kant Kino Saal 3) starts fitted whole, smaller and
+  centred, so every row is visible without panning; zoom works as before.
 - **Score breakdown:** six categories with bars and rating counts.
 - **Visit history:** newest first; tap to open/edit a visit.
 - Button **"Add visit"** (hall pre-selected).
