@@ -72,7 +72,8 @@ class DelphiLuxSeedScreenshotTest {
         composeRule.setContent {
             // Numbers at the fitted zoom in the hall detail's map (412 dp phone: 376 dp wide).
             val density = LocalDensity.current
-            val numbers = if (seatNumbersShownWhenFitted(layout, with(density) { 376.dp.toPx() }, density, hall.screenWidth)) {
+            val width = with(density) { 376.dp.toPx() }
+            val numbers = if (seatNumbersShownWhenFitted(layout, width, density, hall.screenWidth, hall.screenOffset)) {
                 "numbers when fitted"
             } else {
                 "numbers after zooming in"
@@ -89,6 +90,7 @@ class DelphiLuxSeedScreenshotTest {
                         contentDescription = hall.name,
                         screenWidth = hall.screenWidth,
                         screenDistance = hall.screenDistance,
+                        screenOffset = hall.screenOffset,
                         maxHeight = 760.dp,
                     )
                 }

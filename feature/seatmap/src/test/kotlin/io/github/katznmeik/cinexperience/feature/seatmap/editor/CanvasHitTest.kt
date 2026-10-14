@@ -93,6 +93,39 @@ class CanvasHitTest {
     }
 
     @Test
+    fun anOffsetScreenHasItsHandlesAtItsShiftedEnds() {
+        // A 10-seat screen 6 seats to the left of a 30-column hall's centre, close to row 0.
+        val g = SeatMapGeometry(
+            SeatLayout.fromPatterns(List(3) { "S".repeat(30) }, firstSeatId = 1),
+            metrics,
+            screenWidth = 10f,
+            screenDistance = 0.5f,
+            screenOffset = -6f,
+        )
+        val t = ViewBounds.of(Size(388f, 300f), g.contentBounds, 2.5f, 3f).fitted()
+        fun at(content: Offset, selected: Boolean = true) =
+            hitTest(t.toScreen(content), g, t, handleTouchRadius, labelHeight, screenSelected = selected)
+        assertEquals(g.cellsWidth / 2f - 6f * metrics.pitchX, g.screenCenterX)
+        assertEquals(CanvasHit.WidthHandle(right = false), at(Offset(g.screenLeft, g.screenY)))
+        assertEquals(CanvasHit.WidthHandle(right = true), at(Offset(g.screenRight, g.screenY)))
+        assertEquals(CanvasHit.ScreenBar, at(Offset(g.screenCenterX, g.screenY)))
+        // Where a centred screen's middle would be: beside the shifted bar, nothing.
+        assertEquals(CanvasHit.Empty, at(Offset(g.cellsWidth / 2f + 3f * metrics.pitchX, g.screenY), selected = false))
+        // Row 0 under the shifted handles still paints.
+        assertEquals(CanvasHit.Cell(CellPosition(0, 4)), at(g.cellCenter(0, 4)))
+        assertEquals(CanvasHit.Cell(CellPosition(0, 13)), at(g.cellCenter(0, 13)))
+    }
+
+    @Test
+    fun aBarDragLocksToTheDirectionItStartsIn() {
+        val slop = 8f
+        assertEquals(null, dragAxis(Offset(3f, 4f), slop)) // within the slop: undecided
+        assertEquals(DragAxis.HORIZONTAL, dragAxis(Offset(12f, 5f), slop))
+        assertEquals(DragAxis.HORIZONTAL, dragAxis(Offset(-9f, 9f), slop)) // a tie moves sideways
+        assertEquals(DragAxis.VERTICAL, dragAxis(Offset(4f, -11f), slop))
+    }
+
+    @Test
     fun rowLabelsAndEmptySpace() {
         assertEquals(CanvasHit.RowLabel(1), hit(geometry.leftLabelRect(1).center))
         assertEquals(CanvasHit.Empty, hit(Offset(geometry.cellsWidth + 6f, geometry.rowTop(2) + 4f)))

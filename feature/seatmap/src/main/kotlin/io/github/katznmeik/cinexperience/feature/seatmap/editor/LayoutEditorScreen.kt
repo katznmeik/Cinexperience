@@ -80,6 +80,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.model.CellPosition
 import io.github.katznmeik.cinexperience.core.model.CellType
+import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import io.github.katznmeik.cinexperience.core.seatmapui.SeatMapViewState
@@ -117,6 +118,7 @@ internal interface LayoutEditorActions : EditorCanvasActions {
     fun onColumnCount(delta: Int) {}
     fun onScreenWidthStep(delta: Float) {}
     fun onScreenDistanceStep(delta: Float) {}
+    fun onScreenOffsetStep(delta: Float) {}
 
     /** "Done" in the screen panel. */
     fun onDeselectScreen() {}
@@ -135,6 +137,7 @@ internal interface LayoutEditorActions : EditorCanvasActions {
     override fun onTapOutside() {}
     override fun onScreenWidth(width: Float) {}
     override fun onScreenDistance(distance: Float) {}
+    override fun onScreenOffset(offset: Float) {}
     override fun onReferenceAlignment(alignment: ReferenceAlignment) {}
 }
 
@@ -161,6 +164,7 @@ private fun LayoutEditorViewModel.actions(pickReference: () -> Unit) = object : 
     override fun onColumnCount(delta: Int) = changeColumnCount(delta)
     override fun onScreenWidthStep(delta: Float) = changeScreenWidth(delta)
     override fun onScreenDistanceStep(delta: Float) = changeScreenDistance(delta)
+    override fun onScreenOffsetStep(delta: Float) = changeScreenOffset(delta)
     override fun onDeselectScreen() = deselectScreen()
     override fun onConfirmDiscard() = discard()
     override fun onConfirmSave() = confirmSave()
@@ -176,6 +180,7 @@ private fun LayoutEditorViewModel.actions(pickReference: () -> Unit) = object : 
     override fun onTapOutside() = tapOutside()
     override fun onScreenWidth(width: Float) = dragScreenWidth(width)
     override fun onScreenDistance(distance: Float) = dragScreenDistance(distance)
+    override fun onScreenOffset(offset: Float) = dragScreenOffset(offset)
     override fun onReferenceAlignment(alignment: ReferenceAlignment) = setReferenceAlignment(alignment)
 }
 
@@ -420,7 +425,8 @@ private fun FitButton(onClick: () -> Unit) {
 
 /**
  * The selected screen's controls (spec §6.5), in place of the row panel: how to
- * drag it on the canvas, and steppers for width and distance. "Done" deselects it.
+ * drag it on the canvas, and steppers for width, distance and position. "Done"
+ * deselects it.
  */
 @Composable
 private fun ScreenPanel(draft: LayoutDraft, actions: LayoutEditorActions) {
@@ -432,8 +438,9 @@ private fun ScreenPanel(draft: LayoutDraft, actions: LayoutEditorActions) {
             }
         }
         Text(
-            "Drag the green handles on the canvas to change the width, and the bar up or down " +
-                "to change its distance to the first row.",
+            "Drag the green handles on the canvas to change the width. Drag the bar up or down " +
+                "to change its distance to the first row, or sideways when the screen isn't centred " +
+                "over the seats.",
             style = MaterialTheme.typography.bodySmall,
             color = CinexTheme.colors.textMuted,
         )
@@ -613,7 +620,7 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
             PanelTitle("Rows")
             Text(
                 "Tap a row label on the left of the canvas to edit that row: label, numbering, seat offset and block starts. " +
-                    "Tap the screen to change its width and distance.",
+                    "Tap the screen to change its width, distance and position.",
                 style = MaterialTheme.typography.bodySmall,
                 color = CinexTheme.colors.textMuted,
             )
@@ -810,6 +817,18 @@ private fun screenSteppers(draft: LayoutDraft, actions: LayoutEditorActions): Li
         canMinus = draft.screenDistance > ScreenRules.MIN_DISTANCE,
         canPlus = draft.screenDistance < ScreenRules.MAX_DISTANCE,
     ),
+    StepperSpec(
+        label = "Screen position",
+        value = ScreenRules.offsetText(draft.screenOffset),
+        onMinus = { actions.onScreenOffsetStep(-ScreenOffsetRules.STEP) },
+        onPlus = { actions.onScreenOffsetStep(ScreenOffsetRules.STEP) },
+        canMinus = draft.screenOffset > -ScreenOffsetRules.maxMagnitude(draft.columnCount),
+        canPlus = draft.screenOffset < ScreenOffsetRules.maxMagnitude(draft.columnCount),
+        minusSymbol = "←",
+        plusSymbol = "→",
+        minusDescription = "Move the screen left",
+        plusDescription = "Move the screen right",
+    ),
 )
 
 @Composable
@@ -853,6 +872,10 @@ private class StepperSpec(
     val onPlus: () -> Unit,
     val canMinus: Boolean,
     val canPlus: Boolean,
+    val minusSymbol: String = "−",
+    val plusSymbol: String = "+",
+    val minusDescription: String = "Decrease ${label.lowercase()}",
+    val plusDescription: String = "Increase ${label.lowercase()}",
 )
 
 @Composable
@@ -871,8 +894,8 @@ private fun StepperCard(spec: StepperSpec, modifier: Modifier = Modifier, contai
             Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal), color = CinexTheme.colors.textMuted)
             Text(spec.value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = CinexTheme.colors.text)
         }
-        StepButton("−", "Decrease ${label.lowercase()}", spec.canMinus, spec.onMinus)
-        StepButton("+", "Increase ${label.lowercase()}", spec.canPlus, spec.onPlus)
+        StepButton(spec.minusSymbol, spec.minusDescription, spec.canMinus, spec.onMinus)
+        StepButton(spec.plusSymbol, spec.plusDescription, spec.canPlus, spec.onPlus)
     }
 }
 

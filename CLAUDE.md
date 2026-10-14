@@ -70,7 +70,8 @@ Don't duplicate config in module build files.
 - **Theme:** dark only, monochrome. All colours and text styles come from
   `core:ui` (`CinexTheme.colors`, `CinexTheme.textStyles`,
   `MaterialTheme.colorScheme/typography`). Never hard-code colours in feature
-  modules. Seat colours (`CinexTheme.colors.seat.*`) are the only hues in the app.
+  modules. Seat colours (`CinexTheme.colors.seat.*`) are the only hues in the app,
+  plus `editorSelection` (the layout editor's selected screen, spec §7).
   Titles are uppercase Archivo; body text is Instrument Sans.
 - **Accessibility** (M7): every main screen has a `*AccessibilityTest` that runs
   `assertAccessible()` (core:testing: every clickable has a label; the clickable
@@ -86,8 +87,9 @@ Don't duplicate config in module build files.
   fixed height that text must fit in (`heightIn(min = …)`), rows of chips wrap
   (`ChoiceChipRow` is a `FlowRow`), and two-column layouts become one column
   when `LocalDensity.current.fontScale > 1.3f` instead of breaking words. Text
-  drawn inside a zoomable canvas (editor row labels) is sized in dp, not sp: it
-  grows with zoom, not with the system font size.
+  drawn inside a zoomable canvas (row labels, seat numbers, the screen caption,
+  in the seat map and the editor) is sized in dp, not sp: it grows with zoom,
+  not with the system font size.
 - **Contrast:** text ≥4.5:1, meaningful graphics and outline-only controls
   ≥3:1 against their background (checked in `ThemeContrastTest` and
   `EditorContrastTest`). `outline` and `divider` are decorative only; borders
@@ -120,6 +122,11 @@ Don't duplicate config in module build files.
   the only cue (× on avoid, ★ and outline on the favourite, great/OK differ in
   lightness), screen readers get the state from `seatDescription()` /
   `seatStatesDescription()`, and a coloured map is shown with a `SeatLegend`.
+  Numbered seats (not wheelchair spaces) show their number from
+  `layout.labels()` (`seatNumberText`, `drawNumberedSeat` in `SeatNumbers.kt`),
+  in the fill's on-colour (`seat.onGreat` … `seat.onNoData`, ≥4.5:1), with the
+  marks in a band above it; below `MIN_SEAT_NUMBER_SIZE` on screen the numbers
+  wait until the user zooms in and the marks are drawn as symbols.
   Overrides and the favourite are written only through `SeatOverrideRepository`
   (the fake in `core:testing` models them like Room: `FakeStore.overrides`).
 - **Screen geometry** (`Hall`): `screenWidth` in seat widths, `screenDistance`
@@ -128,7 +135,11 @@ Don't duplicate config in module build files.
   seats, 0 = centred). The screen is a straight bar. Offset rules live in
   `core:model` `ScreenOffsetRules` (`isValid`, `snap`, `maxMagnitude(columns)`);
   `updateHall` rejects invalid offsets, so snap first. `viewingAngle(...,
-  screenOffset = hall.screenOffset)` uses it.
+  screenOffset = hall.screenOffset)` uses it, and every map draws it: pass it
+  to `SeatMap` / `SeatMapGeometry`. In the editor (`LayoutDraft.screenOffset`)
+  the selected screen's bar is dragged sideways (the drag locks to the axis it
+  starts in) or set with the "Screen position" stepper; screen controls never
+  reach into row 0 (`hitTest`).
 - **Favourite cinemas:** `Cinema.isFavourite`, written only through
   `CinemaRepository.setFavourite`; every cinema flow carries it.
 - **Schema changes:** the database is at version 2 (`MIGRATION_1_2` added

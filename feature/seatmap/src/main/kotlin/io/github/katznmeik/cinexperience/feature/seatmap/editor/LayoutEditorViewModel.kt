@@ -11,6 +11,7 @@ import io.github.katznmeik.cinexperience.core.model.CellPosition
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
+import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
@@ -241,6 +242,9 @@ class LayoutEditorViewModel(
     /** Screen distance from a handle drag (row depths; snapped and limited). */
     fun dragScreenDistance(distance: Float) = edit { it.withScreenDistance(distance) }
 
+    /** Screen position from a sideways drag of the bar (seat widths; snapped to half seats, within the grid). */
+    fun dragScreenOffset(offset: Float) = edit { it.withScreenOffset(offset) }
+
     // ---- Steppers ----
 
     fun changeRowCount(delta: Int) = edit { it.withRowCount(it.rowCount + delta) }
@@ -250,6 +254,9 @@ class LayoutEditorViewModel(
     fun changeScreenWidth(delta: Float) = edit { it.withScreenWidth(it.screenWidth + delta) }
 
     fun changeScreenDistance(delta: Float) = edit { it.withScreenDistance(it.screenDistance + delta) }
+
+    /** "Screen position" stepper: moves the screen by [delta] seat widths (negative = left). */
+    fun changeScreenOffset(delta: Float) = edit { it.withScreenOffset(it.screenOffset + delta) }
 
     // ---- Selected row ----
 
@@ -428,9 +435,12 @@ class LayoutEditorViewModel(
 
     private suspend fun write(stored: Hall) {
         val current = draft ?: return
+        // The draft's offset is always valid; snapping again guards the repository's check.
+        val screenOffset = ScreenOffsetRules.snap(current.screenOffset)
         val unchanged = stored.layout?.rows == current.layout.rows &&
             stored.screenWidth == current.screenWidth &&
             stored.screenDistance == current.screenDistance &&
+            stored.screenOffset == screenOffset &&
             stored.referenceImagePath == current.referenceImagePath
         try {
             if (!unchanged) {
@@ -438,6 +448,7 @@ class LayoutEditorViewModel(
                     layout = current.layout,
                     screenWidth = current.screenWidth,
                     screenDistance = current.screenDistance,
+                    screenOffset = screenOffset,
                     referenceImagePath = current.referenceImagePath,
                 )
                 if (!hallRepository.updateHall(updated)) {

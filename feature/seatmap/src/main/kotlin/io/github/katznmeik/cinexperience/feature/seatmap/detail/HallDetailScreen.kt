@@ -317,6 +317,7 @@ private fun ColumnScope.MapContent(
         contentDescription = description,
         screenWidth = state.screenWidth,
         screenDistance = state.screenDistance,
+        screenOffset = state.screenOffset,
         seatVisuals = state.seatVisuals,
         selectedSeatId = state.selectedSeat?.seatId,
         onSeatClick = onSeatClick,

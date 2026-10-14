@@ -253,6 +253,34 @@ class SeatMapScreenshotTest {
     }
 
     /**
+     * The selected screen moved 3 seats to the left (spec §4.2, §6.5): the bar is drawn
+     * there, the label and the "Screen position" stepper say so.
+     */
+    @Test
+    @Config(qualifiers = "w412dp-h1100dp-port-night-xxhdpi")
+    fun layoutEditorWithScreenOffset() {
+        val vm = LayoutEditorViewModel(SampleData.DELPHI_LUX_SAAL_1, repository, FakeReferenceImageStore())
+        vm.selectScreen()
+        vm.changeScreenWidth(-4f)
+        vm.changeScreenOffset(-3f)
+        val state = vm.uiState.value
+        check(state.draft?.screenOffset == -3f)
+        capture("layout_editor_screen_offset") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
+    }
+
+    /** The hall detail of a hall whose screen is 3 seats left of centre: the map and the viewing angle follow it. */
+    @Test
+    fun hallDetailWithScreenOffset() {
+        val store = RatedHallFixture.store()
+        repository = FakeCinexRepository(
+            store.copy(halls = store.halls.map { if (it.id == RatedHallFixture.HALL) it.copy(screenOffset = -3f) else it }),
+        )
+        val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.favourite) }
+        check((state as HallDetailUiState.Loaded).screenOffset == -3f)
+        capture("hall_detail_screen_offset") { HallDetail(state) }
+    }
+
+    /**
      * Zoomed in by the user: the seat numbers are bigger, and the "Fit" control sits in
      * the line under the canvas, where it never covers the screen or its handles.
      */

@@ -85,4 +85,15 @@ class SeatMapAccessibilityTest(private val fontScale: Float) {
         val state = vm.uiState.value
         check("layout_editor") { LayoutEditorScreen(state, referenceImage = null, actions = object : LayoutEditorActions {}) }
     }
+
+    /** The selected screen: the screen panel ("Done", width, distance and position steppers) in place of the row panel. */
+    @Test
+    fun layoutEditorWithSelectedScreen() {
+        val repository = FakeCinexRepository(SampleData.storeWithSplitHall())
+        val vm = LayoutEditorViewModel(SampleData.DELPHI_LUX_SAAL_1, repository, FakeReferenceImageStore())
+        vm.selectScreen()
+        vm.changeScreenOffset(-1.5f)
+        val state = vm.uiState.value
+        check("layout_editor_screen") { LayoutEditorScreen(state, referenceImage = null, actions = object : LayoutEditorActions {}) }
+    }
 }

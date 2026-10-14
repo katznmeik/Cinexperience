@@ -95,5 +95,9 @@ class SeatNumbersTest {
         assertTrue(seatNumbersShownWhenFitted(SeatLayout.fromPatterns(List(8) { "S".repeat(24) }, firstSeatId = 1), width, density))
         // Wider halls show them once zoomed in.
         assertFalse(seatNumbersShownWhenFitted(SeatLayout.fromPatterns(List(8) { "S".repeat(26) }, firstSeatId = 1), width, density))
+        // A screen moved far past the side widens the drawing as well.
+        val twenty = SeatLayout.fromPatterns(List(8) { "S".repeat(20) }, firstSeatId = 1)
+        assertTrue(seatNumbersShownWhenFitted(twenty, width, density, screenWidth = 16f))
+        assertFalse(seatNumbersShownWhenFitted(twenty, width, density, screenWidth = 16f, screenOffset = -10f))
     }
 }

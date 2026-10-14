@@ -103,6 +103,8 @@ sealed interface HallDetailUiState {
         val screenWidth: Float?,
         val screenDistance: Float?,
         val visitCount: Int,
+        /** The screen's sideways shift in seat widths (spec §4.2); the map draws it there. */
+        val screenOffset: Float = 0f,
         val selectedSeat: SelectedSeat? = null,
         /** The hall's visits, newest first. */
         val visits: List<HallVisitRow> = emptyList(),
@@ -209,6 +211,7 @@ class HallDetailViewModel(
             layoutUnreadable = hall.layoutUnreadable,
             screenWidth = hall.screenWidth,
             screenDistance = hall.screenDistance,
+            screenOffset = hall.screenOffset,
             visitCount = visits.size,
             selectedSeat = selectedSeat,
             visits = visits.map { visit ->

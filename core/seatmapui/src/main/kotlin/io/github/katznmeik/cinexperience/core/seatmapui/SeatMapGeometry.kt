@@ -49,25 +49,30 @@ data class SeatMapMetrics(
  * x grows to the right, y towards the back of the hall. Row `r` spans
  * `[r × pitchY, r × pitchY + seatSize]`; column `c` starts at `c × pitchX`, plus
  * half a pitch in rows with a half-seat offset. Row labels sit left (and right)
- * of the grid; the screen is a horizontal line above row 0 at `screenY < 0`,
- * centred over the cell area like in the viewing-angle model
+ * of the grid; the screen is a straight horizontal line above row 0 at
+ * `screenY < 0`, placed like in the viewing-angle model
  * (`core.model.viewingAngle`): [screenWidth] seat widths wide, [screenDistance]
- * row depths in front of row 0.
+ * row depths in front of row 0, its centre [screenOffset] seat widths right of
+ * the cell area's centre (negative = left, towards column 0, as seen from the
+ * seats facing the screen).
  *
  * @param screenWidth in seat widths; `null` → as wide as the grid.
  * @param screenDistance in row depths; `null` → [DEFAULT_SCREEN_DISTANCE].
+ * @param screenOffset in seat widths (`Hall.screenOffset`); 0 = centred.
  */
 class SeatMapGeometry(
     val layout: SeatLayout,
     val metrics: SeatMapMetrics,
     screenWidth: Float? = null,
     screenDistance: Float? = null,
+    screenOffset: Float = 0f,
 ) {
     val rowCount: Int = layout.rowCount
     val columnCount: Int = layout.columnCount
 
     val screenWidth: Float = screenWidth?.takeIf { it > 0f } ?: columnCount.toFloat()
     val screenDistance: Float = screenDistance?.takeIf { it >= 0f } ?: DEFAULT_SCREEN_DISTANCE
+    val screenOffset: Float = screenOffset.takeIf { it.isFinite() } ?: 0f
 
     private val halfShift: Float = metrics.pitchX / 2f
     private val hasOffsetRows: Boolean = layout.rows.any { it.halfSeatOffset }
@@ -79,8 +84,8 @@ class SeatMapGeometry(
     val gridWidth: Float = cellsWidth + if (hasOffsetRows) halfShift else 0f
     val gridHeight: Float = rowCount * metrics.pitchY - metrics.rowGap
 
-    /** Centre of the screen (and of the unshifted cell area). */
-    val screenCenterX: Float = cellsWidth / 2f
+    /** Centre of the screen: the centre of the unshifted cell area, moved by [screenOffset]. */
+    val screenCenterX: Float = cellsWidth / 2f + this.screenOffset * metrics.pitchX
     val screenLeft: Float = screenCenterX - this.screenWidth * metrics.pitchX / 2f
     val screenRight: Float = screenCenterX + this.screenWidth * metrics.pitchX / 2f
 

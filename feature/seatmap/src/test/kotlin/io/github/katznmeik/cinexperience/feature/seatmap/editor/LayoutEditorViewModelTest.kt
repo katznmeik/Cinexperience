@@ -7,6 +7,7 @@ import io.github.katznmeik.cinexperience.core.model.Cinema
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.LayoutPattern
+import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
@@ -222,6 +223,62 @@ class LayoutEditorViewModelTest {
         assertEquals(1f, vm.draft.screenWidth)
         vm.changeScreenDistance(-100f)
         assertEquals(0f, vm.draft.screenDistance)
+    }
+
+    @Test
+    fun theScreenPositionStepsSnapsAndUndoes() {
+        val vm = viewModel() // 4 columns: the centre can move up to 2 seats either way
+        assertEquals(0f, vm.draft.screenOffset)
+        vm.changeScreenOffset(-ScreenOffsetRules.STEP)
+        vm.changeScreenOffset(-ScreenOffsetRules.STEP)
+        assertEquals(-1f, vm.draft.screenOffset)
+        assertTrue(vm.state.hasUnsavedChanges)
+        vm.changeScreenOffset(-5f)
+        assertEquals(-2f, vm.draft.screenOffset) // within the grid
+        vm.undo()
+        assertEquals(-1f, vm.draft.screenOffset)
+        vm.undo()
+        vm.undo()
+        assertEquals(0f, vm.draft.screenOffset)
+        assertFalse(vm.state.hasUnsavedChanges)
+        vm.redo()
+        assertEquals(-0.5f, vm.draft.screenOffset)
+
+        // A sideways drag of the bar snaps to half seats and is one undo step.
+        vm.beginGesture()
+        vm.dragScreenOffset(0.3f)
+        vm.dragScreenOffset(1.27f)
+        vm.dragScreenOffset(1.74f)
+        vm.endGesture()
+        assertEquals(1.5f, vm.draft.screenOffset)
+        vm.undo()
+        assertEquals(-0.5f, vm.draft.screenOffset)
+    }
+
+    @Test
+    fun discardingAMovedScreenAsksFirst() {
+        val vm = viewModel()
+        vm.changeScreenOffset(1f)
+        vm.requestDiscard()
+        assertEquals(EditorDialog.ConfirmDiscard, vm.state.dialog)
+        vm.discard()
+        assertTrue(vm.state.isClosed)
+        assertEquals(0f, storedHall().screenOffset) // nothing saved
+    }
+
+    @Test
+    fun saveWritesTheScreenOffset() {
+        val vm = viewModel()
+        vm.changeScreenOffset(-1.5f)
+        vm.save()
+        assertTrue(vm.state.isClosed)
+        assertEquals(-1.5f, storedHall().screenOffset)
+        assertEquals(stored.rows, storedHall().layout!!.rows) // only the offset changed
+
+        // The stored offset is where the next edit starts.
+        val again = viewModel()
+        assertEquals(-1.5f, again.draft.screenOffset)
+        assertFalse(again.state.hasUnsavedChanges)
     }
 
     @Test

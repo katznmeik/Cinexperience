@@ -469,6 +469,7 @@ class VisitEditViewModel(
             labels = labels,
             screenWidth = hall?.screenWidth,
             screenDistance = hall?.screenDistance,
+            screenOffset = hall?.screenOffset ?: 0f,
             seatLabel = seatLabel,
             seatMissing = form.seatId != null && seatLabel == null,
             seatPickerUnavailable = when {

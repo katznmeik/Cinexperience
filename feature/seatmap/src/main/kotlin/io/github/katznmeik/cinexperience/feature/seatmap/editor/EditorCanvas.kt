@@ -92,7 +92,32 @@ internal interface EditorCanvasActions {
     fun onTapOutside()
     fun onScreenWidth(width: Float)
     fun onScreenDistance(distance: Float)
+
+    /** The screen's sideways position from dragging its bar (seat widths, not yet snapped). */
+    fun onScreenOffset(offset: Float)
     fun onReferenceAlignment(alignment: ReferenceAlignment)
+}
+
+/** The direction a drag on the screen bar is locked to. */
+internal enum class DragAxis {
+    /** Sideways: moves the screen left or right (its offset). */
+    HORIZONTAL,
+
+    /** Up or down: changes the screen's distance to row 0. */
+    VERTICAL,
+}
+
+/**
+ * The axis a drag on the screen bar locks to, from its [total] movement so far:
+ * `null` while it is within the touch [slop], then the direction of the larger
+ * component (sideways on a tie). Once locked, the drag keeps its axis until the
+ * finger lifts, so a slightly diagonal drag never changes both the position and
+ * the distance.
+ */
+internal fun dragAxis(total: Offset, slop: Float): DragAxis? = when {
+    total.getDistance() <= slop -> null
+    abs(total.x) >= abs(total.y) -> DragAxis.HORIZONTAL
+    else -> DragAxis.VERTICAL
 }
 
 /**
@@ -268,9 +293,10 @@ internal fun canvasHint(referenceMode: Boolean, hasReferenceImage: Boolean, refe
  * Gestures: tap a cell to paint it, drag across cells to paint a stroke (one undo
  * step), tap a row label to select the row, tap the screen bar to select the
  * screen (it turns green and shows its handles), drag the selected screen's
- * handles to change its width and the bar to change its distance, and use two
- * fingers (or one finger outside the grid) to zoom and pan. In reference mode,
- * one or two fingers move and scale the screenshot instead.
+ * handles to change its width, drag the bar up or down to change its distance
+ * or sideways to move it (the drag locks to the direction it starts in, see
+ * [dragAxis]), and use two fingers (or one finger outside the grid) to zoom and
+ * pan. In reference mode, one or two fingers move and scale the screenshot instead.
  */
 @Composable
 internal fun EditorCanvas(
@@ -311,8 +337,8 @@ internal fun EditorCanvas(
             with(density) { 4.dp.toPx() }
     }
     val metrics = remember(density, labelWidth) { editorMetrics(density, labelWidth) }
-    val geometry = remember(draft.layout, metrics, draft.screenWidth, draft.screenDistance) {
-        SeatMapGeometry(draft.layout, metrics, draft.screenWidth, draft.screenDistance)
+    val geometry = remember(draft.layout, metrics, draft.screenWidth, draft.screenDistance, draft.screenOffset) {
+        SeatMapGeometry(draft.layout, metrics, draft.screenWidth, draft.screenDistance, draft.screenOffset)
     }
     val maxZoomScale = with(density) { MAX_ZOOM_SEAT_SIZE.toPx() } / metrics.seatSize
     val numbersMinScale = seatNumbersMinScale(metrics.seatSize, density)
@@ -395,10 +421,21 @@ internal fun EditorCanvas(
                             }
                         }
                         CanvasHit.ScreenBar -> {
+                            // Touching the bar selects the screen; dragging it moves the screen,
+                            // sideways or up / down, whichever way the drag starts.
                             currentActions.onSelectScreen()
-                            val start = currentDraft.screenDistance
+                            val startDistance = currentDraft.screenDistance
+                            val startOffset = currentDraft.screenOffset
+                            var axis: DragAxis? = null
                             dragScreenControl(down, transform, viewState, currentActions) { total ->
-                                currentActions.onScreenDistance(start - total.y / (g.metrics.pitchY * transform.scale))
+                                val locked = axis ?: dragAxis(total, slop)?.also { axis = it }
+                                when (locked) {
+                                    DragAxis.HORIZONTAL ->
+                                        currentActions.onScreenOffset(startOffset + total.x / (g.metrics.pitchX * transform.scale))
+                                    DragAxis.VERTICAL ->
+                                        currentActions.onScreenDistance(startDistance - total.y / (g.metrics.pitchY * transform.scale))
+                                    null -> Unit
+                                }
                             }
                         }
                         is CanvasHit.Cell -> paintOrZoom(
@@ -725,7 +762,10 @@ private fun DrawScope.drawScreenControls(
         val box = Rect(handle, radius * 0.8f)
         strokeGlyph(handleArrows, box, colors.onEditorSelection, strokeWidth = 2.6f)
     }
-    val text = measurer.measure("distance ${ScreenRules.distanceText(geometry.screenDistance)}", style)
+    val text = measurer.measure(
+        "distance ${ScreenRules.distanceText(geometry.screenDistance)} · ${ScreenRules.offsetText(geometry.screenOffset).lowercase()}",
+        style,
+    )
     val arrowWidth = 10f * dp
     val arrowHeight = 22f * dp
     val total = arrowWidth + 6f * dp + text.size.width

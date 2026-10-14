@@ -112,6 +112,8 @@ val MAX_ZOOM_SEAT_SIZE: Dp = 44.dp
  * it). Its height follows the fitted content, up to [maxHeight].
  *
  * @param contentDescription what the map shows, e.g. from [seatMapDescription].
+ * @param screenWidth, screenDistance, screenOffset the hall's screen geometry (spec §4.2);
+ *   the bar is drawn shifted by [screenOffset] seat widths (negative = left).
  * @param seatVisuals colour, favourite and avoid states (spec §5); missing seats are neutral.
  *   When it is not empty, the selected seat's state is part of its screen-reader
  *   description ("Selected: Row 7, Seat 10, great, favourite"). Pair the map with a
@@ -128,6 +130,7 @@ fun SeatMap(
     labels: LayoutLabels = remember(layout) { layout.labels() },
     screenWidth: Float? = null,
     screenDistance: Float? = null,
+    screenOffset: Float = 0f,
     seatVisuals: Map<SeatId, SeatVisual> = emptyMap(),
     selectedSeatId: SeatId? = null,
     onSeatClick: ((SeatId) -> Unit)? = null,
@@ -158,8 +161,8 @@ fun SeatMap(
     }
     val metrics = remember(density, labelWidth) { seatMapMetrics(density, labelWidth) }
     val numbersMinScale = seatNumbersMinScale(metrics.seatSize, density)
-    val geometry = remember(layout, metrics, screenWidth, screenDistance) {
-        SeatMapGeometry(layout, metrics, screenWidth, screenDistance)
+    val geometry = remember(layout, metrics, screenWidth, screenDistance, screenOffset) {
+        SeatMapGeometry(layout, metrics, screenWidth, screenDistance, screenOffset)
     }
     val maxZoomScale = with(density) { MAX_ZOOM_SEAT_SIZE.toPx() } / metrics.seatSize
     val tapTolerance = with(density) { 10.dp.toPx() }
@@ -277,10 +280,12 @@ fun seatNumbersShownWhenFitted(
     width: Float,
     density: Density,
     screenWidth: Float? = null,
+    screenOffset: Float = 0f,
     labelWidth: Float = with(density) { 12.dp.toPx() },
 ): Boolean {
     val metrics = seatMapMetrics(density, labelWidth)
-    val geometry = SeatMapGeometry(layout, metrics, screenWidth, null)
+    // A screen wider than the grid, or moved past its side, widens the content.
+    val geometry = SeatMapGeometry(layout, metrics, screenWidth, null, screenOffset)
     val fit = ViewBounds.of(Size(width, 1f), geometry.contentBounds, MAX_FIT_SCALE, 1f).fitScale
     return fit >= seatNumbersMinScale(metrics.seatSize, density)
 }
