@@ -19,17 +19,25 @@ is required.
 ## Commands
 
 ```sh
-./gradlew testDebugUnitTest recordRoborazziDebug assembleDebug   # local pre-push check
+./gradlew testDebugUnitTest recordRoborazziDebug assembleDebug lintDebug   # local pre-push check
 ./gradlew :core:model:test                                       # pure JVM unit tests
 ./gradlew recordRoborazziDebug    # PNGs -> app/ and feature/*/build/outputs/roborazzi/
+./gradlew lintDebug               # Android Lint; errors fail CI (warnings are reported only)
 ./gradlew assembleRelease         # needs CINEX_* env vars, else debug-signed + warning
 ```
 
-CI (`.github/workflows/android.yml`) first runs `testDebugUnitTest recordRoborazziDebug`.
-If the `CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
+CI (`.github/workflows/android.yml`) first runs `testDebugUnitTest recordRoborazziDebug`,
+then `lintDebug`. If the `CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
 `CINEX_REQUIRE_RELEASE_SIGNING=true`, so a missing or blank signing value fails
 the build instead of falling back to the debug key. Without that secret it runs
 `assembleDebug` and uploads a `-debug` APK.
+
+**Versions and releases:** the version is `cinexVersionName` in `gradle.properties`
+(MAJOR.MINOR.PATCH); `versionCode` is derived from it (MAJOR*10000 + MINOR*100 +
+PATCH). Pushing a tag `v<version>` runs `.github/workflows/release.yml` (tag must
+match the version; tests, lint, signed APK with `CINEX_REQUIRE_RELEASE_SIGNING`,
+signature check, GitHub Release with `cinexperience-<version>.apk`). Agents never
+create tags or releases; the owner does. R8/minify stays off in v1.
 
 Look at the screenshot PNGs after every UI change.
 
@@ -40,7 +48,7 @@ Look at the screenshot PNGs after every UI change.
 | `app` | application | `MainActivity`, `CinexApp` (NavHost + bottom bar), manual DI `AppContainer`, screenshot tests |
 | `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic (no Android) |
 | `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos), backup export/import engine |
-| `core:testing` | Android lib (tests only) | in-memory fake repositories and file stores, illustrative screenshot fixtures, `MainDispatcherRule` |
+| `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories and file stores, illustrative screenshot fixtures, `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips) |
 | `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
 | `feature:cinemas` | feature | cinema list (start tab), cinema detail, manage cinemas & halls |
@@ -61,6 +69,29 @@ Don't duplicate config in module build files.
   `MaterialTheme.colorScheme/typography`). Never hard-code colours in feature
   modules. Seat colours (`CinexTheme.colors.seat.*`) are the only hues in the app.
   Titles are uppercase Archivo; body text is Instrument Sans.
+- **Accessibility** (M7): every main screen has a `*AccessibilityTest` that runs
+  `assertAccessible()` (core:testing: every clickable has a label and a ≥48 dp
+  layout, nothing is announced twice, a heading exists) at font scale 1, 1.5
+  and 2 and records `<screen>_font_150/200.png`. Add new screens there and look
+  at the PNGs. Rules: icon-only buttons get a content description, decorative
+  icons `null`; a control's description replaces its visible texts (clear the
+  inner text semantics, e.g. placeholders), section titles use `SectionHeader` /
+  `ScreenTitle` (headings); small controls keep their look but get
+  `minimumInteractiveComponentSize()` or a 48 dp min height; nothing has a
+  fixed height that text must fit in (`heightIn(min = …)`), rows of chips wrap
+  (`ChoiceChipRow` is a `FlowRow`), and two-column layouts become one column
+  when `LocalDensity.current.fontScale > 1.3f` instead of breaking words.
+- **Contrast:** text ≥4.5:1, meaningful graphics and outline-only controls
+  ≥3:1 against their background (checked in `ThemeContrastTest` and
+  `EditorContrastTest`). `outline` and `divider` are decorative only; borders
+  that alone identify a control use `fieldOutline`; "no data" seats are drawn
+  with the `seat.noDataOutline` rim.
+- **App icon and splash:** the mark is `@drawable/ic_launcher_mark`, an alias in
+  `app/src/main/res/values/icon.xml` pointing at one of
+  `drawable/ic_launcher_concept_{1,2,3}.xml` (single colour, inside the 66 dp
+  safe zone, also the monochrome layer). `IconPreviewTest` renders the concepts.
+  The splash screen (`Theme.Cinexperience.Starting`, core-splashscreen) shows
+  the same mark on the background colour.
 - **Navigation:** type-safe `@Serializable` routes. Each feature exposes its
   routes, `NavGraphBuilder.xxxScreen(...)` and `NavController.navigateToXxx()`.
   Features never depend on each other; `app/.../ui/CinexApp.kt` wires them
