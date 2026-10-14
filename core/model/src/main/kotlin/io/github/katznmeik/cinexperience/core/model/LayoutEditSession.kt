@@ -12,9 +12,10 @@ package io.github.katznmeik.cinexperience.core.model
  * - **Toggling restores ids.** When a cell that held one of the *original*
  *   layout's seats is turned into a gap or aisle and later back into a seat (at
  *   the same physical position, which follows inserted and removed rows and
- *   columns), it gets its original id back, so its visits stay attached. It gets
- *   the painted kind and no fixed label: painting a seat over drops its
- *   [LayoutCell.Seat.fixedLabel] (undo in the editor brings it back).
+ *   columns), it gets its original id back, so its visits stay attached, and its
+ *   [LayoutCell.Seat.fixedLabel] (e.g. "R") with it: the editor can't create
+ *   fixed labels, so a label lost this way could never be set again. It gets the
+ *   painted kind.
  * - **Row settings stay with their rows.** Inserting or removing rows and
  *   columns keeps every row's label, numbering, numbering direction, block starts
  *   and offset, and every seat's kind and fixed label.
@@ -30,8 +31,8 @@ class LayoutEditSession private constructor(
     val layout: SeatLayout?,
     /** Lowest id that may be handed out to a new seat. */
     private val freshIdFloor: Int,
-    /** Original seat ids whose cell is currently a gap or aisle, by current position. */
-    private val ghosts: Map<CellPosition, SeatId>,
+    /** Original seats whose cell is currently a gap or aisle, by current position. */
+    private val ghosts: Map<CellPosition, Ghost>,
 ) {
     private val originalIds: Set<SeatId> = original?.seatIds.orEmpty()
 
@@ -53,14 +54,14 @@ class LayoutEditSession private constructor(
         val edited = when {
             type == CellType.SEAT -> {
                 val ghost = ghosts.remove(position)
-                if (ghost != null && ghost !in current.seatIds) {
-                    current.withSeat(row, column, ghost)
+                if (ghost != null && ghost.id !in current.seatIds) {
+                    current.withSeat(row, column, ghost.id, fixedLabel = ghost.fixedLabel)
                 } else {
                     current.withCellType(row, column, type)
                 }
             }
             cell is LayoutCell.Seat -> {
-                if (cell.id in originalIds) ghosts[position] = cell.id
+                if (cell.id in originalIds) ghosts[position] = Ghost(cell.id, cell.fixedLabel)
                 current.withCellType(row, column, type)
             }
             else -> current.withCellType(row, column, type) // gap <-> aisle keeps a ghost
@@ -133,13 +134,16 @@ class LayoutEditSession private constructor(
 
     private fun requireLayout(): SeatLayout = checkNotNull(layout) { "No layout; call newGrid first" }
 
-    private fun copyWith(newLayout: SeatLayout?, newGhosts: Map<CellPosition, SeatId>): LayoutEditSession =
+    private fun copyWith(newLayout: SeatLayout?, newGhosts: Map<CellPosition, Ghost>): LayoutEditSession =
         LayoutEditSession(
             original = original,
             layout = newLayout,
             freshIdFloor = maxOf(freshIdFloor, newLayout?.nextSeatId ?: 0),
             ghosts = newGhosts,
         )
+
+    /** An original seat painted over: its id and fixed label, restored when the cell becomes a seat again. */
+    private data class Ghost(val id: SeatId, val fixedLabel: String?)
 
     companion object {
         /**

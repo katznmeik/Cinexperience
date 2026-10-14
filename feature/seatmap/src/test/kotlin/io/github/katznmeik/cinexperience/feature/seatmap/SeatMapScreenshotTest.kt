@@ -303,7 +303,10 @@ class SeatMapScreenshotTest {
         capture("layout_editor_right_to_left") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
     }
 
-    /** The row with the fixed "R" (row 6) selected in the editor: the "R" on its seat, the range "1–14 + R". */
+    /**
+     * The row with the fixed "R" (row 6, right to left, the "R" at the right end)
+     * selected in the editor: the "R" on its seat, the range "R + 1–14" in numbering order.
+     */
     @Test
     @Config(qualifiers = "w412dp-h1300dp-port-night-xxhdpi")
     fun layoutEditorFixedLabelRow() {
@@ -311,7 +314,7 @@ class SeatMapScreenshotTest {
         val vm = LayoutEditorViewModel(SampleData.DELPHI_LUX_SAAL_1, repository, FakeReferenceImageStore())
         vm.selectRow(5)
         val state = vm.uiState.value
-        check(state.row?.blocks?.single()?.rangeText == "1–14 + R")
+        check(state.row?.blocks?.single()?.rangeText == "R + 1–14")
         capture("layout_editor_fixed_label") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
     }
 

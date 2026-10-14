@@ -124,10 +124,15 @@ Don't duplicate config in module build files.
   as stored, in both directions; its value is the number of that block's first
   numbered seat in numbering order (the rightmost seat when the row runs right
   to left). `CONTINUOUS` counts on across blocks, `RESTART_PER_BLOCK` restarts.
-  A seat can have a `fixedLabel` (1–4 characters, e.g. "R"): it is shown
-  instead of a number and uses up no number. It moves with its seat and
-  survives a change of kind; painting the cell as a gap or aisle, or deleting
-  its row or column, drops it. The editor can't create fixed labels.
+  A seat can have a `fixedLabel` (1–4 characters, no surrounding spaces, no
+  control or format characters, e.g. "R"): it is shown instead of a number and
+  uses up no number. It moves with its seat and survives a change of kind; a
+  seat painted as a gap or aisle and back as a seat in the same editing session
+  gets its id and its fixed label back; deleting its row or column drops it.
+  The editor can't create fixed labels, so it must never lose one.
+  Wheelchair spaces are numbered in every layout format, also in format 1/2
+  layouts stored before format 3; an older build (which didn't count them)
+  numbers such a layout the old way. Accepted before v1.0.
   `SeatLabel.seat` is the text ("10" or "R"); texts read "Row 7 · Seat 10" and
   "Row 8 · Seat R", and descriptions name the kind ("…, wheelchair space").
 - **Scores and seat colours** come from the `core:model` functions
@@ -211,13 +216,22 @@ Don't duplicate config in module build files.
   and fills empty fields, it never overwrites or deletes (a renamed seed hall
   only gets the new name on fresh installs). For `screenOffset`, 0 counts as
   empty (see `Seeder`). One exception (spec §9): when a newer seed ships a
-  different layout, a hall whose layout is still the previous seed's (snapshot
-  `layout`, compared by structure with `hasSameStructureAs`, ids ignored) and
-  that has no visits, seat colours or favourite gets the new layout, with ids
-  above the hall's mark. Its screen width and distance follow only while they
-  still hold the previous seed's values; a value the user changed is kept.
-  Names, notes, the screen offset and the reference screenshot are never
-  touched.
+  layout that differs from the one the seeder last wrote into a hall, a hall
+  whose layout is still exactly that written layout (compared by structure
+  with `hasSameStructureAs`: ids ignored, block starts normalised) and that has
+  no visits, seat colours or favourite gets the new layout, with ids above the
+  hall's mark. The written layout is the snapshot field `appliedLayout`
+  (canonical, ids from 1), set only when the seeder inserts, fills or replaces
+  a layout, `null` when it never wrote one (e.g. an adopted user hall that
+  already had a layout: the user's own drawing is never replaced); halls
+  seeded before the field existed fall back to the previous seed's `layout`.
+  So a replacement blocked by a favourite happens with a later seed version
+  once the favourite is gone. The screen width and distance follow only while
+  they still hold the previous seed's values; a value the user changed is
+  kept. The screen offset is touched only when the new layout is narrower:
+  it is then snapped with `ScreenOffsetRules.snap(offset, newColumns)`, so the
+  screen stays over the grid. Names, notes and the reference screenshot are
+  never touched.
 - **Seed layouts** (`"layout"` of a seed hall, see `LayoutJson`): one object per
   grid row, closest to the screen first, e.g.
   `{ "label": "1", "cells": "W.W|SSSSSSSSS|W.W" }` (generated, see the next

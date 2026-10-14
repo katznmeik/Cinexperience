@@ -50,7 +50,12 @@ import kotlinx.serialization.json.Json
  * - `halfSeatOffset`: the row is drawn half a seat to the right.
  *
  * Every seat place is numbered, wheelchair spaces included (see
- * [io.github.katznmeik.cinexperience.core.model.labels]).
+ * [io.github.katznmeik.cinexperience.core.model.labels]). That holds for format 1
+ * and 2 layouts too: the stored JSON is the same, only its reading changed.
+ * Older builds didn't count wheelchair spaces (they were "Wheelchair 1, 2, …" of
+ * their row), so an older build reading a layout with a `W` numbers it the old
+ * way, and the seats after it one lower. Accepted before v1.0: the format version
+ * only guards fields an older build can't read.
  *
  * Format versions: 1 knows only `S` seats; 2 adds the seat kinds `W`, `C`, `F`;
  * 3 adds `direction` and `seatLabels`. A layout is written with the lowest
@@ -197,7 +202,7 @@ internal object LayoutJson {
         seatLabels.forEach { label ->
             require(label == null || LayoutCell.Seat.isValidFixedLabel(label)) {
                 "Row ${row + 1} has an invalid seat label '$label' (1–${LayoutCell.Seat.MAX_FIXED_LABEL_LENGTH} " +
-                    "characters, no surrounding spaces)"
+                    "characters, no surrounding spaces, no control or format characters)"
             }
         }
         val labels = seatLabels.iterator()

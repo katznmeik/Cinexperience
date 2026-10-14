@@ -257,7 +257,14 @@ class SeatLabelsTest {
         val id = SeatId(1)
         assertEquals("R", LayoutCell.Seat(id, fixedLabel = "R").fixedLabel)
         assertEquals("R12a", LayoutCell.Seat(id, fixedLabel = "R12a").fixedLabel)
-        listOf("", " ", "R ", " R", "ABCDE").forEach { label ->
+        assertEquals("Ü 1", LayoutCell.Seat(id, fixedLabel = "Ü 1").fixedLabel) // inner spaces and letters are fine
+        // Blank, surrounding spaces, too long, ISO control characters (tab, newline, NUL, DEL, C1)
+        // and format characters (zero-width space/joiner, bidi marks and overrides, soft hyphen, BOM).
+        listOf(
+            "", " ", "R ", " R", "ABCDE",
+            "R\t1", "R\n", "\u0000", "R\u007F", "R\u0085",
+            "R\u200B", "\u200DR", "R\u200E", "\u202ER", "R\u2066", "R\u00AD", "\uFEFFR",
+        ).forEach { label ->
             assertFailsWith<IllegalArgumentException>(label) { LayoutCell.Seat(id, fixedLabel = label) }
         }
         assertFailsWith<IllegalArgumentException> { layoutOf("S.").withFixedLabel(0, 1, "R") }

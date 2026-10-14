@@ -238,6 +238,16 @@ class SeatLayoutTest {
         assertFalse(seed.hasSameStructureAs(seed.withSeatKind(0, 0, SeatKind.SOFA)))
         assertFalse(seed.hasSameStructureAs(seed.updateRow(0) { it.copy(blockStartNumbers = listOf(2)) }))
         assertFalse(seed.hasSameStructureAs(seed.withCellType(0, 3, CellType.AISLE)))
+        // Block starts that mean nothing for the labels don't count: trailing nulls, entries beyond the blocks.
+        val withStarts = seed.updateRow(0) { it.copy(blockStartNumbers = listOf(null, 4)) } // 2 blocks
+        assertTrue(withStarts.hasSameStructureAs(withStarts.updateRow(0) { it.copy(blockStartNumbers = listOf(null, 4, null)) }))
+        assertTrue(withStarts.hasSameStructureAs(withStarts.updateRow(0) { it.copy(blockStartNumbers = listOf(null, 4, 9, null)) }))
+        assertTrue(seed.hasSameStructureAs(seed.updateRow(1) { it.copy(blockStartNumbers = listOf(null)) })) // 1 block
+        assertTrue(seed.hasSameStructureAs(seed.updateRow(1) { it.copy(blockStartNumbers = listOf(null, 3)) }))
+        assertFalse(withStarts.hasSameStructureAs(withStarts.updateRow(0) { it.copy(blockStartNumbers = listOf(null, 5)) }))
+        assertFalse(withStarts.hasSameStructureAs(withStarts.updateRow(0) { it.copy(blockStartNumbers = listOf(1, 4)) }))
+        assertEquals(listOf(null, 4), withStarts.updateRow(0) { it.copy(blockStartNumbers = listOf(null, 4, 7)) }
+            .withCanonicalSeatIds().rows[0].blockStartNumbers)
         // A seat deleted and redrawn in the same place has a new id but the same structure.
         assertTrue(seed.hasSameStructureAs(seed.withCellType(0, 0, CellType.GAP).withCellType(0, 0, CellType.SEAT).withIdsShiftedBy(0)))
     }
