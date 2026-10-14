@@ -162,5 +162,10 @@ internal data class SeedHallJson(
     val name: String,
     val screenWidth: Float? = null,
     val screenDistance: Float? = null,
+    /**
+     * Hall.screenOffset in seat widths (0.5 steps, ScreenOffsetRules); missing or
+     * 0 = centred. Yorck's plans don't show it, so seed halls usually omit it.
+     */
+    val screenOffset: Float? = null,
     val layout: SeatLayoutJson? = null,
 )

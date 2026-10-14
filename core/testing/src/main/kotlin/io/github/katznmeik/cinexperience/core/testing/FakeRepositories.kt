@@ -13,6 +13,7 @@ import io.github.katznmeik.cinexperience.core.model.CinemaSummary
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
+import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
@@ -153,6 +154,16 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         return updateCinema(cinemaId, name, cinema.address, cinema.notes)
     }
 
+    /** Like Room: false for an unknown cinema; any number of cinemas can be favourites. */
+    override suspend fun setFavourite(cinemaId: Long, favourite: Boolean): Boolean {
+        write()
+        if (store.value.cinemas.none { it.id == cinemaId }) return false
+        store.update { s ->
+            s.copy(cinemas = s.cinemas.map { if (it.id == cinemaId) it.copy(isFavourite = favourite) else it })
+        }
+        return true
+    }
+
     override suspend fun deleteCinema(cinemaId: Long): DeleteResult {
         write()
         val cinema = store.value.cinemas.firstOrNull { it.id == cinemaId } ?: return DeleteResult.NOT_FOUND
@@ -205,6 +216,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
     override suspend fun updateHall(hall: Hall): Boolean {
         write()
         val cleanName = hall.name.requireName()
+        require(ScreenOffsetRules.isValid(hall.screenOffset)) { "Invalid screen offset ${hall.screenOffset}" }
         val existing = store.value.halls.firstOrNull { it.id == hall.id } ?: return false
         require(existing.cinemaId == hall.cinemaId) { "Moving a hall to another cinema is not supported" }
         val stored = existing.layout
@@ -223,6 +235,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
             layout = newLayout,
             screenWidth = hall.screenWidth,
             screenDistance = hall.screenDistance,
+            screenOffset = hall.screenOffset + 0f,
             referenceImagePath = hall.referenceImagePath.clean(),
             notes = hall.notes.clean(),
             nextSeatId = maxOf(mark, newLayout?.nextSeatId ?: 0),

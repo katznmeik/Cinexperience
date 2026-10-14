@@ -193,7 +193,7 @@ class HallDetailViewModel(
             SelectedSeat(
                 seatId = id,
                 label = label,
-                viewingAngle = layout?.let { viewingAngle(it, hall.screenWidth, hall.screenDistance, id) },
+                viewingAngle = layout?.let { viewingAngle(it, hall.screenWidth, hall.screenDistance, id, screenOffset = hall.screenOffset) },
                 visual = visuals[id] ?: SeatVisual.Neutral,
                 overrideColour = state?.overrideColour,
                 averageRating = state?.averageRating,

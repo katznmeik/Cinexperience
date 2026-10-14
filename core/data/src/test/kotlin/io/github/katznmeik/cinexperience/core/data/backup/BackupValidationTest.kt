@@ -93,8 +93,9 @@ internal class BackupValidationTest : BackupTestBase() {
     fun newerBackupVersionAsksForAnUpdate() = runTest {
         exportValid()
         val newer = modified("newer.zip") {
-            editJson(BackupFormat.MANIFEST) { JsonObject(it + ("backupVersion" to JsonPrimitive(2)) + ("newField" to JsonPrimitive(true))) }
+            editJson(BackupFormat.MANIFEST) { JsonObject(it + ("backupVersion" to JsonPrimitive(3)) + ("newField" to JsonPrimitive(true))) }
         }
+        assertEquals(2, BackupFormat.BACKUP_VERSION)
         val e = assertRejected(newer, BackupError.NEWER_VERSION)
         assertTrue(e.message!!.contains("newer version"))
     }
@@ -226,6 +227,8 @@ internal class BackupValidationTest : BackupTestBase() {
             },
             "blank-name" to { d -> d.copy(cinemas = d.cinemas.mapIndexed { i, c -> if (i == 0) c.copy(name = " ") else c }) },
             "mark" to { d -> d.copy(halls = d.halls.mapIndexed { i, h -> if (i == 0) h.copy(nextSeatId = 0) else h }) },
+            "offset-step" to { d -> d.copy(halls = d.halls.mapIndexed { i, h -> if (i == 0) h.copy(screenOffset = 1.25f) else h }) },
+            "offset-range" to { d -> d.copy(halls = d.halls.mapIndexed { i, h -> if (i == 0) h.copy(screenOffset = -30.5f) else h }) },
         )
         for ((name, change) in cases) {
             assertRejected(modified("$name.zip") { editData(change) }, BackupError.INVALID_DATA)

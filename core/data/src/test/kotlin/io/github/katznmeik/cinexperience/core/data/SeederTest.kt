@@ -138,6 +138,66 @@ internal class SeederTest : DatabaseTest() {
         assertEquals(4, halls.getHall(hall.id)!!.layout!!.seatCount)
     }
 
+    private fun seedWithOffset(version: Int, offset: Float?) = """
+        {"seedVersion": $version, "cinemas": [
+          {"seedKey": "alpha", "name": "Alpha", "halls": [
+            {"seedKey": "alpha/1", "name": "Saal 1" ${offset?.let { """, "screenOffset": $it""" } ?: ""}}
+          ]}
+        ]}
+    """
+
+    @Test
+    fun newHallsGetTheSeedScreenOffsetOrStartCentred() = runTest {
+        seeder(seedWithOffset(1, -1.5f)).seedIfNeeded()
+        assertEquals(-1.5f, halls.getHall(db.hallDao().getAll().single().id)!!.screenOffset)
+
+        seeder(v1.replace("\"seedVersion\": 1", "\"seedVersion\": 2")).seedIfNeeded()
+        assertEquals(-1.5f, halls.getHall(db.hallDao().getAll().single().id)!!.screenOffset) // never reset
+    }
+
+    @Test
+    fun screenOffsetFollowsTheFillRulesWithZeroAsEmpty() = runTest {
+        seeder(seedWithOffset(1, null)).seedIfNeeded()
+        val hallId = db.hallDao().getAll().single().id
+        assertEquals(0f, halls.getHall(hallId)!!.screenOffset)
+
+        // An explicit 0 in the seed is the same as none.
+        seeder(seedWithOffset(2, 0f)).seedIfNeeded()
+        assertEquals(0f, halls.getHall(hallId)!!.screenOffset)
+
+        // A still centred screen gets a new seed offset.
+        seeder(seedWithOffset(3, 2f)).seedIfNeeded()
+        assertEquals(2f, halls.getHall(hallId)!!.screenOffset)
+
+        // A user's offset is never overwritten.
+        halls.updateHall(halls.getHall(hallId)!!.copy(screenOffset = -1f))
+        seeder(seedWithOffset(4, 3f)).seedIfNeeded()
+        assertEquals(-1f, halls.getHall(hallId)!!.screenOffset)
+
+        // Centred by the user: the same seed offset doesn't come back...
+        halls.updateHall(halls.getHall(hallId)!!.copy(screenOffset = 0f))
+        seeder(seedWithOffset(5, 3f)).seedIfNeeded()
+        assertEquals(0f, halls.getHall(hallId)!!.screenOffset)
+        // ...but a changed one fills it, like a cleared address gets a changed seed address.
+        seeder(seedWithOffset(6, 2.5f)).seedIfNeeded()
+        assertEquals(2.5f, halls.getHall(hallId)!!.screenOffset)
+    }
+
+    @Test
+    fun seedingKeepsFavouriteCinemas() = runTest {
+        seeder(v1).seedIfNeeded()
+        val alpha = db.cinemaDao().getAll().single { it.seedKey == "alpha" }
+        val mine = cinemas.createCinema("Gamma") // adopted by the v2 seed
+        cinemas.setFavourite(alpha.id, true)
+        cinemas.setFavourite(mine, true)
+
+        seeder(v2).seedIfNeeded()
+
+        val all = db.cinemaDao().getAll()
+        assertEquals(setOf(alpha.id, mine), all.filter { it.isFavourite }.map { it.id }.toSet())
+        assertEquals("gamma", all.single { it.id == mine }.seedKey)
+    }
+
     @Test
     fun seedLayoutFilledIntoAHallRespectsItsSeatIdMark() = runTest {
         seeder(seedWith(1, null, "SSS")).seedIfNeeded() // ids 1..3

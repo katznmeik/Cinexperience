@@ -28,6 +28,8 @@ internal data class CinemaEntity(
     @ColumnInfo(name = "is_preloaded") val isPreloaded: Boolean,
     /** Stable key from the seed asset, null for user-added cinemas. */
     @ColumnInfo(name = "seed_key") val seedKey: String?,
+    /** Marked as a favourite by the user (spec §6.1, §6.2). Added in schema version 2. */
+    @ColumnInfo(name = "is_favourite", defaultValue = "0") val isFavourite: Boolean = false,
 )
 
 @Entity(
@@ -64,6 +66,12 @@ internal data class HallEntity(
      * earlier layout, so new seats must get ids at or above it (Hall.nextSeatId).
      */
     @ColumnInfo(name = "next_seat_id", defaultValue = "1") val nextSeatId: Int = 1,
+    /**
+     * Horizontal shift of the screen's centre from the grid's centre, in seat widths
+     * (Hall.screenOffset; the repositories only store ScreenOffsetRules.isValid
+     * values). Added in schema version 2.
+     */
+    @ColumnInfo(name = "screen_offset", defaultValue = "0") val screenOffset: Float = 0f,
 )
 
 @Entity(

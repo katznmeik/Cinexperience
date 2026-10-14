@@ -87,6 +87,36 @@ internal class HallRepositoryTest : DatabaseTest() {
     }
 
     @Test
+    fun screenOffsetIsSavedKeptByOtherEditsAndValidated() = runTest {
+        val hallId = newHall(layoutOf("SSSS", "SSSS"))
+        assertEquals(0f, halls.getHall(hallId)!!.screenOffset)
+
+        assertTrue(halls.updateHall(halls.getHall(hallId)!!.copy(screenWidth = 3f, screenDistance = 1f, screenOffset = -1.5f)))
+        assertEquals(-1.5f, halls.getHall(hallId)!!.screenOffset)
+        assertEquals(-1.5f, halls.observeHallDetail(hallId).first()!!.hall.screenOffset)
+        assertEquals(-1.5f, cinemas.observeCinemaDetails().first().flatMap { it.halls }.single().hall.screenOffset)
+
+        // Callers that don't deal with the offset keep it: renaming, a layout edit, other fields.
+        assertTrue(halls.renameHall(hallId, "Saal 2"))
+        val hall = halls.getHall(hallId)!!
+        assertTrue(halls.updateHall(hall.copy(layout = hall.startLayoutEdit().removeRow(1).layout, notes = "x")))
+        assertEquals(-1.5f, halls.getHall(hallId)!!.screenOffset)
+
+        // Invalid offsets are rejected and change nothing.
+        for (bad in listOf(0.25f, 30.5f, -100f, Float.NaN, Float.POSITIVE_INFINITY)) {
+            val stored = halls.getHall(hallId)!!
+            assertThrows("$bad", IllegalArgumentException::class.java) {
+                runBlocking { halls.updateHall(stored.copy(screenOffset = bad, notes = "changed")) }
+            }
+            assertEquals(stored, halls.getHall(hallId))
+        }
+
+        // -0.0 is stored as 0.0, so a saved centred screen equals a new hall's.
+        assertTrue(halls.updateHall(halls.getHall(hallId)!!.copy(screenOffset = -0f)))
+        assertEquals(0f.toRawBits(), halls.getHall(hallId)!!.screenOffset.toRawBits())
+    }
+
+    @Test
     fun hallDetailCombinesLayoutScoresVisitsAndSeatStates() = runTest {
         val hallId = newHall(layoutOf("SS|SS"))
         visits.save(visit(hallId, day = 1, seat = 1, seatRating = 5, sound = 4))

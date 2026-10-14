@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import io.github.katznmeik.cinexperience.core.data.DatabaseConfig
 import java.time.LocalDate
 
@@ -27,7 +28,7 @@ import java.time.LocalDate
         SeedSnapshotEntity::class,
         MetadataEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -41,13 +42,25 @@ internal abstract class CinexDatabase : RoomDatabase() {
     abstract fun backupDao(): BackupDao
 
     companion object {
-        /** Every migration, in order. Empty while the schema is at version 1. */
-        val ALL_MIGRATIONS: Array<Migration> = emptyArray()
+        /** Every migration, in order. */
+        val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
 
         fun build(context: Context): CinexDatabase =
             Room.databaseBuilder(context.applicationContext, CinexDatabase::class.java, DatabaseConfig.DATABASE_NAME)
                 .addMigrations(*ALL_MIGRATIONS)
                 .build()
+    }
+}
+
+/**
+ * 1 → 2 (M8): favourite cinemas (`cinema.is_favourite`, spec §4.1) and the
+ * screen's horizontal offset (`hall.screen_offset`, spec §4.2). Existing rows
+ * keep all their data and get the defaults: not a favourite, screen centred.
+ */
+internal val MIGRATION_1_2: Migration = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `cinema` ADD COLUMN `is_favourite` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `hall` ADD COLUMN `screen_offset` REAL NOT NULL DEFAULT 0")
     }
 }
 

@@ -15,13 +15,17 @@ data class ViewingAngle(val fieldOfViewDegrees: Double, val offAxisDegrees: Doub
 
 /**
  * Approximate viewing angle of [seatId], or `null` when the hall has no usable
- * screen geometry or the seat is not in the layout.
+ * screen geometry or the seat is not in the layout. Pass the hall's
+ * [Hall.screenOffset] as [screenOffset] (by name: it is the last parameter).
  *
  * Geometry assumptions (a flat, top-down model; seat heights and rake are ignored):
  * - The unit is one seat width (one grid column). Column `c` spans `[c, c + 1]`;
  *   a row with [LayoutRow.halfSeatOffset] is shifted right by 0.5.
- * - The screen is flat, parallel to the rows and centred over the grid, i.e. it
- *   spans `columnCount / 2 ± screenWidth / 2`. [screenWidth] is in seat widths (§4.2).
+ * - The screen is flat (straight, §4.3) and parallel to the rows. Its centre is
+ *   at `columnCount / 2 + screenOffset`, so it spans
+ *   `columnCount / 2 + screenOffset ± screenWidth / 2`. [screenWidth] and
+ *   [screenOffset] are in seat widths (§4.2); a negative offset moves the screen
+ *   to the left (towards column 0), 0 centres it over the grid.
  * - The seat's eye point is the centre of its cell. Its distance to the screen
  *   plane is `(screenDistance + row + 0.5) × rowDepthInSeatWidths`, where
  *   [screenDistance] and the rows are counted in row depths (§4.2). Rows without
@@ -37,14 +41,16 @@ fun viewingAngle(
     screenDistance: Float?,
     seatId: SeatId,
     rowDepthInSeatWidths: Double = DEFAULT_ROW_DEPTH_IN_SEAT_WIDTHS,
+    screenOffset: Float = ScreenOffsetRules.CENTRED,
 ): ViewingAngle? {
     if (screenWidth == null || screenDistance == null) return null
     if (!(screenWidth > 0f) || !(screenDistance >= 0f) || !(rowDepthInSeatWidths > 0.0)) return null
+    if (!screenOffset.isFinite()) return null
     val position = layout.positionOf(seatId) ?: return null
     val offset = if (layout.rows[position.row].halfSeatOffset) 0.5 else 0.0
     val seatX = position.column + 0.5 + offset
     val depth = (screenDistance + position.row + 0.5) * rowDepthInSeatWidths
-    val screenCentre = layout.columnCount / 2.0
+    val screenCentre = layout.columnCount / 2.0 + screenOffset
     val left = screenCentre - screenWidth / 2.0
     val right = screenCentre + screenWidth / 2.0
     val fieldOfView = Math.toDegrees(atan2(right - seatX, depth) - atan2(left - seatX, depth))

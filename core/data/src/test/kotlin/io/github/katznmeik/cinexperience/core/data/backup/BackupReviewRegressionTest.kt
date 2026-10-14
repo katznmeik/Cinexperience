@@ -257,6 +257,29 @@ internal class BackupReviewRegressionTest : BackupTestBase() {
     }
 
     @Test
+    fun exportAndSafetyCopiesCheckTheScreenOffset() = runTest {
+        // The repositories never store such an offset; a damaged database could.
+        val (deviceB, doc) = prepareTwoDevices()
+        val hall = deviceB.db.hallDao().getAll().first()
+        deviceB.db.hallDao().update(hall.copy(screenOffset = 0.3f))
+        try {
+            deviceB.repository.export(deviceB.document("b.zip"))
+            fail("Expected the export to fail")
+        } catch (e: BackupException) {
+            assertEquals(BackupError.INVALID_DATA, e.error)
+            assertTrue(e.message!!, e.message!!.startsWith("Your data can't be backed up: hall “${hall.name}” has an invalid screen position"))
+        }
+        try {
+            deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
+            fail("Expected the import to fail")
+        } catch (e: BackupException) {
+            assertEquals(BackupError.INVALID_DATA, e.error)
+            assertTrue(e.message!!, e.message!!.startsWith("Current data can't be backed up: hall “${hall.name}” has an invalid screen position"))
+        }
+        assertTrue(deviceB.safetyCopyFiles().isEmpty())
+    }
+
+    @Test
     fun importIsCancelledWhenTheCurrentDataCantBeBackedUp() = runTest {
         val (deviceB, doc) = prepareTwoDevices()
         val hallName = breakALayout(deviceB)

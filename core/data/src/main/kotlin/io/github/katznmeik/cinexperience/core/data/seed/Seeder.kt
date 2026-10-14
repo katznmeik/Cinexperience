@@ -9,6 +9,7 @@ import io.github.katznmeik.cinexperience.core.data.db.SeedSnapshotEntity
 import io.github.katznmeik.cinexperience.core.data.db.seatIdMark
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.data.json.SeedJson
+import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import java.util.Locale
 
@@ -25,10 +26,22 @@ import java.util.Locale
  *   inserted as preloaded; a new hall of an existing cinema goes into that cinema.
  * - **Never overwrite, never delete.** Names and notes are never touched. The
  *   seed only fills fields that are empty (`null`): a cinema's address, a hall's
- *   layout, screen width and screen distance — and only when the seed's value is
+ *   layout, screen width and screen distance (and screen offset, see below) —
+ *   and only when the seed's value is
  *   *new*, i.e. differs from the value the seed supplied last time (kept in
  *   `seed_snapshot`). So a value the user cleared stays cleared until the seed
  *   ships a different one (e.g. a corrected address or a newly transcribed layout).
+ * - **Screen offset.** `screen_offset` is not nullable; its "empty" value is 0
+ *   (centred), the default every hall has until someone moves the screen. So
+ *   the same rule applies with 0 in place of null: a hall's non-zero offset is
+ *   never touched; an offset of 0 is filled with the seed's non-zero offset when
+ *   that value is new (snapshot field `screenOffset`; a missing or 0 seed offset
+ *   is recorded as null). Trade-off: a user who centred a screen on purpose
+ *   looks the same as one who never moved it, so a *changed* seed offset fills
+ *   it, exactly like a cleared address gets a changed seed address; an
+ *   unchanged seed offset never does. A separate "set by the user" flag would
+ *   need another column for a case that Yorck's plans (which don't show the
+ *   offset, spec §9) make unlikely.
  * - **Seat ids.** A seed layout's ids start at 1; when it fills an existing hall
  *   it is shifted above the hall's seat id mark so ids are never reused.
  */
@@ -89,6 +102,9 @@ internal class Seeder(
                 // Canonical JSON of the seed layout with ids from 1, used for comparisons.
                 val seedLayout = seedHall.layout?.let(LayoutJson::fromJson)
                 val seedLayoutJson = seedLayout?.let(LayoutJson::encode)
+                // The screen offset is not nullable: 0 (centred) is its "empty" value, on
+                // the hall and in the seed (missing and 0 are the same). See the class doc.
+                val seedOffset = seedHall.screenOffset.offsetOrNull()
                 val matchedHall = halls.firstOrNull { it.seedKey == key }
                     ?: halls.filter { it.seedKey == null && it.cinemaId == cinemaId && sameName(it.name, seedHall.name) }
                         .minByOrNull { it.id }
@@ -99,6 +115,7 @@ internal class Seeder(
                         layoutJson = seedLayoutJson,
                         screenWidth = seedHall.screenWidth,
                         screenDistance = seedHall.screenDistance,
+                        screenOffset = seedOffset?.toFloat() ?: ScreenOffsetRules.CENTRED,
                         referenceImagePath = null,
                         notes = null,
                         isPreloaded = true,
@@ -114,6 +131,8 @@ internal class Seeder(
                             ?.toFloat(),
                         screenDistance = snapshots.fill(HALL, key, "screenDistance", matchedHall.screenDistance?.toString(), seedHall.screenDistance?.toString())
                             ?.toFloat(),
+                        screenOffset = snapshots.fill(HALL, key, SCREEN_OFFSET, matchedHall.screenOffset.offsetOrNull(), seedOffset)
+                            ?.toFloat() ?: ScreenOffsetRules.CENTRED,
                     )
                     val fillLayout = snapshots.fill(HALL, key, "layout", matchedHall.layoutJson, seedLayoutJson)
                     if (matchedHall.layoutJson == null && fillLayout != null && seedLayout != null) {
@@ -129,10 +148,14 @@ internal class Seeder(
                 snapshots.record(HALL, key, "layout", seedLayoutJson)
                 snapshots.record(HALL, key, "screenWidth", seedHall.screenWidth?.toString())
                 snapshots.record(HALL, key, "screenDistance", seedHall.screenDistance?.toString())
+                snapshots.record(HALL, key, SCREEN_OFFSET, seedOffset)
             }
         }
         db.seedSnapshotDao().putAll(snapshots.changed())
     }
+
+    /** A screen offset as a seed field value: `null` for centred (0) or missing. */
+    private fun Float?.offsetOrNull(): String? = this?.takeIf { it != ScreenOffsetRules.CENTRED }?.toString()
 
     private fun sameName(a: String, b: String): Boolean =
         a.trim().lowercase(Locale.ROOT) == b.trim().lowercase(Locale.ROOT)
@@ -166,13 +189,15 @@ internal class Seeder(
         const val KEY_SEED_VERSION: String = "seed_version"
         private const val CINEMA = "cinema"
         private const val HALL = "hall"
+        private const val SCREEN_OFFSET = "screenOffset"
     }
 }
 
 internal object SeedParser {
     /**
      * Parses and validates seed JSON: positive `seedVersion`, non-blank and unique
-     * seed keys (hall keys are unique across all cinemas) and names, valid layouts.
+     * seed keys (hall keys are unique across all cinemas) and names, valid layouts
+     * and screen offsets.
      * `address` may be null or missing, `halls` may be empty or missing.
      */
     fun parse(text: String): SeedJson {
@@ -190,6 +215,9 @@ internal object SeedParser {
                     "Blank or duplicate hall seedKey '${hall.seedKey}'"
                 }
                 require(hall.name.isNotBlank()) { "Hall '${hall.seedKey}' has a blank name" }
+                hall.screenOffset?.let { offset ->
+                    require(ScreenOffsetRules.isValid(offset)) { "Hall '${hall.seedKey}' has an invalid screenOffset $offset" }
+                }
                 hall.layout?.let(LayoutJson::fromJson)
             }
         }

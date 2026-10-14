@@ -21,6 +21,7 @@ internal fun CinemaEntity.toModel() = Cinema(
     notes = notes,
     isPreloaded = isPreloaded,
     seedKey = seedKey,
+    isFavourite = isFavourite,
 )
 
 /**
@@ -42,6 +43,7 @@ internal fun HallEntity.toModel(maxDataSeatId: Int = 0): Hall {
         layout = layout,
         screenWidth = screenWidth,
         screenDistance = screenDistance,
+        screenOffset = screenOffset,
         referenceImagePath = referenceImagePath,
         notes = notes,
         isPreloaded = isPreloaded,
