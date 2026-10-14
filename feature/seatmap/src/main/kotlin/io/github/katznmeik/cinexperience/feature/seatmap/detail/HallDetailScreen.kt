@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -31,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.model.SeatId
@@ -40,11 +42,15 @@ import io.github.katznmeik.cinexperience.core.seatmapui.seatChoices
 import io.github.katznmeik.cinexperience.core.seatmapui.seatMapDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.viewingAngleText
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
-import io.github.katznmeik.cinexperience.core.ui.component.NavigationRow
+import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
+import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
+import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
+import io.github.katznmeik.cinexperience.core.ui.component.StarRatingDisplay
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.countText
+import io.github.katznmeik.cinexperience.core.ui.text.dateText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 @Composable
@@ -52,7 +58,8 @@ internal fun HallDetailEntry(
     viewModel: HallDetailViewModel,
     onBack: () -> Unit,
     onEditLayout: (Long) -> Unit,
-    onAddVisit: () -> Unit,
+    onAddVisit: (Long) -> Unit,
+    onOpenVisit: (Long) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     HallDetailScreen(
@@ -60,6 +67,7 @@ internal fun HallDetailEntry(
         onBack = onBack,
         onEditLayout = onEditLayout,
         onAddVisit = onAddVisit,
+        onOpenVisit = onOpenVisit,
         onSeatClick = viewModel::onSeatClick,
         onSeatChosen = viewModel::selectSeat,
     )
@@ -72,13 +80,14 @@ internal fun hallMetaText(state: HallDetailUiState.Loaded): String = listOfNotNu
     if (state.visitCount == 0) "no visits" else countText(state.visitCount, "visit"),
 ).joinToString(" · ")
 
-/** Hall detail (spec §6.3). Scores, the seat sheet and the visit list follow in M4. */
+/** Hall detail (spec §6.3). Scores and the seat sheet follow in M4. */
 @Composable
 internal fun HallDetailScreen(
     state: HallDetailUiState,
     onBack: () -> Unit,
     onEditLayout: (Long) -> Unit,
-    onAddVisit: () -> Unit,
+    onAddVisit: (Long) -> Unit,
+    onOpenVisit: (Long) -> Unit,
     onSeatClick: (SeatId) -> Unit,
     onSeatChosen: (SeatId) -> Unit,
     modifier: Modifier = Modifier,
@@ -112,9 +121,11 @@ internal fun HallDetailScreen(
                         )
                     }
                 }
-                RowGroup(Modifier.padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 24.dp)) {
-                    NavigationRow(title = "Add visit", subtitle = "Placeholder link", onClick = onAddVisit)
-                }
+                VisitHistory(
+                    visits = state.visits,
+                    onAddVisit = { onAddVisit(state.hallId) },
+                    onOpenVisit = onOpenVisit,
+                )
             }
             HallDetailUiState.Loading -> BackTopBar(onBack)
             HallDetailUiState.NotFound -> MessageContent("This hall no longer exists.", onBack)
@@ -207,6 +218,72 @@ private fun ColumnScope.MapContent(
                 .padding(top = 12.dp),
         )
         TextButton(onClick = { showPicker = false }, modifier = Modifier.align(Alignment.End)) { Text("Done") }
+    }
+}
+
+/** "VISITS" with "Add visit", then the hall's visits, newest first (spec §6.3). */
+@Composable
+private fun VisitHistory(visits: List<HallVisitRow>, onAddVisit: () -> Unit, onOpenVisit: (Long) -> Unit) {
+    Column(
+        Modifier.padding(start = 12.dp, end = 12.dp, top = 20.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionHeader("Visits", Modifier.weight(1f))
+            OutlinedPillButton(text = "Add visit", onClick = onAddVisit)
+        }
+        RowGroup {
+            if (visits.isEmpty()) {
+                Text(
+                    text = "No visits yet. Log one with \"Add visit\".",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CinexTheme.colors.textMuted,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+            visits.forEachIndexed { index, visit ->
+                if (index > 0) RowDivider()
+                VisitHistoryRow(visit, onClick = { onOpenVisit(visit.visitId) })
+            }
+        }
+    }
+}
+
+/** Second line of a visit row: "12 Sep 2026 · Row G · Seat 10 · OmU"; missing parts are left out. */
+internal fun HallVisitRow.detailText(): String = listOfNotNull(
+    dateText(date),
+    seatLabel?.displayText?.replace(", ", " · "),
+    format?.displayName,
+).joinToString(" · ")
+
+@Composable
+private fun VisitHistoryRow(visit: HallVisitRow, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = visit.filmTitle ?: "Untitled",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = if (visit.filmTitle == null) CinexTheme.colors.textMuted else CinexTheme.colors.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                visit.detailText(),
+                style = MaterialTheme.typography.bodySmall,
+                color = CinexTheme.colors.textMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        visit.seatRating?.let { StarRatingDisplay(it.value) }
     }
 }
 

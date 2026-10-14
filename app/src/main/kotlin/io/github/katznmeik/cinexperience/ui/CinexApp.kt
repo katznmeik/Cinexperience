@@ -34,9 +34,10 @@ import io.github.katznmeik.cinexperience.feature.seatmap.layoutEditorScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToHallDetail
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToLayoutEditor
 import io.github.katznmeik.cinexperience.feature.visits.allVisitsScreen
+import io.github.katznmeik.cinexperience.feature.visits.navigateToAddVisit
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAllVisits
-import io.github.katznmeik.cinexperience.feature.visits.navigateToVisitEdit
-import io.github.katznmeik.cinexperience.feature.visits.visitEditScreen
+import io.github.katznmeik.cinexperience.feature.visits.navigateToEditVisit
+import io.github.katznmeik.cinexperience.feature.visits.visitEditScreens
 
 /**
  * Root composable: bottom navigation (shown on the three tab screens only, as in
@@ -87,7 +88,7 @@ fun CinexApp(
             cinemasScreen(
                 cinemaRepository = container.cinemaRepository,
                 onOpenCinema = navController::navigateToCinemaDetail,
-                onAddVisit = navController::navigateToVisitEdit,
+                onAddVisit = { navController.navigateToAddVisit() },
             )
             cinemaDetailScreen(
                 cinemaRepository = container.cinemaRepository,
@@ -100,14 +101,20 @@ fun CinexApp(
                 hallRepository = container.hallRepository,
                 onBack = navController::navigateUp,
                 onEditLayout = navController::navigateToLayoutEditor,
-                onAddVisit = navController::navigateToVisitEdit,
+                onAddVisit = navController::navigateToAddVisit,
+                onOpenVisit = navController::navigateToEditVisit,
             )
             layoutEditorScreen(
                 hallRepository = container.hallRepository,
                 referenceImageStore = container.referenceImageStore,
                 onClose = navController::navigateUp,
             )
-            visitEditScreen(onBack = navController::navigateUp)
+            visitEditScreens(
+                cinemaRepository = container.cinemaRepository,
+                visitRepository = container.visitRepository,
+                visitPhotoStore = container.visitPhotoStore,
+                onClose = navController::navigateUp,
+            )
 
             // Rankings tab
             rankingsScreen()
@@ -125,7 +132,11 @@ fun CinexApp(
                 onBack = navController::navigateUp,
                 onOpenCinema = navController::navigateToCinemaDetail,
             )
-            allVisitsScreen(onBack = navController::navigateUp)
+            allVisitsScreen(
+                visitRepository = container.visitRepository,
+                onBack = navController::navigateUp,
+                onOpenVisit = navController::navigateToEditVisit,
+            )
         }
     }
 }

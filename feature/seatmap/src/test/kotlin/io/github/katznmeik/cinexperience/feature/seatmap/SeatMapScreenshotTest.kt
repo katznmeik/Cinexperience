@@ -13,7 +13,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
+import io.github.katznmeik.cinexperience.core.model.Rating
+import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
+import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
@@ -34,6 +37,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.LocalDate
 
 /**
  * Screenshots of the hall detail and the layout editor with invented data
@@ -69,7 +73,7 @@ class SeatMapScreenshotTest {
 
     @Composable
     private fun hallDetail(state: HallDetailUiState) {
-        HallDetailScreen(state, onBack = {}, onEditLayout = {}, onAddVisit = {}, onSeatClick = {}, onSeatChosen = {})
+        HallDetailScreen(state, onBack = {}, onEditLayout = {}, onAddVisit = {}, onOpenVisit = {}, onSeatClick = {}, onSeatChosen = {})
     }
 
     @Test
@@ -84,6 +88,27 @@ class SeatMapScreenshotTest {
         val state = hallState(SampleData.DELPHI_LUX_SAAL_1) { it.onSeatClick(seat) }
         check((state as HallDetailUiState.Loaded).selectedSeat?.label == SeatLabel("G", 6))
         capture("hall_detail_selected_seat") { hallDetail(state) }
+    }
+
+    /** The visit history below the map, on a tall screen so it is fully visible. */
+    @Test
+    @Config(qualifiers = "w412dp-h1400dp-port-night-xxhdpi")
+    fun hallDetailWithVisitHistory() {
+        val rowG = SampleLayouts.splitHall.rows[6].seatIds
+        val visits = listOf(
+            Visit(
+                id = 9_001, hallId = SampleData.DELPHI_LUX_SAAL_1, date = LocalDate.of(2026, 10, 3),
+                filmTitle = "Perfect Days", seatId = rowG[13], screeningFormat = ScreeningFormat.OMU, seatRating = Rating(4),
+            ),
+            Visit(
+                id = 9_002, hallId = SampleData.DELPHI_LUX_SAAL_1, date = LocalDate.of(2026, 9, 19),
+                filmTitle = "The Brutalist", seatId = rowG[2], screeningFormat = ScreeningFormat.SEVENTY_MM, seatRating = Rating(5),
+            ),
+            Visit(id = 9_003, hallId = SampleData.DELPHI_LUX_SAAL_1, date = LocalDate.of(2026, 8, 30), seatRating = Rating(2)),
+        )
+        repository.store.value = repository.store.value.copy(visits = visits)
+        val state = hallState(SampleData.DELPHI_LUX_SAAL_1)
+        capture("hall_detail_visit_history") { hallDetail(state) }
     }
 
     @Test
