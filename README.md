@@ -150,15 +150,20 @@ The version lives in one place, `cinexVersionName` in `gradle.properties`
 `MAJOR * 10000 + MINOR * 100 + PATCH` (1.0.0 → 10000, 1.2.3 → 10203), so each new
 version installs as an update.
 
-To publish a version: raise `cinexVersionName`, merge it into the integration
-branch, then push a tag `v<version>` on that commit:
+To publish a version: raise `cinexVersionName` and merge it into the integration
+branch. Then either run the release from GitHub (Actions → Release → Run
+workflow, on the integration branch, enter the version, e.g. `1.0.0`; this works
+from the phone, and it is how Claude releases when you ask it to), or push a tag
+`v<version>` on that commit:
 
 ```sh
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-`.github/workflows/release.yml` then checks that the tag matches the version,
+A run from GitHub releases the newest commit of the branch and creates the tag
+`v<version>` on it; it refuses a version whose tag already exists.
+`.github/workflows/release.yml` checks that the tag matches the version,
 runs the tests and lint, builds the release APK signed with the fixed key (it
 fails if a signing secret is missing), checks with `scripts/verify-release-apk.sh`
 that the APK verifies and its only signer is the release certificate, and creates
