@@ -10,15 +10,17 @@ import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.time.LocalDate
 
 /*
- * Backup file format (spec §8), version 1. A zip file with:
+ * Backup file format (spec §8), version 2. A zip file with:
  *
  *   manifest.json   what the backup is (BackupManifest), e.g.
- *                   { "format": "cinexperience-backup", "backupVersion": 1,
+ *                   { "format": "cinexperience-backup", "backupVersion": 2,
  *                     "appVersion": "0.1.0", "exportedAt": "2026-10-03T12:05:00Z",
  *                     "counts": { "cinemas": 13, "halls": 36, "visits": 27,
  *                                 "overrides": 4, "photos": 9, "referenceImages": 2 } }
@@ -36,13 +38,17 @@ import java.time.LocalDate
  *   as "made by a newer app version" via the manifest.
  * - Enum values use their storage keys (ScreeningFormat, SeatColour), which never change.
  * - Layouts are stored verbatim as the JSON string the database holds (LayoutJson).
+ *
+ * Versions: 1 (v1.0); 2 adds `isFavourite` to cinemas and `screenOffset` to
+ * halls (M8). New DTO fields have no default values, so the strict parser still
+ * requires them; older files get them from their BackupMigrations step.
  */
 
 internal object BackupFormat {
     const val FORMAT_ID: String = "cinexperience-backup"
 
     /** The backup format this app writes and the newest it reads. */
-    const val BACKUP_VERSION: Int = 1
+    const val BACKUP_VERSION: Int = 2
 
     const val MANIFEST: String = "manifest.json"
     const val DATA: String = "data.json"
@@ -167,6 +173,8 @@ internal data class BackupCinema(
     val notes: String?,
     val isPreloaded: Boolean,
     val seedKey: String?,
+    /** Since version 2. */
+    val isFavourite: Boolean,
 )
 
 @Serializable
@@ -184,6 +192,8 @@ internal data class BackupHall(
     val seedKey: String?,
     /** The hall's seat id mark (never reuse ids below it). */
     val nextSeatId: Int,
+    /** Since version 2: Hall.screenOffset, in seat widths (ScreenOffsetRules). */
+    val screenOffset: Float,
 )
 
 @Serializable
@@ -251,10 +261,39 @@ internal data class BackupMetadata(
 /**
  * Converts data.json of an older backup version, step by step, to the current
  * [BackupFormat.BACKUP_VERSION]. `steps[i]` turns version `i + 1` into `i + 2`.
- * Only version 1 exists so far; when version 2 comes, add its step here.
+ * A step only adds what the newer version requires; the strict decoder then
+ * rejects anything else that is wrong, exactly as for a current backup.
  */
 internal object BackupMigrations {
-    private val steps: List<(JsonObject) -> JsonObject> = emptyList()
+    private val steps: List<(JsonObject) -> JsonObject> = listOf(::version1To2)
+
+    /**
+     * 1 → 2: every cinema gets `"isFavourite": false` (not a favourite) and every
+     * hall `"screenOffset": 0.0` (screen centred), like the database migration 1 → 2.
+     * A version 1 row that already has one of these fields is invalid (version 1
+     * didn't have them) and is rejected instead of being merged.
+     */
+    private fun version1To2(data: JsonObject): JsonObject = data
+        .withFieldInEveryRow("cinemas", "isFavourite", JsonPrimitive(false))
+        .withFieldInEveryRow("halls", "screenOffset", JsonPrimitive(0f))
+
+    /**
+     * Adds [field] = [value] to every object in the list [list]. A missing list or a
+     * row that is not an object is left as it is, for the strict decoder to reject.
+     * @throws IllegalArgumentException if a row already has [field].
+     */
+    private fun JsonObject.withFieldInEveryRow(list: String, field: String, value: JsonElement): JsonObject {
+        val rows = this[list] as? JsonArray ?: return this
+        val migrated = rows.map { row ->
+            if (row !is JsonObject) {
+                row
+            } else {
+                require(field !in row) { "Unexpected field '$field' in $list of an older backup" }
+                JsonObject(row + (field to value))
+            }
+        }
+        return JsonObject(this + (list to JsonArray(migrated)))
+    }
 
     init {
         check(steps.size == BackupFormat.BACKUP_VERSION - 1) { "One migration step per older backup version" }
@@ -274,9 +313,9 @@ internal object BackupMigrations {
 // Entity ↔ DTO conversion. Values are copied unchanged, so an import restores
 // exactly what was exported.
 
-internal fun CinemaEntity.toBackup() = BackupCinema(id, name, address, notes, isPreloaded, seedKey)
+internal fun CinemaEntity.toBackup() = BackupCinema(id, name, address, notes, isPreloaded, seedKey, isFavourite)
 
-internal fun BackupCinema.toEntity() = CinemaEntity(id, name, address, notes, isPreloaded, seedKey)
+internal fun BackupCinema.toEntity() = CinemaEntity(id, name, address, notes, isPreloaded, seedKey, isFavourite)
 
 internal fun HallEntity.toBackup() = BackupHall(
     id = id,
@@ -290,6 +329,7 @@ internal fun HallEntity.toBackup() = BackupHall(
     isPreloaded = isPreloaded,
     seedKey = seedKey,
     nextSeatId = nextSeatId,
+    screenOffset = screenOffset,
 )
 
 internal fun BackupHall.toEntity() = HallEntity(
@@ -304,6 +344,7 @@ internal fun BackupHall.toEntity() = HallEntity(
     isPreloaded = isPreloaded,
     seedKey = seedKey,
     nextSeatId = nextSeatId,
+    screenOffset = screenOffset,
 )
 
 internal fun VisitEntity.toBackup() = BackupVisit(

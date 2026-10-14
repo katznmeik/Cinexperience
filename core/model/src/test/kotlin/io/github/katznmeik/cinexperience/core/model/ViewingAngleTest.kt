@@ -1,6 +1,8 @@
 package io.github.katznmeik.cinexperience.core.model
 
+import kotlin.math.abs
 import kotlin.math.atan
+import kotlin.math.atan2
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -70,5 +72,59 @@ class ViewingAngleTest {
         assertNull(viewingAngle(layout, Float.NaN, 1f, SeatId(1)))
         assertNull(viewingAngle(layout, 1f, 1f, SeatId(2)))
         assertNull(viewingAngle(layout, 1f, 1f, SeatId(1), rowDepthInSeatWidths = 0.0))
+    }
+
+    @Test
+    fun offsetZeroGivesTheSameAnglesAsBefore() {
+        val layout = layoutOf("SSSSSSS", "SSSSSS.", "SSSSSSS").updateRow(1) { it.copy(halfSeatOffset = true) }
+        for (seat in layout.seatIds) {
+            for (depth in listOf(1.0, DEFAULT_ROW_DEPTH_IN_SEAT_WIDTHS)) {
+                val before = viewingAngle(layout, 5f, 1.5f, seat, depth)!!
+                assertEquals(before, viewingAngle(layout, 5f, 1.5f, seat, depth, screenOffset = 0f))
+                // The old model written out: a 5-seat screen centred over 7 columns, i.e. [1, 6].
+                val position = layout.positionOf(seat)!!
+                val x = position.column + 0.5 + if (position.row == 1) 0.5 else 0.0
+                val d = (1.5 + position.row + 0.5) * depth
+                assertEquals(Math.toDegrees(abs(atan2(3.5 - x, d))), before.offAxisDegrees, eps)
+                assertEquals(Math.toDegrees(atan2(6.0 - x, d) - atan2(1.0 - x, d)), before.fieldOfViewDegrees, eps)
+            }
+        }
+    }
+
+    @Test
+    fun shiftingTheScreenTowardsASideSeatReducesItsAngle() {
+        val layout = layoutOf("SSSSSSSS")
+        val leftSeat = SeatId(1) // x = 0.5; the centred screen's centre is at x = 4
+        val centred = viewingAngle(layout, 4f, 2f, leftSeat, 1.0)!!
+        val shiftedLeft = viewingAngle(layout, 4f, 2f, leftSeat, 1.0, screenOffset = -2f)!!
+        val shiftedRight = viewingAngle(layout, 4f, 2f, leftSeat, 1.0, screenOffset = 2f)!!
+        assertTrue(shiftedLeft.offAxisDegrees < centred.offAxisDegrees)
+        assertTrue(shiftedRight.offAxisDegrees > centred.offAxisDegrees)
+        assertTrue(shiftedLeft.fieldOfViewDegrees > centred.fieldOfViewDegrees)
+        // Depth 2.5, centre at 4 - 2 = 2 → off-axis atan(1.5 / 2.5).
+        assertEquals(Math.toDegrees(atan(1.5 / 2.5)), shiftedLeft.offAxisDegrees, eps)
+        // A seat right in front of the shifted screen's centre looks straight ahead.
+        val inFront = viewingAngle(layout, 4f, 2f, SeatId(2), 1.0, screenOffset = -2.5f)!! // x = 1.5
+        assertEquals(0.0, inFront.offAxisDegrees, eps)
+    }
+
+    @Test
+    fun mirroredSeatAndOffsetGiveTheSameAngle() {
+        val layout = layoutOf("SSSSSSS", "SSSSSSS")
+        for (offset in listOf(-3f, -1.5f, 0.5f, 2f)) {
+            for (column in 0 until 7) {
+                val angle = viewingAngle(layout, 5f, 1f, layout.rows[1].seatIds[column], screenOffset = offset)!!
+                val mirror = viewingAngle(layout, 5f, 1f, layout.rows[1].seatIds[6 - column], screenOffset = -offset)!!
+                assertEquals(angle.offAxisDegrees, mirror.offAxisDegrees, eps)
+                assertEquals(angle.fieldOfViewDegrees, mirror.fieldOfViewDegrees, eps)
+            }
+        }
+    }
+
+    @Test
+    fun nonFiniteOffsetGivesNull() {
+        val layout = layoutOf("SS")
+        assertNull(viewingAngle(layout, 2f, 1f, SeatId(1), screenOffset = Float.NaN))
+        assertNull(viewingAngle(layout, 2f, 1f, SeatId(1), screenOffset = Float.POSITIVE_INFINITY))
     }
 }

@@ -1,7 +1,13 @@
 package io.github.katznmeik.cinexperience.core.data.backup
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -31,10 +37,39 @@ class BackupFormatTest {
 
     @Test
     fun migrationsOnlyAcceptKnownVersions() {
-        val data = JsonObject(mapOf("backupVersion" to JsonPrimitive(1)))
-        assertEquals(data, BackupMigrations.migrate(data, 1))
+        val data = JsonObject(mapOf("backupVersion" to JsonPrimitive(2)))
+        assertEquals(data, BackupMigrations.migrate(data, 2))
         assertThrows(IllegalArgumentException::class.java) { BackupMigrations.migrate(data, 0) }
         assertThrows(IllegalArgumentException::class.java) { BackupMigrations.migrate(data, BackupFormat.BACKUP_VERSION + 1) }
+    }
+
+    @Test
+    fun version1To2AddsTheDefaultsToEveryCinemaAndHall() {
+        val v1 = Json.parseToJsonElement(
+            """
+            {"backupVersion": 1,
+             "cinemas": [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}],
+             "halls": [{"id": 3, "name": "Saal 1"}],
+             "visits": [{"id": 4}]}
+            """,
+        ).jsonObject
+        val v2 = BackupMigrations.migrate(v1, 1)
+        assertEquals(JsonPrimitive(2), v2["backupVersion"])
+        assertEquals(
+            listOf(JsonPrimitive(false), JsonPrimitive(false)),
+            v2.getValue("cinemas").jsonArray.map { it.jsonObject["isFavourite"] },
+        )
+        assertEquals(0.0, v2.getValue("halls").jsonArray.single().jsonObject.getValue("screenOffset").jsonPrimitive.double, 0.0)
+        // Everything else is left as it was.
+        assertEquals(v1.getValue("visits"), v2.getValue("visits"))
+        assertEquals(JsonPrimitive("Saal 1"), v2.getValue("halls").jsonArray.single().jsonObject["name"])
+        // No lists, or rows that aren't objects: left for the strict decoder to reject.
+        assertEquals(JsonPrimitive(2), BackupMigrations.migrate(JsonObject(mapOf("backupVersion" to JsonPrimitive(1))), 1)["backupVersion"])
+        val odd = Json.parseToJsonElement("""{"backupVersion": 1, "cinemas": [7], "halls": "x"}""").jsonObject
+        assertEquals(JsonArray(listOf(JsonPrimitive(7))), BackupMigrations.migrate(odd, 1)["cinemas"])
+        // A version 1 row with a version 2 field is invalid.
+        val withField = Json.parseToJsonElement("""{"backupVersion": 1, "halls": [{"id": 3, "screenOffset": 1.5}]}""").jsonObject
+        assertThrows(IllegalArgumentException::class.java) { BackupMigrations.migrate(withField, 1) }
     }
 
     @Test

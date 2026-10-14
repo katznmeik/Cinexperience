@@ -10,6 +10,8 @@ import java.time.LocalDate
  *   renamed and edited but not deleted.
  * @property seedKey stable key of a preloaded cinema in the seed asset (§9), `null`
  *   for user-added cinemas. Never shown to the user.
+ * @property isFavourite marked as a favourite cinema by the user (§6.1, §6.2);
+ *   changed only through `CinemaRepository.setFavourite`.
  */
 data class Cinema(
     val id: Long = 0,
@@ -18,6 +20,7 @@ data class Cinema(
     val notes: String? = null,
     val isPreloaded: Boolean = false,
     val seedKey: String? = null,
+    val isFavourite: Boolean = false,
 )
 
 /**
@@ -26,6 +29,10 @@ data class Cinema(
  * @property layout `null` until the user draws it (or the seed supplies one).
  * @property screenWidth screen width in seat widths (grid columns).
  * @property screenDistance gap between the screen and row 0, in row depths.
+ * @property screenOffset horizontal shift of the screen's centre from the grid's
+ *   centre, in seat widths (0.5 steps; negative = to the left as seen from the
+ *   seats facing the screen); 0 = centred. Must be [ScreenOffsetRules.isValid]:
+ *   the repositories reject other values.
  * @property referenceImagePath app-private relative path of the Yorck-app
  *   screenshot used in the layout editor (§6.5), relative to the app's files dir.
  * @property isPreloaded see [Cinema.isPreloaded]; preloaded halls cannot be deleted.
@@ -45,6 +52,7 @@ data class Hall(
     val layout: SeatLayout? = null,
     val screenWidth: Float? = null,
     val screenDistance: Float? = null,
+    val screenOffset: Float = ScreenOffsetRules.CENTRED,
     val referenceImagePath: String? = null,
     val notes: String? = null,
     val isPreloaded: Boolean = false,

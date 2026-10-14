@@ -4,6 +4,7 @@ import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
+import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
@@ -71,7 +72,9 @@ internal class ValidationProblem(val detail: String, val missingFile: Boolean = 
  * one favourite per hall; every layout decodes with this app's layout reader (a
  * layout it can't read is rejected, never carried along silently); known enum
  * keys; ratings 1–5; valid dates; a seat id mark ≥ 1; finite screen geometry;
- * every referenced photo / reference image has a safe name in its folder and is
+ * a screen offset that [ScreenOffsetRules.isValid] accepts (finite, 0.5 steps,
+ * within ±[ScreenOffsetRules.MAX_MAGNITUDE]), the same rule the repositories
+ * enforce, so data saved by the app always exports; every referenced photo / reference image has a safe name in its folder and is
  * in [files].
  */
 internal object BackupValidator {
@@ -98,6 +101,7 @@ internal object BackupValidator {
             if (hall.screenWidth?.isFinite() == false || hall.screenDistance?.isFinite() == false) {
                 problem("$label has an invalid screen size.")
             }
+            if (!ScreenOffsetRules.isValid(hall.screenOffset)) problem("$label has an invalid screen position.")
             layouts[hall.id] = hall.layoutJson?.let { json ->
                 try {
                     LayoutJson.decode(json)

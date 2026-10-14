@@ -67,6 +67,22 @@ class SeedParserTest {
     }
 
     @Test
+    fun screenOffsetIsOptional() {
+        val seed = SeedParser.parse(
+            """
+            {"seedVersion": 1, "cinemas": [{"seedKey": "a", "name": "A", "halls": [
+              {"seedKey": "a/1", "name": "Saal 1", "screenOffset": -1.5},
+              {"seedKey": "a/2", "name": "Saal 2"}
+            ]}]}
+            """,
+        )
+        assertEquals(-1.5f, seed.cinemas[0].halls[0].screenOffset)
+        assertNull(seed.cinemas[0].halls[1].screenOffset)
+        // The shipped seed has no offsets yet: every hall starts centred.
+        assertTrue(SeedParser.parse(asset.readText()).cinemas.flatMap { it.halls }.all { it.screenOffset == null })
+    }
+
+    @Test
     fun invalidSeedsAreRejected() {
         val invalid = listOf(
             """{"seedVersion": 0, "cinemas": []}""",
@@ -79,6 +95,10 @@ class SeedParserTest {
                  {"seedKey": "b", "name": "B", "halls": [{"seedKey": "x", "name": "1"}]}]}""",
             """{"seedVersion": 1, "cinemas": [{"seedKey": "a", "name": "A", "halls": [
                  {"seedKey": "a/1", "name": "1", "layout": {"formatVersion": 1, "rows": [{"cells": "?"}]}}]}]}""",
+            """{"seedVersion": 1, "cinemas": [{"seedKey": "a", "name": "A", "halls": [
+                 {"seedKey": "a/1", "name": "1", "screenOffset": 0.25}]}]}""",
+            """{"seedVersion": 1, "cinemas": [{"seedKey": "a", "name": "A", "halls": [
+                 {"seedKey": "a/1", "name": "1", "screenOffset": -40}]}]}""",
         )
         invalid.forEach { json ->
             assertThrows(json, IllegalArgumentException::class.java) { SeedParser.parse(json) }
