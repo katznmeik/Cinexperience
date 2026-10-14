@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -59,6 +60,9 @@ fun CinexApp(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     val currentTab = TopLevelDestination.entries.firstOrNull { currentDestination.isOn(it) }
+    // While a backup import replaces the data, nothing else may write: tabs are locked
+    // (Settings itself blocks Back and its other rows).
+    val importing by container.backupRepository.isImporting.collectAsStateWithLifecycle()
 
     Scaffold(
         modifier = modifier,
@@ -70,10 +74,11 @@ fun CinexApp(
                     TopLevelDestination.entries.forEach { tab ->
                         CinexNavigationBarItem(
                             selected = tab == currentTab,
-                            onClick = { navController.navigateToTab(tab) },
+                            onClick = { if (!importing) navController.navigateToTab(tab) },
                             icon = tab.icon,
                             label = tab.label,
                             modifier = Modifier.testTag(tab.testTag),
+                            enabled = !importing,
                         )
                     }
                 }

@@ -61,6 +61,8 @@ fun RowScope.CinexNavigationBarItem(
     icon: ImageVector,
     label: String,
     modifier: Modifier = Modifier,
+    /** False blocks switching tabs (e.g. while a backup import replaces the data). */
+    enabled: Boolean = true,
 ) {
     val color = if (selected) CinexTheme.colors.text else CinexTheme.colors.textMuted
     Column(
@@ -68,7 +70,7 @@ fun RowScope.CinexNavigationBarItem(
             .weight(1f)
             .fillMaxHeight()
             .widthIn(min = 64.dp)
-            .selectable(selected = selected, onClick = onClick, role = Role.Tab),
+            .selectable(selected = selected, enabled = enabled, onClick = onClick, role = Role.Tab),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
     ) {

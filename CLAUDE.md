@@ -92,13 +92,20 @@ Don't duplicate config in module build files.
   `manifest.json`, `data.json` (every row, ids included, layouts as stored) and
   the referenced `photos/` and `reference/` files. The DTOs are the format and
   are separate from the Room entities: any DTO change bumps `BACKUP_VERSION` and
-  adds a step to `BackupMigrations` (imports parse `data.json` strictly).
-  Imports validate everything before touching data (`BackupReader`), write a
-  safety copy (`filesDir/backups/`, newest 2 kept) and replace all rows in one
-  transaction (`BackupRestorer`: imported files are added under names no
-  existing file has, and removed again if the transaction fails). Failures
-  are `BackupException`s with user-facing messages. Tests:
-  `core/data/src/test/.../backup/`.
+  adds a step to `BackupMigrations` (imports parse `data.json` strictly,
+  straight into the DTOs). `BackupValidator` holds the data rules; export and
+  safety copies run it too, so no backup is written that can't be imported.
+  Imports validate everything before touching data (`BackupReader`; manifest
+  and data must precede the files, unreferenced entries are skipped), make
+  sure a safety copy exists (`filesDir/backups/pre-import-<seq>-<time>.zip`,
+  ordered by sequence, not clock; reused if the newest already holds the
+  current data; a failed import deletes the copy it wrote; pruned to the newest
+  2 only after success) and replace all rows in one transaction
+  (`BackupRestorer`: imported files are added under names no existing file
+  has, and removed again if the transaction fails). While
+  `BackupRepository.isImporting` is true the UI blocks every other write
+  (tabs, Back, Settings rows). Failures are `BackupException`s with
+  user-facing messages. Tests: `core/data/src/test/.../backup/`.
 - **Row and seat labels:** Yorck numbers rows and seats (1…n), which is the
   default labelling. Keep fixtures, examples and UI texts numeric ("Row 7 ·
   Seat 10"); custom row labels exist only for other cinemas.

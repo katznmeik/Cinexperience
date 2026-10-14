@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.feature.backup
 
 import android.content.ActivityNotFoundException
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -102,6 +103,10 @@ internal fun SettingsScreen(
     actions: BackupActions = BackupActions.None,
 ) {
     val backup = state.backup
+    // While an import replaces the data nothing else may write: Back and the Data rows
+    // are blocked here, tab switching in CinexApp.
+    val importing = backup.task is BackupTask.Importing
+    BackHandler(enabled = importing) {}
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(backup.message) {
         backup.message?.let {
@@ -123,6 +128,7 @@ internal fun SettingsScreen(
                         state.countsError -> "Couldn't load the counts"
                         else -> null
                     },
+                    enabled = !importing,
                     onClick = onOpenManage,
                 )
                 RowDivider()
@@ -130,6 +136,7 @@ internal fun SettingsScreen(
                     icon = CinexIcons.List,
                     title = "All visits",
                     subtitle = counts?.let { if (it.visits == 0) "No visits yet" else countText(it.visits, "visit") },
+                    enabled = !importing,
                     onClick = onOpenAllVisits,
                 )
             }

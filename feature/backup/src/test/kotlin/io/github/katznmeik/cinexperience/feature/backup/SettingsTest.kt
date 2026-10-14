@@ -4,8 +4,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
@@ -159,7 +163,9 @@ class SettingsViewModelTest {
         vm.onConfirmImport()
         assertNull(vm.backupState.preview)
         assertEquals(BackupTask.Importing(0.5f, ImportSource.FILE), vm.backupState.task)
+        assertTrue(backup.isImporting.value)
         backup.gate!!.complete(Unit)
+        assertTrue(!backup.isImporting.value)
 
         assertEquals(listOf(preview), backup.committed)
         assertNull(vm.backupState.task)
@@ -274,15 +280,41 @@ class SettingsScreenshotTest {
         return SettingsUiState(appVersion = "0.1.0", counts = DataCounts.of(cinemas), backup = backup)
     }
 
-    private fun show(state: SettingsUiState) {
+    private fun show(state: SettingsUiState, onOpenManage: () -> Unit = {}, onOpenAllVisits: () -> Unit = {}) {
         composeRule.setContent {
             CinexTheme {
                 Box(Modifier.fillMaxSize().background(CinexTheme.colors.background)) {
-                    SettingsScreen(state, onOpenManage = {}, onOpenAllVisits = {})
+                    SettingsScreen(state, onOpenManage = onOpenManage, onOpenAllVisits = onOpenAllVisits)
                 }
             }
         }
         composeRule.waitForIdle()
+    }
+
+    /** While an import replaces the data, nothing that could write is reachable from Settings. */
+    @Test
+    fun everythingIsLockedWhileImporting() {
+        var opened = 0
+        show(
+            state(BackupUiState(lastExport = LastExport(EXPORTED_AT, COUNTS), task = BackupTask.Importing(0.6f, ImportSource.FILE))),
+            onOpenManage = { opened++ },
+            onOpenAllVisits = { opened++ },
+        )
+        for (row in listOf("Manage cinemas & halls", "All visits", "Export backup")) {
+            composeRule.onNodeWithText(row).assertHasNoClickAction().performClick()
+        }
+        composeRule.onNodeWithText("Importing… 60%").assertExists()
+        assertEquals(0, opened)
+        composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/settings-importing.png")
+    }
+
+    @Test
+    fun dataRowsWorkWhenIdle() {
+        var opened = 0
+        show(state(BackupUiState()), onOpenManage = { opened++ }, onOpenAllVisits = { opened++ })
+        composeRule.onNodeWithText("Manage cinemas & halls").assertHasClickAction().performClick()
+        composeRule.onNodeWithText("All visits").assertHasClickAction().performClick()
+        assertEquals(2, opened)
     }
 
     @Test
