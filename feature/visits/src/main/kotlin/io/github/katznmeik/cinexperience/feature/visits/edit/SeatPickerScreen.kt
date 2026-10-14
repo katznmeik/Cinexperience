@@ -103,7 +103,8 @@ internal fun SeatPickerScreen(state: VisitEditUiState, picker: SeatPickerState, 
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(CinexTheme.colors.surface)
-                    .padding(start = 10.dp, end = 10.dp, top = 18.dp, bottom = 14.dp),
+                    // Narrow side padding: the seats (and their numbers) get the width.
+                    .padding(start = 6.dp, end = 6.dp, top = 16.dp, bottom = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 SeatMap(

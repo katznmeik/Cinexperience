@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -116,6 +117,9 @@ internal interface LayoutEditorActions : EditorCanvasActions {
     fun onColumnCount(delta: Int) {}
     fun onScreenWidthStep(delta: Float) {}
     fun onScreenDistanceStep(delta: Float) {}
+
+    /** "Done" in the screen panel. */
+    fun onDeselectScreen() {}
     fun onConfirmDiscard() {}
     fun onConfirmSave() {}
     fun onDismissDialog() {}
@@ -127,6 +131,8 @@ internal interface LayoutEditorActions : EditorCanvasActions {
     override fun onTapCell(row: Int, column: Int) {}
     override fun onPaintCells(cells: List<CellPosition>) {}
     override fun onSelectRow(row: Int) {}
+    override fun onSelectScreen() {}
+    override fun onTapOutside() {}
     override fun onScreenWidth(width: Float) {}
     override fun onScreenDistance(distance: Float) {}
     override fun onReferenceAlignment(alignment: ReferenceAlignment) {}
@@ -155,6 +161,7 @@ private fun LayoutEditorViewModel.actions(pickReference: () -> Unit) = object : 
     override fun onColumnCount(delta: Int) = changeColumnCount(delta)
     override fun onScreenWidthStep(delta: Float) = changeScreenWidth(delta)
     override fun onScreenDistanceStep(delta: Float) = changeScreenDistance(delta)
+    override fun onDeselectScreen() = deselectScreen()
     override fun onConfirmDiscard() = discard()
     override fun onConfirmSave() = confirmSave()
     override fun onDismissDialog() = dismissDialog()
@@ -165,6 +172,8 @@ private fun LayoutEditorViewModel.actions(pickReference: () -> Unit) = object : 
     override fun onTapCell(row: Int, column: Int) = tapCell(row, column)
     override fun onPaintCells(cells: List<CellPosition>) = paintCells(cells)
     override fun onSelectRow(row: Int) = selectRow(row)
+    override fun onSelectScreen() = selectScreen()
+    override fun onTapOutside() = tapOutside()
     override fun onScreenWidth(width: Float) = dragScreenWidth(width)
     override fun onScreenDistance(distance: Float) = dragScreenDistance(distance)
     override fun onReferenceAlignment(alignment: ReferenceAlignment) = setReferenceAlignment(alignment)
@@ -315,7 +324,7 @@ private fun ReadyContent(
         if (state.replacesUnreadableLayout) {
             Notice("The saved layout can't be shown by this version of the app. Saving replaces it with this one.")
         }
-        Box(
+        Column(
             Modifier
                 .padding(horizontal = 12.dp)
                 .fillMaxWidth()
@@ -332,23 +341,105 @@ private fun ReadyContent(
                 referenceAlignment = state.referenceAlignment,
                 actions = actions,
                 viewState = viewState,
+                screenSelected = state.screenSelected,
                 maxHeight = canvasMaxHeight(),
                 modifier = Modifier.fillMaxWidth(),
             )
             // Derived, so zooming and panning don't recompose the whole editor every frame.
             val adjusted by remember(viewState) { derivedStateOf { viewState.isAdjusted } }
-            if (adjusted) {
-                IconButton(onClick = viewState::reset, modifier = Modifier.align(Alignment.TopEnd)) {
-                    Icon(CinexIcons.Fit, contentDescription = "Fit to view", tint = CinexTheme.colors.text, modifier = Modifier.size(20.dp))
-                }
+            CanvasFooter(
+                hint = canvasHint(state.referenceMode, referenceImage != null, state.referenceOpacity, state.screenSelected),
+                showFit = adjusted,
+                onFit = viewState::reset,
+            )
+        }
+        when {
+            state.referenceMode -> ReferencePanel(state, hasImage = draft.referenceImagePath != null, actions)
+            state.screenSelected -> ScreenPanel(draft, actions)
+            else -> RowPanel(state, actions)
+        }
+        // The screen's steppers move into the screen panel while the screen is selected.
+        Steppers(draft, actions, includeScreen = !state.screenSelected)
+    }
+}
+
+/**
+ * The line under the drawing area: the canvas hint and, while the view is zoomed
+ * or panned, the "Fit" control. Outside the drawing, so neither ever covers the
+ * grid, the screen bar or its handles.
+ */
+@Composable
+private fun CanvasFooter(hint: String, showFit: Boolean, onFit: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 30.dp)
+            .padding(start = 12.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            hint,
+            style = MaterialTheme.typography.labelSmall,
+            color = CinexTheme.colors.text.copy(alpha = 0.75f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = 4.dp),
+        )
+        if (showFit) FitButton(onFit)
+    }
+}
+
+/** Small labelled pill "Fit" (screen readers: "Fit to view"), drawn 32 dp tall, touched 48 dp. */
+@Composable
+private fun FitButton(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .heightIn(min = 32.dp)
+            .clip(shape)
+            .border(1.dp, CinexTheme.colors.outline, shape)
+            .semantics { contentDescription = "Fit to view" }
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Icon(CinexIcons.Fit, contentDescription = null, tint = CinexTheme.colors.text, modifier = Modifier.size(16.dp))
+        Text(
+            "Fit",
+            style = MaterialTheme.typography.labelMedium,
+            color = CinexTheme.colors.text,
+            // The description says it ("Fit to view").
+            modifier = Modifier.clearAndSetSemantics {},
+        )
+    }
+}
+
+/**
+ * The selected screen's controls (spec §6.5), in place of the row panel: how to
+ * drag it on the canvas, and steppers for width and distance. "Done" deselects it.
+ */
+@Composable
+private fun ScreenPanel(draft: LayoutDraft, actions: LayoutEditorActions) {
+    PanelCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PanelTitle("Screen", Modifier.weight(1f))
+            TextButton(onClick = actions::onDeselectScreen) {
+                Text("Done", style = MaterialTheme.typography.labelLarge, color = CinexTheme.colors.text)
             }
         }
-        if (state.referenceMode) {
-            ReferencePanel(state, hasImage = draft.referenceImagePath != null, actions)
-        } else {
-            RowPanel(state, actions)
+        Text(
+            "Drag the green handles on the canvas to change the width, and the bar up or down " +
+                "to change its distance to the first row.",
+            style = MaterialTheme.typography.bodySmall,
+            color = CinexTheme.colors.textMuted,
+        )
+        screenSteppers(draft, actions).forEach { spec ->
+            StepperCard(spec, Modifier.fillMaxWidth(), container = CinexTheme.colors.surfaceRaised)
         }
-        Steppers(draft, actions)
     }
 }
 
@@ -521,7 +612,8 @@ private fun RowPanel(state: LayoutEditorUiState, actions: LayoutEditorActions) {
         if (row == null) {
             PanelTitle("Rows")
             Text(
-                "Tap a row label on the left of the canvas to edit that row: label, numbering, seat offset and block starts.",
+                "Tap a row label on the left of the canvas to edit that row: label, numbering, seat offset and block starts. " +
+                    "Tap the screen to change its width and distance.",
                 style = MaterialTheme.typography.bodySmall,
                 color = CinexTheme.colors.textMuted,
             )
@@ -700,8 +792,28 @@ private fun ReferencePanel(state: LayoutEditorUiState, hasImage: Boolean, action
     }
 }
 
+/** Steppers of the screen geometry: under the canvas, or in the [ScreenPanel] while the screen is selected. */
+private fun screenSteppers(draft: LayoutDraft, actions: LayoutEditorActions): List<StepperSpec> = listOf(
+    StepperSpec(
+        label = "Screen width",
+        value = ScreenRules.widthText(draft.screenWidth),
+        onMinus = { actions.onScreenWidthStep(-ScreenRules.STEP) },
+        onPlus = { actions.onScreenWidthStep(ScreenRules.STEP) },
+        canMinus = draft.screenWidth > ScreenRules.MIN_WIDTH,
+        canPlus = draft.screenWidth < ScreenRules.maxWidth(draft.columnCount),
+    ),
+    StepperSpec(
+        label = "Screen distance",
+        value = ScreenRules.distanceText(draft.screenDistance),
+        onMinus = { actions.onScreenDistanceStep(-ScreenRules.STEP) },
+        onPlus = { actions.onScreenDistanceStep(ScreenRules.STEP) },
+        canMinus = draft.screenDistance > ScreenRules.MIN_DISTANCE,
+        canPlus = draft.screenDistance < ScreenRules.MAX_DISTANCE,
+    ),
+)
+
 @Composable
-private fun Steppers(draft: LayoutDraft, actions: LayoutEditorActions) {
+private fun Steppers(draft: LayoutDraft, actions: LayoutEditorActions, includeScreen: Boolean) {
     val steppers = listOf(
         StepperSpec(
             label = "Rows",
@@ -719,23 +831,7 @@ private fun Steppers(draft: LayoutDraft, actions: LayoutEditorActions) {
             canMinus = draft.columnCount > 1,
             canPlus = draft.columnCount < LayoutDraft.MAX_COLUMNS,
         ),
-        StepperSpec(
-            label = "Screen width",
-            value = ScreenRules.widthText(draft.screenWidth),
-            onMinus = { actions.onScreenWidthStep(-ScreenRules.STEP) },
-            onPlus = { actions.onScreenWidthStep(ScreenRules.STEP) },
-            canMinus = draft.screenWidth > ScreenRules.MIN_WIDTH,
-            canPlus = draft.screenWidth < ScreenRules.maxWidth(draft.columnCount),
-        ),
-        StepperSpec(
-            label = "Screen distance",
-            value = ScreenRules.distanceText(draft.screenDistance),
-            onMinus = { actions.onScreenDistanceStep(-ScreenRules.STEP) },
-            onPlus = { actions.onScreenDistanceStep(ScreenRules.STEP) },
-            canMinus = draft.screenDistance > ScreenRules.MIN_DISTANCE,
-            canPlus = draft.screenDistance < ScreenRules.MAX_DISTANCE,
-        ),
-    )
+    ) + if (includeScreen) screenSteppers(draft, actions) else emptyList()
     // Two per row; one per row with large text, so the labels aren't broken mid-word.
     val perRow = if (LocalDensity.current.fontScale > 1.3f) 1 else 2
     Column(
@@ -760,12 +856,12 @@ private class StepperSpec(
 )
 
 @Composable
-private fun StepperCard(spec: StepperSpec, modifier: Modifier = Modifier) {
+private fun StepperCard(spec: StepperSpec, modifier: Modifier = Modifier, container: Color = CinexTheme.colors.surface) {
     val label = spec.label
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(CinexTheme.colors.surface)
+            .background(container)
             // No end or vertical padding: the buttons' 48 dp touch areas already leave
             // 6 dp around their 36 dp boxes, so the labels keep their width.
             .padding(start = 10.dp),

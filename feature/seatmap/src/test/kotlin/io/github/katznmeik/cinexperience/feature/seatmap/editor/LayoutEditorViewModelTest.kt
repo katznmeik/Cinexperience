@@ -14,6 +14,7 @@ import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.model.labels
+import io.github.katznmeik.cinexperience.core.seatmapui.seatNumberText
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.FakeStore
@@ -221,6 +222,100 @@ class LayoutEditorViewModelTest {
         assertEquals(1f, vm.draft.screenWidth)
         vm.changeScreenDistance(-100f)
         assertEquals(0f, vm.draft.screenDistance)
+    }
+
+    @Test
+    fun tappingTheScreenSelectsItAndClearsTheRow() {
+        val vm = viewModel()
+        vm.selectRow(1)
+        vm.selectScreen()
+        assertTrue(vm.state.screenSelected)
+        assertNull(vm.state.selectedRow) // the screen panel replaces the row panel
+        assertNull(vm.state.row)
+        // Selecting is not an edit.
+        assertFalse(vm.state.canUndo)
+        assertFalse(vm.state.hasUnsavedChanges)
+
+        // Dragging the selected screen keeps it selected and is one undo step.
+        vm.beginGesture()
+        vm.dragScreenWidth(6f)
+        vm.endGesture()
+        assertTrue(vm.state.screenSelected)
+        vm.undo()
+        assertEquals(4f, vm.draft.screenWidth)
+        assertTrue(vm.state.screenSelected) // undo keeps the selection
+        vm.redo()
+        assertEquals(6f, vm.draft.screenWidth)
+        assertTrue(vm.state.screenSelected)
+    }
+
+    @Test
+    fun cellsRowLabelsPaintingAndTapsBesideTheGridDeselectTheScreen() {
+        val vm = viewModel()
+        vm.selectScreen()
+        vm.tapCell(0, 0) // already a seat: nothing painted, but deselected
+        assertFalse(vm.state.screenSelected)
+
+        vm.selectScreen()
+        vm.selectRow(2)
+        assertFalse(vm.state.screenSelected)
+        assertEquals(2, vm.state.selectedRow)
+
+        vm.selectScreen()
+        vm.selectTool(CellType.GAP)
+        vm.beginGesture()
+        vm.paintCells(listOf(CellPosition(1, 0), CellPosition(1, 1)))
+        vm.endGesture()
+        assertFalse(vm.state.screenSelected)
+        assertEquals("..SS", vm.patterns()[1])
+
+        vm.selectScreen()
+        vm.tapOutside()
+        assertFalse(vm.state.screenSelected)
+
+        vm.selectScreen()
+        vm.deselectScreen() // "Done"
+        assertFalse(vm.state.screenSelected)
+    }
+
+    @Test
+    fun theReferenceModeAndTheScreenSelectionExcludeEachOther() {
+        val vm = viewModel()
+        vm.selectScreen()
+        vm.toggleReferenceMode()
+        assertTrue(vm.state.referenceMode)
+        assertFalse(vm.state.screenSelected)
+        vm.selectScreen() // the canvas aligns the screenshot in reference mode
+        assertFalse(vm.state.screenSelected)
+    }
+
+    @Test
+    fun seatNumbersFollowEveryEditLive() {
+        val vm = viewModel()
+        fun numbers(row: Int) = vm.state.labels!!.seats.values
+            .filter { it.position.row == row }
+            .sortedBy { it.position.column }
+            .map { it.label.seatNumberText }
+        assertEquals(listOf("1", "2", "3", "4"), numbers(0))
+
+        // Painting: an aisle splits the row, a wheelchair space has no number.
+        vm.selectTool(CellType.AISLE)
+        vm.tapCell(0, 1)
+        assertEquals(listOf("1", "2", "3"), numbers(0))
+        vm.selectSeatKind(SeatKind.WHEELCHAIR)
+        vm.tapCell(0, 3)
+        assertEquals(listOf("1", "2", null), numbers(0))
+
+        // Block numbering and start numbers.
+        vm.selectRow(0)
+        vm.setNumbering(SeatNumbering.RESTART_PER_BLOCK)
+        assertEquals(listOf("1", "1", null), numbers(0))
+        vm.setBlockStart(1, "12")
+        assertEquals(listOf("1", "12", null), numbers(0))
+
+        // Undo brings the numbers back as well.
+        vm.undo()
+        assertEquals(listOf("1", "1", null), numbers(0))
     }
 
     @Test

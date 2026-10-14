@@ -1,22 +1,14 @@
 package io.github.katznmeik.cinexperience.feature.seatmap.editor
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
@@ -34,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
@@ -64,10 +57,15 @@ import io.github.katznmeik.cinexperience.core.seatmapui.SeatGlyphs
 import io.github.katznmeik.cinexperience.core.seatmapui.SeatMapGeometry
 import io.github.katznmeik.cinexperience.core.seatmapui.SeatMapMetrics
 import io.github.katznmeik.cinexperience.core.seatmapui.SeatMapViewState
+import io.github.katznmeik.cinexperience.core.seatmapui.SeatNumberTexts
+import io.github.katznmeik.cinexperience.core.seatmapui.SeatVisual
 import io.github.katznmeik.cinexperience.core.seatmapui.ViewBounds
 import io.github.katznmeik.cinexperience.core.seatmapui.ViewTransform
+import io.github.katznmeik.cinexperience.core.seatmapui.drawNumberedSeat
 import io.github.katznmeik.cinexperience.core.seatmapui.innerSquare
 import io.github.katznmeik.cinexperience.core.seatmapui.rowLabelWidth
+import io.github.katznmeik.cinexperience.core.seatmapui.seatNumberText
+import io.github.katznmeik.cinexperience.core.seatmapui.seatNumbersMinScale
 import io.github.katznmeik.cinexperience.core.seatmapui.seatRoundRect
 import io.github.katznmeik.cinexperience.core.seatmapui.strokeGlyph
 import io.github.katznmeik.cinexperience.core.seatmapui.trackZoomPan
@@ -86,31 +84,48 @@ internal interface EditorCanvasActions {
     fun onTapCell(row: Int, column: Int)
     fun onPaintCells(cells: List<CellPosition>)
     fun onSelectRow(row: Int)
+
+    /** A touch on the screen bar (or its label): selects the screen. */
+    fun onSelectScreen()
+
+    /** A tap on the canvas outside the grid, the row labels and the screen. */
+    fun onTapOutside()
     fun onScreenWidth(width: Float)
     fun onScreenDistance(distance: Float)
     fun onReferenceAlignment(alignment: ReferenceAlignment)
 }
 
-/** Sizes of the editor drawing (bigger cells than the seat map, labels on the left only). */
+/**
+ * Sizes of the editor drawing: the seat map's proportions (big cells, narrow
+ * gaps, so the seat numbers fit), labels on the left only, and room around the
+ * screen's ends for its drag handles.
+ */
 internal fun editorMetrics(density: Density, labelWidth: Float): SeatMapMetrics = with(density) {
     SeatMapMetrics(
-        seatSize = 15.dp.toPx(),
-        seatGap = 3.dp.toPx(),
+        seatSize = 16.dp.toPx(),
+        seatGap = 2.dp.toPx(),
         rowGap = 3.dp.toPx(),
         labelWidth = labelWidth,
-        labelGap = 5.dp.toPx(),
-        screenTopSpace = HANDLE_RADIUS.toPx() + 4.dp.toPx(),
+        labelGap = 4.dp.toPx(),
+        // The label above the bar (taller than the handles' upper half).
+        screenTopSpace = SCREEN_LABEL_HEIGHT.toPx(),
         minScreenGap = 0f,
-        padding = 12.dp.toPx(),
+        padding = 4.dp.toPx(),
         rightLabels = false,
+        screenSideSpace = HANDLE_RADIUS.toPx() + HANDLE_RING.toPx(),
     )
 }
 
-private val HANDLE_RADIUS = 7.dp
+/** The selected screen's width handles: drawn this big, touched within [HANDLE_TOUCH_RADIUS]. */
+private val HANDLE_RADIUS = 11.dp
+private val HANDLE_RING = 2.5.dp
 private val HANDLE_TOUCH_RADIUS = 24.dp
 
-/** Room below the grid for the hint line. */
-private val HINT_SPACE = 28.dp
+/** Height of the label above the screen bar, which belongs to the bar's touch area. */
+private val SCREEN_LABEL_HEIGHT = 34.dp
+
+/** A little room below the grid, so the last row doesn't touch the canvas edge. */
+private val BOTTOM_SPACE = 6.dp
 
 /**
  * Opacity of the muted gap dashes and aisle hatching: at least 3:1 against the
@@ -118,8 +133,8 @@ private val HINT_SPACE = 28.dp
  */
 internal const val EDITOR_MARK_ALPHA = 0.65f
 
-/** The hint's own padding and margins (horizontal 2 × 8 dp; vertical 2 × 2 dp + 6 dp below + 4 dp gap). */
-private val HINT_PADDING = 16.dp
+/** Fill of the editor's seats: translucent, so a reference screenshot shows through. */
+internal const val EDITOR_SEAT_FILL_ALPHA = 0.12f
 
 /**
  * Default placement of the reference screenshot: as wide as the whole drawing,
@@ -166,7 +181,7 @@ internal fun alignedBy(
 
 /** What touches on the editor canvas do. */
 internal enum class CanvasMode {
-    /** Paint cells, select rows, drag the screen handles; two fingers zoom. */
+    /** Paint cells, select rows, select and drag the screen; two fingers zoom. */
     EDIT,
 
     /** One or two fingers move and scale the reference screenshot. */
@@ -184,38 +199,51 @@ internal fun canvasMode(referenceMode: Boolean, hasReferenceImage: Boolean): Can
 
 /** Where a touch on the editor canvas lands. */
 internal sealed interface CanvasHit {
+    /** A width handle of the selected screen. */
     data class WidthHandle(val right: Boolean) : CanvasHit
-    data object DistanceHandle : CanvasHit
+
+    /** The screen bar or the label above it: selects the screen, and dragging it moves the screen. */
+    data object ScreenBar : CanvasHit
     data class Cell(val position: CellPosition) : CanvasHit
     data class RowLabel(val row: Int) : CanvasHit
     data object Empty : CanvasHit
 }
 
 /**
- * Hit-test of a screen point: above the grid, the screen's width handles first
- * (a finger-sized circle), then the screen bar and its distance label; then
- * cells and row labels. The screen controls never reach into row 0, so a wide
- * hall or a small screen distance can't turn a paint stroke into a screen drag.
+ * Hit-test of a screen point: above the grid, the selected screen's width handles
+ * first (a finger-sized circle; an unselected screen has no handles), then the
+ * screen bar and the label above it; then cells and row labels. The screen
+ * controls never reach into row 0, so a wide hall or a small screen distance
+ * can't turn a paint stroke into a screen drag.
  */
 internal fun hitTest(
     point: Offset,
     geometry: SeatMapGeometry,
     transform: ViewTransform,
     handleTouchRadius: Float,
-    distanceLabelHeight: Float,
+    screenLabelHeight: Float,
+    screenSelected: Boolean,
 ): CanvasHit {
     // Top of row 0's band (cells own half of the row gap above them, see cellAt).
     val gridTop = transform.toScreen(Offset(0f, -geometry.metrics.rowGap / 2f)).y
     if (point.y < gridTop) {
         val left = transform.toScreen(Offset(geometry.screenLeft, geometry.screenY))
         val right = transform.toScreen(Offset(geometry.screenRight, geometry.screenY))
-        val toRight = (point - right).getDistance()
-        val toLeft = (point - left).getDistance()
-        if (min(toLeft, toRight) <= handleTouchRadius) return CanvasHit.WidthHandle(right = toRight <= toLeft)
-        val onBar = point.x in left.x..right.x && abs(point.y - left.y) <= handleTouchRadius * 0.6f
+        if (screenSelected) {
+            val toRight = (point - right).getDistance()
+            val toLeft = (point - left).getDistance()
+            if (min(toLeft, toRight) <= handleTouchRadius) return CanvasHit.WidthHandle(right = toRight <= toLeft)
+        }
+        val reach = handleTouchRadius * 0.6f
+        val alongBar = point.x in (left.x - reach)..(right.x + reach)
+        val onBar = alongBar && abs(point.y - left.y) <= reach
+        // The label lies in the band above the bar (centred, or kept inside the canvas when
+        // zoomed), and may be wider than a short bar.
         val centre = (left.x + right.x) / 2f
-        val onLabel = abs(point.x - centre) <= handleTouchRadius * 3f && point.y in left.y..left.y + distanceLabelHeight
-        if (onBar || onLabel) return CanvasHit.DistanceHandle
+        val labelReach = handleTouchRadius * 3f
+        val overLabel = alongBar || abs(point.x - centre) <= labelReach
+        val onLabel = overLabel && point.y in left.y - screenLabelHeight..left.y
+        if (onBar || onLabel) return CanvasHit.ScreenBar
     }
     val content = transform.toContent(point)
     geometry.cellAt(content)?.let { return CanvasHit.Cell(it) }
@@ -223,16 +251,26 @@ internal fun hitTest(
     return CanvasHit.Empty
 }
 
+/** The canvas's hint line under the grid. */
+internal fun canvasHint(referenceMode: Boolean, hasReferenceImage: Boolean, referenceOpacity: Float, screenSelected: Boolean): String = when {
+    referenceMode && hasReferenceImage -> "Reference screenshot · ${(referenceOpacity * 100).roundToInt()} % opacity · drag to align"
+    referenceMode -> "Add a screenshot below to trace it"
+    screenSelected -> "Drag the green handles to resize · drag the bar to move"
+    hasReferenceImage -> "Reference screenshot · ${(referenceOpacity * 100).roundToInt()} % opacity"
+    else -> "Tap or drag to paint · tap the screen to adjust it"
+}
+
 /**
  * The layout editor's canvas (spec §6.5): the grid with seats as outlined
- * squares, gaps dashed and aisles hatched, the screen bar with drag handles, and
- * the reference screenshot behind everything.
+ * squares showing their seat numbers, gaps dashed and aisles hatched, the screen
+ * as a straight bar, and the reference screenshot behind everything.
  *
  * Gestures: tap a cell to paint it, drag across cells to paint a stroke (one undo
- * step), tap a row label to select the row, drag the round handles to change the
- * screen width and the bar or its distance label to change the distance, and use
- * two fingers (or one finger outside the grid) to zoom and pan. In reference
- * mode, one or two fingers move and scale the screenshot instead.
+ * step), tap a row label to select the row, tap the screen bar to select the
+ * screen (it turns green and shows its handles), drag the selected screen's
+ * handles to change its width and the bar to change its distance, and use two
+ * fingers (or one finger outside the grid) to zoom and pan. In reference mode,
+ * one or two fingers move and scale the screenshot instead.
  */
 @Composable
 internal fun EditorCanvas(
@@ -246,25 +284,27 @@ internal fun EditorCanvas(
     actions: EditorCanvasActions,
     viewState: SeatMapViewState,
     modifier: Modifier = Modifier,
-    minHeight: Dp = 240.dp,
+    screenSelected: Boolean = false,
+    minHeight: Dp = 212.dp,
     maxHeight: Dp = 480.dp,
 ) {
     val density = LocalDensity.current
     val colors = CinexTheme.colors
     val textMeasurer = rememberTextMeasurer()
-    // Text drawn in the grid (row labels, screen distance) is sized in dp, not sp: it has
-    // to fit the rows, and it grows with zoom instead of with the system font size.
+    // Text drawn in the grid (row labels, seat numbers, screen label) is sized in dp, not
+    // sp: it has to fit the rows, and it grows with zoom instead of with the system font size.
     val labelStyle = MaterialTheme.typography.labelSmall.copy(
         fontSize = with(density) { 11.dp.toSp() },
         lineHeight = with(density) { 13.dp.toSp() },
         color = colors.textMuted,
     )
     val selectedLabelStyle = labelStyle.copy(color = colors.onPrimary, fontWeight = FontWeight.SemiBold)
-    val distanceStyle = MaterialTheme.typography.labelSmall.copy(
+    val screenLabelStyle = MaterialTheme.typography.labelSmall.copy(
         fontSize = with(density) { 11.dp.toSp() },
         lineHeight = with(density) { 14.dp.toSp() },
         color = colors.text.copy(alpha = 0.8f),
     )
+    val numberStyle = SeatNumberTexts.style(MaterialTheme.typography.labelSmall)
 
     val labelWidth = remember(labels.rowLabels, density) {
         rowLabelWidth(textMeasurer, labels.rowLabels, labelStyle, minWidth = with(density) { 18.dp.toPx() }) +
@@ -275,168 +315,163 @@ internal fun EditorCanvas(
         SeatMapGeometry(draft.layout, metrics, draft.screenWidth, draft.screenDistance)
     }
     val maxZoomScale = with(density) { MAX_ZOOM_SEAT_SIZE.toPx() } / metrics.seatSize
+    val numbersMinScale = seatNumbersMinScale(metrics.seatSize, density)
     val handleTouchRadius = with(density) { HANDLE_TOUCH_RADIUS.toPx() }
-    val distanceLabelHeight = with(density) { 34.dp.toPx() }
+    val screenLabelHeight = with(density) { SCREEN_LABEL_HEIGHT.toPx() }
 
     val currentGeometry by rememberUpdatedState(geometry)
     val currentDraft by rememberUpdatedState(draft)
     val currentActions by rememberUpdatedState(actions)
     val currentMode by rememberUpdatedState(canvasMode(referenceMode, referenceImage != null))
     val currentAlignment by rememberUpdatedState(referenceAlignment)
+    val currentScreenSelected by rememberUpdatedState(screenSelected)
     // Read only while drawing, so changing them (e.g. every frame while aligning the
     // screenshot) redraws without rebuilding the grid's cached paths.
     val selectedRowState = rememberUpdatedState(selectedRow)
     val imageState = rememberUpdatedState(referenceImage)
     val opacityState = rememberUpdatedState(referenceOpacity)
     val alignmentState = rememberUpdatedState(referenceAlignment)
+    val screenSelectedState = rememberUpdatedState(screenSelected)
     fun bounds(size: Size) = ViewBounds.of(size, currentGeometry.contentBounds, MAX_FIT_SCALE, maxZoomScale)
 
-    val hint = when {
-        referenceImage != null -> "Reference screenshot · ${(referenceOpacity * 100).roundToInt()} % opacity" +
-            if (referenceMode) " · drag to align" else ""
-        referenceMode -> "Add a screenshot below to trace it"
-        else -> "Tap or drag to paint · two fingers to zoom"
-    }
-    val hintStyle = MaterialTheme.typography.labelSmall
-
-    // As tall as the grid fitted to the width (plus room for the hint), within the limits.
-    Box(
-        modifier.layout { measurable, constraints ->
-            val content = geometry.contentBounds
-            val width = constraints.maxWidth
-            val fit = min(width / max(content.width, 1f), MAX_FIT_SCALE)
-            // The hint wraps with large text: reserve its real height, so it never covers the grid.
-            val hintHeight = textMeasurer.measure(
-                hint,
-                hintStyle,
-                constraints = Constraints(maxWidth = (width - HINT_PADDING.roundToPx()).coerceAtLeast(0)),
-            ).size.height + HINT_PADDING.toPx()
-            val height = (content.height * fit + max(HINT_SPACE.toPx(), hintHeight)).roundToInt()
-                .coerceIn(minHeight.roundToPx(), maxHeight.roundToPx())
-                .coerceIn(constraints.minHeight, constraints.maxHeight)
-            val placeable = measurable.measure(Constraints.fixed(width, height))
-            layout(width, height) { placeable.place(0, 0) }
-        },
-    ) {
-        Spacer(
-            Modifier
-                .fillMaxSize()
-                .clipToBounds()
-                .semantics {
-                    contentDescription = "Layout canvas: ${draft.rowCount} rows, ${draft.columnCount} columns, " +
-                        "${draft.layout.seatCount} seats. Tap or drag across cells to paint them."
-                }
-                .pointerInput(viewState) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val viewport = size.toSize()
-                        val g = currentGeometry
-                        val transform = viewState.transformFor(bounds(viewport))
-                        val zoomPan: (Offset, Offset, Float) -> Unit = { centroid, pan, zoom ->
-                            val b = bounds(viewport)
-                            viewState.userTransform = b.pinched(viewState.transformFor(b), centroid, pan, zoom)
+    // As tall as the grid fitted to the width, within the limits. The hint line and the
+    // "Fit" control sit below the canvas (CanvasFooter), so they never cover the drawing.
+    Spacer(
+        modifier
+            .layout { measurable, constraints ->
+                val content = geometry.contentBounds
+                val width = constraints.maxWidth
+                val fit = min(width / max(content.width, 1f), MAX_FIT_SCALE)
+                val height = (content.height * fit + BOTTOM_SPACE.toPx()).roundToInt()
+                    .coerceIn(minHeight.roundToPx(), maxHeight.roundToPx())
+                    .coerceIn(constraints.minHeight, constraints.maxHeight)
+                val placeable = measurable.measure(Constraints.fixed(width, height))
+                layout(width, height) { placeable.place(0, 0) }
+            }
+            .clipToBounds()
+            .semantics {
+                contentDescription = "Layout canvas: ${draft.rowCount} rows, ${draft.columnCount} columns, " +
+                    "${draft.layout.seatCount} seats. Tap or drag across cells to paint them."
+            }
+            .pointerInput(viewState) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val viewport = size.toSize()
+                    val g = currentGeometry
+                    val transform = viewState.transformFor(bounds(viewport))
+                    val zoomPan: (Offset, Offset, Float) -> Unit = { centroid, pan, zoom ->
+                        val b = bounds(viewport)
+                        viewState.userTransform = b.pinched(viewState.transformFor(b), centroid, pan, zoom)
+                    }
+                    val slop = viewConfiguration.touchSlop
+                    // Outside the cells, one finger pans only when there is something to pan,
+                    // so it can scroll the screen while the grid is fully visible.
+                    val canPan = {
+                        val b = bounds(viewport)
+                        b.canPan(viewState.transformFor(b))
+                    }
+                    when (currentMode) {
+                        CanvasMode.ALIGN_REFERENCE -> {
+                            var alignment = currentAlignment ?: defaultReferenceAlignment(g)
+                            trackZoomPan(slop, canPanWithOneFinger = { true }, onGesture = { centroid, pan, zoom ->
+                                alignment = alignedBy(alignment, g, viewState.transformFor(bounds(viewport)), centroid, pan, zoom)
+                                currentActions.onReferenceAlignment(alignment)
+                            })
+                            return@awaitEachGesture
                         }
-                        val slop = viewConfiguration.touchSlop
-                        // Outside the cells, one finger pans only when there is something to pan,
-                        // so it can scroll the screen while the grid is fully visible.
-                        val canPan = {
-                            val b = bounds(viewport)
-                            b.canPan(viewState.transformFor(b))
+                        CanvasMode.VIEW_ONLY -> {
+                            trackZoomPan(slop, canPanWithOneFinger = canPan, onGesture = zoomPan)
+                            return@awaitEachGesture
                         }
-                        when (currentMode) {
-                            CanvasMode.ALIGN_REFERENCE -> {
-                                var alignment = currentAlignment ?: defaultReferenceAlignment(g)
-                                trackZoomPan(slop, canPanWithOneFinger = { true }, onGesture = { centroid, pan, zoom ->
-                                    alignment = alignedBy(alignment, g, viewState.transformFor(bounds(viewport)), centroid, pan, zoom)
-                                    currentActions.onReferenceAlignment(alignment)
-                                })
-                                return@awaitEachGesture
+                        CanvasMode.EDIT -> Unit
+                    }
+                    val hit = hitTest(down.position, g, transform, handleTouchRadius, screenLabelHeight, currentScreenSelected)
+                    when (hit) {
+                        is CanvasHit.WidthHandle -> {
+                            val start = currentDraft.screenWidth
+                            val sign = if (hit.right) 1f else -1f
+                            dragScreenControl(down, transform, viewState, currentActions) { total ->
+                                currentActions.onScreenWidth(start + sign * 2f * total.x / (g.metrics.pitchX * transform.scale))
                             }
-                            CanvasMode.VIEW_ONLY -> {
+                        }
+                        CanvasHit.ScreenBar -> {
+                            currentActions.onSelectScreen()
+                            val start = currentDraft.screenDistance
+                            dragScreenControl(down, transform, viewState, currentActions) { total ->
+                                currentActions.onScreenDistance(start - total.y / (g.metrics.pitchY * transform.scale))
+                            }
+                        }
+                        is CanvasHit.Cell -> paintOrZoom(
+                            down = down,
+                            cell = hit.position,
+                            geometry = g,
+                            transform = { viewState.transformFor(bounds(viewport)) },
+                            slop = slop,
+                            actions = currentActions,
+                            zoomPan = zoomPan,
+                        )
+                        is CanvasHit.RowLabel -> {
+                            if (awaitTapOrMove(down, slop)) currentActions.onSelectRow(hit.row) else {
                                 trackZoomPan(slop, canPanWithOneFinger = canPan, onGesture = zoomPan)
-                                return@awaitEachGesture
                             }
-                            CanvasMode.EDIT -> Unit
                         }
-                        when (val hit = hitTest(down.position, g, transform, handleTouchRadius, distanceLabelHeight)) {
-                            is CanvasHit.WidthHandle -> {
-                                viewState.userTransform = transform
-                                val start = currentDraft.screenWidth
-                                val sign = if (hit.right) 1f else -1f
-                                dragHandle(down, currentActions) { total ->
-                                    currentActions.onScreenWidth(start + sign * 2f * total.x / (g.metrics.pitchX * transform.scale))
-                                }
+                        CanvasHit.Empty -> {
+                            if (awaitTapOrMove(down, slop)) currentActions.onTapOutside() else {
+                                trackZoomPan(slop, canPanWithOneFinger = canPan, onGesture = zoomPan)
                             }
-                            CanvasHit.DistanceHandle -> {
-                                viewState.userTransform = transform
-                                val start = currentDraft.screenDistance
-                                dragHandle(down, currentActions) { total ->
-                                    currentActions.onScreenDistance(start - total.y / (g.metrics.pitchY * transform.scale))
-                                }
-                            }
-                            is CanvasHit.Cell -> paintOrZoom(
-                                down = down,
-                                cell = hit.position,
-                                geometry = g,
-                                transform = { viewState.transformFor(bounds(viewport)) },
-                                slop = slop,
-                                actions = currentActions,
-                                zoomPan = zoomPan,
-                            )
-                            is CanvasHit.RowLabel -> {
-                                if (awaitTapOrMove(down, slop)) currentActions.onSelectRow(hit.row) else {
-                                    trackZoomPan(slop, canPanWithOneFinger = canPan, onGesture = zoomPan)
-                                }
-                            }
-                            CanvasHit.Empty -> trackZoomPan(slop, canPanWithOneFinger = canPan, onGesture = zoomPan)
                         }
                     }
                 }
-                .drawWithCache {
-                    val grid = EditorGridDrawing(geometry, labels, colors, textMeasurer, labelStyle, selectedLabelStyle, density)
-                    onDrawBehind {
-                        val transform = viewState.transformFor(ViewBounds.of(size, geometry.contentBounds, MAX_FIT_SCALE, maxZoomScale))
-                        withTransform({
-                            translate(transform.offset.x, transform.offset.y)
-                            scale(transform.scale, transform.scale, pivot = Offset.Zero)
-                        }) {
-                            imageState.value?.let { image ->
-                                val alignment = alignmentState.value ?: defaultReferenceAlignment(geometry)
-                                val rect = referenceRect(alignment, geometry, image)
-                                drawImage(
-                                    image,
-                                    dstOffset = IntOffset(rect.left.roundToInt(), rect.top.roundToInt()),
-                                    dstSize = IntSize(rect.width.roundToInt(), rect.height.roundToInt()),
-                                    alpha = opacityState.value,
-                                    filterQuality = FilterQuality.Medium,
-                                )
-                            }
-                            with(grid) { draw(selectedRowState.value) }
+            }
+            .drawWithCache {
+                val numbers = SeatNumberTexts(textMeasurer, numberStyle, metrics.seatSize, density)
+                val grid = EditorGridDrawing(geometry, labels, colors, textMeasurer, labelStyle, selectedLabelStyle, numbers, density)
+                onDrawBehind {
+                    val transform = viewState.transformFor(ViewBounds.of(size, geometry.contentBounds, MAX_FIT_SCALE, maxZoomScale))
+                    val image = imageState.value
+                    withTransform({
+                        translate(transform.offset.x, transform.offset.y)
+                        scale(transform.scale, transform.scale, pivot = Offset.Zero)
+                    }) {
+                        image?.let {
+                            val alignment = alignmentState.value ?: defaultReferenceAlignment(geometry)
+                            val rect = referenceRect(alignment, geometry, it)
+                            drawImage(
+                                it,
+                                dstOffset = IntOffset(rect.left.roundToInt(), rect.top.roundToInt()),
+                                dstSize = IntSize(rect.width.roundToInt(), rect.height.roundToInt()),
+                                alpha = opacityState.value,
+                                filterQuality = FilterQuality.Medium,
+                            )
                         }
-                        drawScreenControls(geometry, transform, colors, textMeasurer, distanceStyle, density, geometry.screenDistance)
+                        with(grid) {
+                            draw(
+                                selectedRow = selectedRowState.value,
+                                showNumbers = transform.scale >= numbersMinScale,
+                                overReference = image != null,
+                            )
+                        }
                     }
-                },
-        )
-        Text(
-            hint,
-            style = hintStyle,
-            color = colors.text.copy(alpha = 0.75f),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 6.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(colors.canvas.copy(alpha = 0.85f))
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-        )
-    }
+                    drawScreenControls(geometry, transform, colors, textMeasurer, screenLabelStyle, density, screenSelectedState.value)
+                }
+            },
+    )
 }
 
-/** Follows one finger from [down] until it lifts; reports the total movement. One undo step. */
-private suspend fun AwaitPointerEventScope.dragHandle(
+/**
+ * A drag on the screen's controls from [down] until the finger lifts, as one undo
+ * step; reports the total movement. The view is held still meanwhile (the
+ * content's size changes with the screen), without counting as a zoom by the
+ * user, so no "fit to view" button appears for it.
+ */
+private suspend fun AwaitPointerEventScope.dragScreenControl(
     down: PointerInputChange,
+    transform: ViewTransform,
+    viewState: SeatMapViewState,
     actions: EditorCanvasActions,
     onDrag: (total: Offset) -> Unit,
 ) {
+    viewState.hold(transform)
     actions.onBeginGesture()
     try {
         down.consume()
@@ -452,6 +487,7 @@ private suspend fun AwaitPointerEventScope.dragHandle(
         }
     } finally {
         actions.onEndGesture()
+        viewState.release()
     }
 }
 
@@ -519,7 +555,7 @@ private suspend fun AwaitPointerEventScope.paintOrZoom(
     }
 }
 
-/** The grid in content coordinates, prepared once per layout change. */
+/** The grid in content coordinates, prepared once per layout (and label) change. */
 private class EditorGridDrawing(
     private val geometry: SeatMapGeometry,
     labels: LayoutLabels,
@@ -527,14 +563,18 @@ private class EditorGridDrawing(
     measurer: TextMeasurer,
     labelStyle: TextStyle,
     selectedLabelStyle: TextStyle,
+    private val numbers: SeatNumberTexts,
     density: Density,
 ) {
+    /** A seat with a kind symbol or a number. */
+    private class SeatMarks(val rect: Rect, val kind: SeatKind, val number: String?)
+
     private val dp = density.density
     private val seats = Path()
     private val gaps = Path()
     private val aisles = Path()
     private val hatch = Path()
-    private val glyphs = ArrayList<Pair<Rect, SeatKind>>()
+    private val marks = ArrayList<SeatMarks>()
     private val rowLabels = labels.rowLabels.map { it?.let { label -> measurer.measure(label, labelStyle) } }
     private val selectedRowLabels = labels.rowLabels.map { it?.let { label -> measurer.measure(label, selectedLabelStyle) } }
     private val dash = PathEffect.dashPathEffect(floatArrayOf(2.5f * dp, 2f * dp))
@@ -548,7 +588,8 @@ private class EditorGridDrawing(
                 when (val cell = layout.cell(row, column)) {
                     is LayoutCell.Seat -> {
                         seats.addRoundRect(seatRoundRect(rect.deflate(0.75f * dp)))
-                        if (cell.kind != SeatKind.STANDARD) glyphs += rect to cell.kind
+                        // Numbers come from the derived labels, so they follow every edit.
+                        marks += SeatMarks(rect, cell.kind, labels.labelOf(cell.id)?.seatNumberText)
                     }
                     LayoutCell.Gap -> gaps.addRoundRect(RoundRect(rect.deflate(0.5f * dp), CornerRadius(3f * dp)))
                     LayoutCell.Aisle -> {
@@ -560,7 +601,12 @@ private class EditorGridDrawing(
         }
     }
 
-    fun DrawScope.draw(selectedRow: Int?) {
+    /**
+     * With [showNumbers], numbered seats show their number (companion and sofa places
+     * their symbol above it); otherwise only the kind symbols are drawn. Over a
+     * reference screenshot ([overReference]) numbers and symbols get a dark halo.
+     */
+    fun DrawScope.draw(selectedRow: Int?, showNumbers: Boolean, overReference: Boolean) {
         if (selectedRow != null && selectedRow < geometry.rowCount) {
             val top = geometry.rowTop(selectedRow) - geometry.metrics.rowGap / 2f
             drawRect(
@@ -575,9 +621,20 @@ private class EditorGridDrawing(
             drawPath(hatch, colors.textMuted.copy(alpha = EDITOR_MARK_ALPHA), style = Stroke(width = 1.4f * dp))
         }
         drawPath(gaps, colors.textMuted.copy(alpha = EDITOR_MARK_ALPHA), style = Stroke(width = 1f * dp, pathEffect = dash))
-        drawPath(seats, colors.text.copy(alpha = 0.12f))
+        drawPath(seats, colors.text.copy(alpha = EDITOR_SEAT_FILL_ALPHA))
         drawPath(seats, colors.text.copy(alpha = 0.9f), style = Stroke(width = 1.5f * dp))
-        glyphs.forEach { (rect, kind) -> SeatGlyphs.of(kind)?.let { strokeGlyph(it, rect.innerSquare(0.78f), colors.text) } }
+        val halo = if (overReference) colors.canvas else null
+        for (seat in marks) {
+            val number = seat.number
+            if (showNumbers && number != null) {
+                drawNumberedSeat(seat.rect, seat.kind, SeatVisual.Neutral, numbers[number], colors, on = colors.text, halo = halo)
+            } else {
+                val glyph = SeatGlyphs.of(seat.kind) ?: continue
+                val box = seat.rect.innerSquare(0.78f)
+                if (halo != null) strokeGlyph(glyph, box, halo, strokeWidth = 6f)
+                strokeGlyph(glyph, box, colors.text)
+            }
+        }
 
         rowLabels.forEachIndexed { row, text ->
             val rect = geometry.leftLabelRect(row)
@@ -613,7 +670,16 @@ private fun addHatch(path: Path, rect: Rect, spacing: Float) {
     }
 }
 
-/** Screen bar with its two width handles and the distance label, in screen coordinates (fixed size). */
+/** "↔" in a 24 × 24 box: the symbol on the width handles. */
+private val handleArrows: Path by lazy { PathParser().parsePathString("M5 12h14M8.5 8.5L5 12l3.5 3.5M15.5 8.5L19 12l-3.5 3.5").toPath() }
+
+/**
+ * The screen in screen coordinates (fixed size at every zoom): a straight bar
+ * with a label above it. Unselected, the bar is light and the label invites a
+ * tap ("SCREEN · tap to adjust"); selected (spec §6.5), the bar turns green
+ * ([CinexColors.editorSelection]), round handles with "↔" sit on its ends, and
+ * the label shows the distance with a "↕".
+ */
 private fun DrawScope.drawScreenControls(
     geometry: SeatMapGeometry,
     transform: ViewTransform,
@@ -621,22 +687,51 @@ private fun DrawScope.drawScreenControls(
     measurer: TextMeasurer,
     style: TextStyle,
     density: Density,
-    distance: Float,
+    selected: Boolean,
 ) {
     val dp = density.density
     val left = transform.toScreen(Offset(geometry.screenLeft, geometry.screenY))
     val right = transform.toScreen(Offset(geometry.screenRight, geometry.screenY))
-    drawLine(colors.text, left, right, strokeWidth = 4f * dp, cap = StrokeCap.Round)
-    for (handle in listOf(left, right)) {
-        drawCircle(colors.background, radius = (HANDLE_RADIUS.value + 2f) * dp, center = handle)
-        drawCircle(colors.text, radius = HANDLE_RADIUS.value * dp, center = handle)
+    val barColor = if (selected) colors.editorSelection else colors.text
+    val barWidth = (if (selected) 5f else 4f) * dp
+    // A canvas-coloured outline keeps the bar's contrast over a reference screenshot.
+    drawLine(colors.canvas, left, right, strokeWidth = barWidth + 2f * HANDLE_RING.value * dp, cap = StrokeCap.Round)
+    drawLine(barColor, left, right, strokeWidth = barWidth, cap = StrokeCap.Round)
+    // A backdrop keeps the label readable over a reference screenshot (like the row labels').
+    fun backdrop(rect: Rect) = drawRoundRect(
+        colors.canvas.copy(alpha = 0.85f),
+        topLeft = rect.topLeft,
+        size = rect.size,
+        cornerRadius = CornerRadius(6f * dp),
+    )
+    // Centred over the bar, but kept inside the canvas when the bar is zoomed partly out of view.
+    fun labelLeft(width: Float): Float {
+        val margin = 6f * dp
+        val centred = (left.x + right.x) / 2f - width / 2f
+        return if (size.width - 2f * margin < width) centred else centred.coerceIn(margin, size.width - margin - width)
     }
-    val text = measurer.measure("distance ${ScreenRules.distanceText(distance)}", style)
+    // The label sits above the bar, so nothing comes between the screen and row 0.
+    if (!selected) {
+        val text = measurer.measure("SCREEN · tap to adjust", style)
+        val topLeft = Offset(labelLeft(text.size.width.toFloat()), left.y - 9f * dp - text.size.height)
+        backdrop(Rect(topLeft, text.size.toSize()).inflate(3f * dp))
+        drawText(text, topLeft = topLeft)
+        return
+    }
+    val radius = HANDLE_RADIUS.value * dp
+    for (handle in listOf(left, right)) {
+        drawCircle(colors.canvas, radius = radius + HANDLE_RING.value * dp, center = handle)
+        drawCircle(colors.editorSelection, radius = radius, center = handle)
+        val box = Rect(handle, radius * 0.8f)
+        strokeGlyph(handleArrows, box, colors.onEditorSelection, strokeWidth = 2.6f)
+    }
+    val text = measurer.measure("distance ${ScreenRules.distanceText(geometry.screenDistance)}", style)
     val arrowWidth = 10f * dp
     val arrowHeight = 22f * dp
     val total = arrowWidth + 6f * dp + text.size.width
-    val x0 = (left.x + right.x) / 2f - total / 2f
-    val y0 = left.y + 6f * dp
+    val x0 = labelLeft(total)
+    val y0 = left.y - 8f * dp - arrowHeight
+    backdrop(Rect(x0, y0, x0 + total, y0 + arrowHeight).inflate(3f * dp))
     val arrowX = x0 + arrowWidth / 2f
     val arrow = Path().apply {
         moveTo(arrowX, y0 + 1f * dp)
@@ -648,6 +743,6 @@ private fun DrawScope.drawScreenControls(
         lineTo(arrowX, y0 + arrowHeight - 1f * dp)
         lineTo(arrowX + 4f * dp, y0 + arrowHeight - 5f * dp)
     }
-    drawPath(arrow, style.color, style = Stroke(width = 1.4f * dp, cap = StrokeCap.Round))
+    drawPath(arrow, colors.editorSelection, style = Stroke(width = 1.6f * dp, cap = StrokeCap.Round))
     drawText(text, topLeft = Offset(x0 + arrowWidth + 6f * dp, y0 + (arrowHeight - text.size.height) / 2f))
 }

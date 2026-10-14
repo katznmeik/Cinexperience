@@ -15,10 +15,11 @@ import kotlin.math.min
  * Sizes of a seat map drawing, in content units (pixels at zoom 1). The seat map
  * and the layout editor use different metrics for the same [SeatMapGeometry].
  *
- * @property screenTopSpace room above the screen line (arc bulge, drag handles).
+ * @property screenTopSpace room above the screen line (its stroke, drag handles).
  * @property minScreenGap minimum room between the screen line and row 0, e.g. for
  *   a "SCREEN" caption; 0 draws the screen distance exactly.
  * @property rightLabels also show row labels on the right of every row.
+ * @property screenSideSpace room left and right of the screen's ends (drag handles).
  */
 data class SeatMapMetrics(
     val seatSize: Float,
@@ -30,6 +31,7 @@ data class SeatMapMetrics(
     val minScreenGap: Float,
     val padding: Float,
     val rightLabels: Boolean = true,
+    val screenSideSpace: Float = 0f,
 ) {
     /** Horizontal distance between neighbouring cells' left edges. */
     val pitchX: Float get() = seatSize + seatGap
@@ -91,9 +93,9 @@ class SeatMapGeometry(
 
     /** Everything that is drawn, plus padding. */
     val contentBounds: Rect = Rect(
-        left = min(labelsLeft, screenLeft) - metrics.padding,
+        left = min(labelsLeft, screenLeft - metrics.screenSideSpace) - metrics.padding,
         top = screenY - metrics.screenTopSpace - metrics.padding,
-        right = max(labelsRight, screenRight) + metrics.padding,
+        right = max(labelsRight, screenRight + metrics.screenSideSpace) + metrics.padding,
         bottom = gridHeight + metrics.padding,
     )
 

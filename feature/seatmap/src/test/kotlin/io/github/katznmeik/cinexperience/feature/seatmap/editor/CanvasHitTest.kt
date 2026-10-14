@@ -14,18 +14,19 @@ class CanvasHitTest {
 
     /** Editor metrics at density 1. */
     private val metrics = SeatMapMetrics(
-        seatSize = 15f,
-        seatGap = 3f,
+        seatSize = 16f,
+        seatGap = 2f,
         rowGap = 3f,
         labelWidth = 22f,
-        labelGap = 5f,
-        screenTopSpace = 11f,
+        labelGap = 4f,
+        screenTopSpace = 34f,
         minScreenGap = 0f,
-        padding = 12f,
+        padding = 4f,
         rightLabels = false,
+        screenSideSpace = 13.5f,
     )
     private val handleTouchRadius = 24f
-    private val distanceLabelHeight = 34f
+    private val labelHeight = 34f
 
     /** A wide hall whose screen is close to row 0: the handles' touch circles reach into row 0. */
     private val geometry = SeatMapGeometry(
@@ -36,8 +37,8 @@ class CanvasHitTest {
     )
     private val transform = ViewBounds.of(Size(388f, 300f), geometry.contentBounds, 2.5f, 3f).fitted()
 
-    private fun hit(content: Offset) =
-        hitTest(transform.toScreen(content), geometry, transform, handleTouchRadius, distanceLabelHeight)
+    private fun hit(content: Offset, selected: Boolean = true, g: SeatMapGeometry = geometry) =
+        hitTest(transform.toScreen(content), g, transform, handleTouchRadius, labelHeight, screenSelected = selected)
 
     @Test
     fun rowZeroIsPaintedEvenUnderTheScreenHandles() {
@@ -50,14 +51,45 @@ class CanvasHitTest {
         assertEquals(CanvasHit.Cell(CellPosition(0, 29)), hit(geometry.cellCenter(0, 29)))
         assertEquals(CanvasHit.Cell(CellPosition(0, 15)), hit(geometry.cellCenter(0, 15))) // under the bar's middle
         assertEquals(CanvasHit.Cell(CellPosition(0, 15)), hit(Offset(geometry.cellCenter(0, 15).x, -1f))) // row 0's gap half
+        assertEquals(CanvasHit.Cell(CellPosition(0, 0)), hit(firstCell, selected = false))
     }
 
     @Test
-    fun screenControlsStillWorkAboveTheGrid() {
+    fun theSelectedScreenHasHandlesAndABar() {
         assertEquals(CanvasHit.WidthHandle(right = false), hit(Offset(geometry.screenLeft, geometry.screenY)))
         assertEquals(CanvasHit.WidthHandle(right = true), hit(Offset(geometry.screenRight, geometry.screenY - 2f)))
-        assertEquals(CanvasHit.DistanceHandle, hit(Offset(geometry.screenCenterX, geometry.screenY)))
-        assertEquals(CanvasHit.DistanceHandle, hit(Offset(geometry.screenCenterX, geometry.screenY - 4f)))
+        assertEquals(CanvasHit.ScreenBar, hit(Offset(geometry.screenCenterX, geometry.screenY)))
+        assertEquals(CanvasHit.ScreenBar, hit(Offset(geometry.screenCenterX, geometry.screenY - 4f)))
+    }
+
+    @Test
+    fun anUnselectedScreenIsOneBarWithoutHandles() {
+        // Where the handles would be, a touch selects (and drags) the bar instead of resizing.
+        assertEquals(CanvasHit.ScreenBar, hit(Offset(geometry.screenLeft, geometry.screenY), selected = false))
+        assertEquals(CanvasHit.ScreenBar, hit(Offset(geometry.screenRight, geometry.screenY - 2f), selected = false))
+        assertEquals(CanvasHit.ScreenBar, hit(Offset(geometry.screenCenterX, geometry.screenY), selected = false))
+    }
+
+    @Test
+    fun theStraightBarIsHitAlongItsLineOnly() {
+        // A short screen far from the grid: the bar is a straight line at screenY.
+        val g = SeatMapGeometry(SeatLayout.fromPatterns(List(3) { "S".repeat(30) }, firstSeatId = 1), metrics, 10f, 6f)
+        val t = ViewBounds.of(Size(388f, 300f), g.contentBounds, 2.5f, 3f).fitted()
+        fun at(content: Offset, selected: Boolean = false) =
+            hitTest(t.toScreen(content), g, t, handleTouchRadius, labelHeight, screenSelected = selected)
+        val y = g.screenY
+        assertEquals(CanvasHit.ScreenBar, at(Offset(g.screenLeft + 1f, y)))
+        assertEquals(CanvasHit.ScreenBar, at(Offset(g.screenRight - 1f, y)))
+        // The label above the bar's middle belongs to it.
+        assertEquals(CanvasHit.ScreenBar, at(Offset(g.screenCenterX, y - 30f)))
+        // The same height beside the bar, below it, and far above it: nothing.
+        assertEquals(CanvasHit.Empty, at(Offset(g.screenLeft - 40f, y)))
+        assertEquals(CanvasHit.Empty, at(Offset(g.screenRight + 40f, y)))
+        assertEquals(CanvasHit.Empty, at(Offset(g.screenCenterX, y + 40f)))
+        assertEquals(CanvasHit.Empty, at(Offset(g.screenCenterX, y - 80f)))
+        // Selected: handles at both ends.
+        assertEquals(CanvasHit.WidthHandle(right = false), at(Offset(g.screenLeft, y), selected = true))
+        assertEquals(CanvasHit.WidthHandle(right = true), at(Offset(g.screenRight, y), selected = true))
     }
 
     @Test
@@ -72,5 +104,12 @@ class CanvasHitTest {
         assertEquals(CanvasMode.ALIGN_REFERENCE, canvasMode(referenceMode = true, hasReferenceImage = true))
         // The screenshot may still be loading (or failed to load): only zoom and pan.
         assertEquals(CanvasMode.VIEW_ONLY, canvasMode(referenceMode = true, hasReferenceImage = false))
+    }
+
+    @Test
+    fun theHintFollowsTheMode() {
+        assertEquals("Tap or drag to paint · tap the screen to adjust it", canvasHint(false, false, 0.4f, screenSelected = false))
+        assertEquals("Drag the green handles to resize · drag the bar to move", canvasHint(false, true, 0.4f, screenSelected = true))
+        assertEquals("Reference screenshot · 40 % opacity · drag to align", canvasHint(true, true, 0.4f, screenSelected = false))
     }
 }

@@ -59,15 +59,41 @@ class ThemeContrastTest {
         }
     }
 
+    /** The seat fills with the colour of the numbers and marks drawn on them. */
+    private val seatFills = mapOf(
+        "great" to (c.seat.great to c.seat.onGreat),
+        "ok" to (c.seat.ok to c.seat.onOk),
+        "avoid" to (c.seat.avoid to c.seat.onAvoid),
+        "noData" to (c.seat.noData to c.seat.onNoData),
+    )
+
+    @Test
+    fun seatNumbersOnEveryFill() {
+        // Numbers are text: 4.5:1 on every fill, including the favourite (drawn on its
+        // colour's fill) and "no data" (the number sits on the fill inside the rim).
+        seatFills.forEach { (name, colors) ->
+            val (fill, on) = colors
+            assertContrast("number on $name", on, fill, TEXT_CONTRAST)
+        }
+    }
+
     @Test
     fun marksOnSeats() {
-        assertContrast("kind symbol (text) on noData", c.text, c.seat.noData, NON_TEXT_CONTRAST)
-        assertContrast("star (onPrimary) on great", c.onPrimary, c.seat.great, NON_TEXT_CONTRAST)
-        assertContrast("star (onPrimary) on ok", c.onPrimary, c.seat.ok, NON_TEXT_CONTRAST)
-        assertContrast("star (onPrimary) on avoid", c.onPrimary, c.seat.avoid, NON_TEXT_CONTRAST)
-        assertContrast("avoid × (surface) on avoid", c.surface, c.seat.avoid, NON_TEXT_CONTRAST)
+        // ×, ★ and the kind symbols use the same on-colours as the numbers.
+        seatFills.forEach { (name, colors) ->
+            val (fill, on) = colors
+            assertContrast("mark on $name", on, fill, NON_TEXT_CONTRAST)
+        }
         assertContrast("× badge (text) on surface", c.text, c.surface, NON_TEXT_CONTRAST)
         assertContrast("favourite rim (text) on surface", c.text, c.surface, NON_TEXT_CONTRAST)
+        assertContrast("× badge (surface) on avoid", c.surface, c.seat.avoid, NON_TEXT_CONTRAST)
+    }
+
+    @Test
+    fun editorSelectionOnTheCanvas() {
+        // The selected screen in the layout editor (bar and handles), the one non-seat hue.
+        assertContrast("editorSelection on canvas", c.editorSelection, c.canvas, NON_TEXT_CONTRAST)
+        assertContrast("handle arrows on editorSelection", c.onEditorSelection, c.editorSelection, NON_TEXT_CONTRAST)
     }
 
     @Test

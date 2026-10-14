@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -20,6 +21,8 @@ import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.Visit
+import io.github.katznmeik.cinexperience.core.seatmapui.SeatMapViewState
+import io.github.katznmeik.cinexperience.core.seatmapui.ViewTransform
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
@@ -136,6 +139,17 @@ class SeatMapScreenshotTest {
         capture("hall_detail_rated_tall") { HallDetail(state) }
     }
 
+    /**
+     * Seat numbers on every numbered seat of the coloured map (spec §6.3), at phone
+     * size: the selected avoid seat shows its × above its number, the favourite its ★.
+     */
+    @Test
+    fun hallDetailWithNumbers() {
+        repository = FakeCinexRepository(RatedHallFixture.store())
+        val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.manualAvoid) }
+        capture("hall_detail_numbers") { HallDetail(state) }
+    }
+
     /** The same at phone size: what is visible without scrolling. */
     @Test
     fun hallDetailRated() {
@@ -226,6 +240,34 @@ class SeatMapScreenshotTest {
         vm.selectRow(3) // the staggered row 4
         val state = vm.uiState.value
         capture("layout_editor_row_selected") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
+    }
+
+    /** The selected screen (spec §6.5): green bar and handles, the screen panel in place of the row panel. */
+    @Test
+    fun layoutEditorWithSelectedScreen() {
+        val vm = LayoutEditorViewModel(SampleData.DELPHI_LUX_SAAL_1, repository, FakeReferenceImageStore())
+        vm.selectScreen()
+        val state = vm.uiState.value
+        check(state.screenSelected)
+        capture("layout_editor_screen_selected") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
+    }
+
+    /**
+     * Zoomed in by the user: the seat numbers are bigger, and the "Fit" control sits in
+     * the line under the canvas, where it never covers the screen or its handles.
+     */
+    @Test
+    fun layoutEditorZoomedIn() {
+        val vm = LayoutEditorViewModel(SampleData.DELPHI_LUX_SAAL_1, repository, FakeReferenceImageStore())
+        vm.selectScreen()
+        val state = vm.uiState.value
+        val viewState = SeatMapViewState().apply {
+            // Twice the zoom of the fitted view, on the screen's right end (px at xxhdpi).
+            userTransform = ViewTransform(scale = 2f, offset = Offset(-1146f, 384f))
+        }
+        capture("layout_editor_adjusted") {
+            LayoutEditorScreen(state, referenceImage = null, actions = noActions, viewState = viewState)
+        }
     }
 
     @Test

@@ -52,6 +52,9 @@ object SeatGlyphs {
 
     val cross: Path by lazy { parse("M6 6l12 12M18 6L6 18") }
 
+    /** A larger ×, filling its box like the star and the kind symbols: the avoid mark above a seat number. */
+    val markCross: Path by lazy { parse("M4 4l16 16M20 4L4 20") }
+
     fun of(kind: SeatKind): Path? = when (kind) {
         SeatKind.STANDARD -> null
         SeatKind.WHEELCHAIR -> wheelchair

@@ -1,11 +1,15 @@
 package io.github.katznmeik.cinexperience.core.seatmapui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
@@ -13,6 +17,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
+import io.github.katznmeik.cinexperience.core.testing.SampleLayouts
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import org.junit.Rule
 import org.junit.Test
@@ -58,6 +63,53 @@ class SeatMapScreenshotTest {
         }
         composeRule.waitForIdle()
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/seat_map_states.png")
+    }
+
+    /**
+     * Seat numbers and the minimum number size: a 22-column hall fitted to a phone's
+     * map card shows its numbers; a 30-column hall is too small for them when fitted
+     * (its seats show their marks as symbols) and shows them once zoomed in.
+     */
+    @Test
+    fun seatNumbersFittedAndZoomed() {
+        val wide = SeatLayout.fromPatterns(List(6) { "SSSSSS|" + "S".repeat(16) + "|SSSSSS" }, firstSeatId = 1)
+        val visuals = wide.seatIds.withIndex().associate { (index, id) ->
+            id to SeatVisual(listOf(SeatTone.NO_DATA, SeatTone.GREAT, SeatTone.OK, SeatTone.AVOID)[index / 7 % 4])
+        }
+        val zoomed = SeatMapViewState().apply { userTransform = ViewTransform(scale = 1.4f, offset = Offset(-280f, 60f)) }
+        composeRule.setContent {
+            CinexTheme {
+                Column(
+                    Modifier.fillMaxSize().background(CinexTheme.colors.background).padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Card {
+                        SeatMap(SampleLayouts.splitHall, "22 columns", screenWidth = 16f, maxHeight = 240.dp, modifier = Modifier.fillMaxWidth())
+                    }
+                    Card { SeatMap(wide, "30 columns", seatVisuals = visuals, maxHeight = 200.dp, modifier = Modifier.fillMaxWidth()) }
+                    Card {
+                        SeatMap(
+                            wide,
+                            "30 columns, zoomed in",
+                            seatVisuals = visuals,
+                            maxHeight = 200.dp,
+                            viewState = zoomed,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/seat_map_numbers.png")
+    }
+
+    /** Like the hall detail's map card: surface, 6 dp side padding. */
+    @Composable
+    private fun Card(content: @Composable () -> Unit) {
+        Box(Modifier.fillMaxWidth().background(CinexTheme.colors.surface).padding(horizontal = 6.dp, vertical = 10.dp)) {
+            content()
+        }
     }
 
     /** The legend under the map, on the map card's surface. */
