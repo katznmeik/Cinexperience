@@ -61,7 +61,9 @@ internal class BackupRestorer(
             for ((path, stagedFile) in staged.files) {
                 val target = File(filesDir, path)
                 if (target.exists() && target.isFile && sameContent(target, stagedFile.file)) {
-                    // Already there (e.g. re-importing a backup of this device): reuse it.
+                    // Already there (e.g. re-importing a backup of this device): reuse it. It may be
+                    // an old unreferenced file, so refresh its date to keep the orphan sweep away.
+                    target.setLastModified(now())
                 } else {
                     val finalPath = if (target.exists()) freePath(path).also { renamed[path] = it } else path
                     val finalTarget = File(filesDir, finalPath)

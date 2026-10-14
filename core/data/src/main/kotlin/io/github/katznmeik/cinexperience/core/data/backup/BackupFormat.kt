@@ -89,7 +89,8 @@ internal object BackupFormat {
 internal data class BackupLimits(
     val maxEntries: Int = 50_000,
     val maxManifestBytes: Long = 64L * 1024,
-    val maxDataBytes: Long = 64L * 1024 * 1024,
+    /** data.json is parsed in memory; real data is far smaller (thousands of visits ≈ a few MB). */
+    val maxDataBytes: Long = 16L * 1024 * 1024,
     /** Per photo or reference image; stored images are at most 2048 px JPEGs. */
     val maxFileBytes: Long = 64L * 1024 * 1024,
     val maxTotalBytes: Long = 8L * 1024 * 1024 * 1024,

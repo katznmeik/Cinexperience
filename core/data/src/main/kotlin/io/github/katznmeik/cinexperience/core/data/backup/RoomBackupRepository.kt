@@ -143,6 +143,7 @@ internal class RoomBackupRepository(
                     is BackupException, is CancellationException -> e
                     is IOException -> BackupException(BackupError.READ_FAILED, "Couldn't read the backup file.", e)
                     is Exception -> BackupException(BackupError.INVALID_DATA, "The backup is damaged and can't be read.", e)
+                    is OutOfMemoryError -> BackupException(BackupError.TOO_LARGE, "This backup is too large to import.", e)
                     else -> e
                 }
             }
