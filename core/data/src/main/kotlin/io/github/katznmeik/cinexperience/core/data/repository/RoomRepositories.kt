@@ -17,6 +17,7 @@ import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
+import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatOverride
@@ -102,6 +103,11 @@ internal class RoomCinemaRepository(
         }
     }
 
+    override suspend fun setFavourite(cinemaId: Long, favourite: Boolean): Boolean = db.withTransaction {
+        val existing = dao.get(cinemaId) ?: return@withTransaction false
+        existing.isFavourite == favourite || dao.update(existing.copy(isFavourite = favourite)) > 0
+    }
+
     override suspend fun deleteCinema(cinemaId: Long): DeleteResult = db.withTransaction {
         val existing = dao.get(cinemaId)
         when {
@@ -180,6 +186,7 @@ internal class RoomHallRepository(
 
     override suspend fun updateHall(hall: Hall): Boolean {
         val cleanName = hall.name.requireName()
+        require(ScreenOffsetRules.isValid(hall.screenOffset)) { "Invalid screen offset ${hall.screenOffset}" }
         val layoutJson = hall.layout?.let(LayoutJson::encode)
         return db.withTransaction {
             val existing = hallDao.get(hall.id) ?: return@withTransaction false
@@ -212,6 +219,8 @@ internal class RoomHallRepository(
                 layoutJson = newLayoutJson,
                 screenWidth = hall.screenWidth,
                 screenDistance = hall.screenDistance,
+                // + 0f stores -0.0 as 0.0, so an unchanged offset always compares equal.
+                screenOffset = hall.screenOffset + 0f,
                 referenceImagePath = hall.referenceImagePath.cleanText(),
                 notes = hall.notes.cleanText(),
                 nextSeatId = maxOf(mark, hall.layout?.nextSeatId ?: 0),

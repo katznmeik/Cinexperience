@@ -60,6 +60,33 @@ internal class CinemaRepositoryTest : DatabaseTest() {
     }
 
     @Test
+    fun favouritesAreStoredReadEverywhereAndSurviveEdits() = runTest {
+        val kino = cinemas.createCinema("Kino")
+        val preloaded = preloadedCinema()
+        assertFalse(cinemas.observeCinemaDetail(kino).first()!!.cinema.isFavourite)
+
+        assertTrue(cinemas.setFavourite(kino, true))
+        assertTrue(cinemas.setFavourite(preloaded, true))
+        assertTrue(cinemas.setFavourite(preloaded, true)) // unchanged is fine
+        // Every read model the cinema screens use carries the flag.
+        assertEquals(setOf(kino, preloaded), cinemas.observeCinemas().first().filter { it.cinema.isFavourite }.map { it.cinema.id }.toSet())
+        assertEquals(setOf(kino, preloaded), cinemas.observeCinemaDetails().first().filter { it.cinema.isFavourite }.map { it.cinema.id }.toSet())
+        assertTrue(cinemas.observeCinemaDetail(kino).first()!!.cinema.isFavourite)
+
+        // Editing and renaming keep it.
+        assertTrue(cinemas.updateCinema(kino, "Kino 2", "Street 1", "note"))
+        assertTrue(cinemas.renameCinema(preloaded, "Renamed"))
+        assertTrue(cinemas.observeCinemaDetail(kino).first()!!.cinema.isFavourite)
+        assertTrue(cinemas.observeCinemaDetail(preloaded).first()!!.cinema.isFavourite)
+
+        assertTrue(cinemas.setFavourite(kino, false))
+        assertFalse(cinemas.observeCinemaDetail(kino).first()!!.cinema.isFavourite)
+        assertTrue(cinemas.observeCinemaDetail(preloaded).first()!!.cinema.isFavourite)
+
+        assertFalse(cinemas.setFavourite(999, true))
+    }
+
+    @Test
     fun blankNamesAreRejected() = runTest {
         assertThrows(IllegalArgumentException::class.java) { runBlocking { cinemas.createCinema(" ") } }
         val id = cinemas.createCinema("A")

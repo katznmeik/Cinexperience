@@ -47,6 +47,14 @@ interface CinemaRepository {
 
     suspend fun renameCinema(cinemaId: Long, name: String): Boolean
 
+    /**
+     * Marks the cinema as a favourite or unmarks it (spec §6.1, §6.2); any number
+     * of cinemas can be favourites. Returns false if the cinema doesn't exist.
+     * Every flow of this repository then emits the cinema with the new
+     * [io.github.katznmeik.cinexperience.core.model.Cinema.isFavourite].
+     */
+    suspend fun setFavourite(cinemaId: Long, favourite: Boolean): Boolean
+
     /** Deletes a user-added cinema with its halls, visits and overrides. */
     suspend fun deleteCinema(cinemaId: Long): DeleteResult
 }
@@ -63,9 +71,13 @@ interface HallRepository {
     suspend fun renameHall(hallId: Long, name: String): Boolean
 
     /**
-     * Saves the editable fields of [hall]: name, layout, screen width/distance,
-     * reference image and notes. `cinemaId`, `isPreloaded`, `seedKey` and
-     * `nextSeatId` are not changeable. When the layout changes, overrides of seats
+     * Saves the editable fields of [hall]: name, layout, screen width, distance
+     * and offset, reference image and notes. `cinemaId`, `isPreloaded`, `seedKey`
+     * and `nextSeatId` are not changeable. [Hall.screenOffset] must be
+     * [io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules.isValid]
+     * (IllegalArgumentException otherwise; snap it with `ScreenOffsetRules.snap`).
+     * A caller that doesn't deal with the offset keeps it by saving a copy of
+     * the hall it read. When the layout changes, overrides of seats
      * that no longer exist are deleted (visits keep their seat id; it simply has no
      * label any more). Returns false if the hall doesn't exist.
      *

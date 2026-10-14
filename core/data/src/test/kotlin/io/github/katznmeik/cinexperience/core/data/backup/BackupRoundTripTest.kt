@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.core.data.backup
 
+import io.github.katznmeik.cinexperience.core.data.repository.RoomCinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomHallRepository
 import io.github.katznmeik.cinexperience.core.data.save
 import io.github.katznmeik.cinexperience.core.model.Visit
@@ -36,7 +37,7 @@ internal class BackupRoundTripTest : BackupTestBase() {
         assertEquals(counts, preview.counts)
         assertEquals(Instant.parse("2026-10-03T12:05:00Z"), preview.exportedAt)
         assertEquals("1.2.3", preview.appVersion)
-        assertEquals(1, preview.backupVersion)
+        assertEquals(2, preview.backupVersion)
         assertEquals(ImportSource.FILE, preview.source)
 
         assertEquals(counts, deviceB.repository.commitImport(preview))
@@ -49,6 +50,38 @@ internal class BackupRoundTripTest : BackupTestBase() {
         // Seeding afterwards adds and changes nothing.
         assertFalse(deviceB.seed())
         assertEquals(expected, deviceB.snapshot())
+    }
+
+    @Test
+    fun favouriteCinemasAndScreenOffsetsSurviveTheRoundTrip() = runTest {
+        buildRealisticData()
+        val doc = deviceA.document("backup.zip")
+        deviceA.repository.export(doc)
+
+        // data.json carries both fields.
+        val data = BackupFormat.strictJson.decodeFromString(
+            BackupData.serializer(),
+            readZip(File(doc)).single { it.first == BackupFormat.DATA }.second.decodeToString(),
+        )
+        assertEquals(setOf("delphi LUX", "Kiezkino"), data.cinemas.filter { it.isFavourite }.map { it.name }.toSet())
+        assertEquals(mapOf("Saal Eins" to -1.5f, "Saal A" to 2f), data.halls.filter { it.screenOffset != 0f }.associate { it.name to it.screenOffset })
+
+        val deviceB = newDevice("b")
+        deviceB.seed()
+        deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
+
+        val cinemasB = RoomCinemaRepository(deviceB.db, Dispatchers.Default)
+        val details = cinemasB.observeCinemaDetails().first()
+        assertEquals(setOf("delphi LUX", "Kiezkino"), details.filter { it.cinema.isFavourite }.map { it.cinema.name }.toSet())
+        assertEquals(
+            mapOf("Saal Eins" to -1.5f, "Saal A" to 2f),
+            details.flatMap { it.halls }.filter { it.hall.screenOffset != 0f }.associate { it.hall.name to it.hall.screenOffset },
+        )
+        // The safety copy taken before the import holds device B's data in the same format, and validates.
+        val copy = deviceB.latestCopyData()!!
+        BackupValidator.validate(copy, copy.filePaths)
+        assertTrue(copy.cinemas.none { it.isFavourite })
+        assertTrue(copy.halls.all { it.screenOffset == 0f })
     }
 
     @Test
@@ -133,7 +166,7 @@ internal class BackupRoundTripTest : BackupTestBase() {
         )
         val manifest = BackupFormat.manifestJson.decodeFromString(BackupManifest.serializer(), entries[0].second.decodeToString())
         assertEquals("cinexperience-backup", manifest.format)
-        assertEquals(1, manifest.backupVersion)
+        assertEquals(2, manifest.backupVersion)
         assertEquals("2026-10-03T12:05:00Z", manifest.exportedAt)
     }
 

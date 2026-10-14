@@ -1,0 +1,123 @@
+{
+    "backupVersion": 1,
+    "cinemas": [
+        {
+            "id": 5,
+            "name": "delphi LUX",
+            "address": "Kantstraße 10",
+            "notes": null,
+            "isPreloaded": true,
+            "seedKey": "delphi-lux"
+        },
+        {
+            "id": 14,
+            "name": "Kiezkino",
+            "address": null,
+            "notes": "Small and cosy",
+            "isPreloaded": false,
+            "seedKey": null
+        }
+    ],
+    "halls": [
+        {
+            "id": 11,
+            "cinemaId": 5,
+            "name": "Saal Eins",
+            "layoutJson": "{\"formatVersion\":1,\"nextSeatId\":5,\"rows\":[{\"cells\":\"SS|SS\",\"seatIds\":[1,2,3,4]}]}",
+            "screenWidth": 3.5,
+            "screenDistance": 2.0,
+            "referenceImagePath": null,
+            "notes": "Row 1 is close",
+            "isPreloaded": true,
+            "seedKey": "delphi-lux/saal-1",
+            "nextSeatId": 5
+        },
+        {
+            "id": 37,
+            "cinemaId": 14,
+            "name": "Saal A",
+            "layoutJson": null,
+            "screenWidth": null,
+            "screenDistance": null,
+            "referenceImagePath": null,
+            "notes": null,
+            "isPreloaded": false,
+            "seedKey": null,
+            "nextSeatId": 1
+        }
+    ],
+    "visits": [
+        {
+            "id": 1,
+            "hallId": 11,
+            "date": "2026-09-12",
+            "filmTitle": "Perfect Days",
+            "seatId": 3,
+            "screeningFormat": "OMU",
+            "hallRatings": {
+                "sound": 5,
+                "picture": 4,
+                "screenSize": null,
+                "seatComfort": 3,
+                "legroom": null,
+                "steepness": 2
+            },
+            "seatRating": 4,
+            "cinemaRatings": {
+                "atmosphere": 5,
+                "barSnacks": null,
+                "popcorn": 3,
+                "seatComfort": null
+            },
+            "note": "Great sound",
+            "photoPath": "photos/visit-1.jpg"
+        },
+        {
+            "id": 2,
+            "hallId": 37,
+            "date": "2026-09-20",
+            "filmTitle": null,
+            "seatId": null,
+            "screeningFormat": null,
+            "hallRatings": {
+                "sound": null,
+                "picture": null,
+                "screenSize": null,
+                "seatComfort": null,
+                "legroom": null,
+                "steepness": null
+            },
+            "seatRating": null,
+            "cinemaRatings": {
+                "atmosphere": null,
+                "barSnacks": null,
+                "popcorn": null,
+                "seatComfort": null
+            },
+            "note": null,
+            "photoPath": null
+        }
+    ],
+    "seatOverrides": [
+        {
+            "hallId": 11,
+            "seatId": 3,
+            "colour": "GREEN",
+            "isFavourite": true
+        }
+    ],
+    "seedSnapshots": [
+        {
+            "kind": "hall",
+            "seedKey": "delphi-lux/saal-1",
+            "field": "screenWidth",
+            "value": "3.5"
+        }
+    ],
+    "metadata": [
+        {
+            "key": "seed_version",
+            "value": "2"
+        }
+    ]
+}

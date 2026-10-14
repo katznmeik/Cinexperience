@@ -126,6 +126,13 @@ internal abstract class BackupTestBase : DatabaseTest() {
             .build()
             .also { extraDatabases += it }
 
+    /**
+     * Whether the devices seed after an import, from the bundled seed (like the app).
+     * A test that compares imported data exactly turns it off, so a later seed
+     * update doesn't add cinemas and halls to its result.
+     */
+    protected open val seedAfterImport: Boolean = true
+
     /** Device A, on the base class database. */
     protected val deviceA: Device by lazy { Device(db, "a") }
 
@@ -147,7 +154,7 @@ internal abstract class BackupTestBase : DatabaseTest() {
             documents = documents,
             lastExportStore = lastExports,
             appVersion = { "1.2.3" },
-            readSeed = { seedAsset },
+            readSeed = if (seedAfterImport) ({ seedAsset }) else null,
             ioDispatcher = Dispatchers.IO,
             clock = clock,
             limits = limits,
@@ -196,7 +203,8 @@ internal abstract class BackupTestBase : DatabaseTest() {
 
     /**
      * Realistic data on device A: the shipped seed (13 cinemas, 36 halls, delphi
-     * LUX layouts with seat kinds), a renamed preloaded hall with a reference image,
+     * LUX layouts with seat kinds), two favourite cinemas (one preloaded, one
+     * user-added), two halls with a shifted screen, a renamed preloaded hall with a reference image,
      * visits with seats, ratings, photos and formats, seat colours and a favourite,
      * a user-added cinema whose hall has seat kinds, an aisle, a seat id mark above
      * its layout's ids and a visit on a seat that was removed since.
@@ -208,7 +216,10 @@ internal abstract class BackupTestBase : DatabaseTest() {
         halls.renameHall(saal1.id, "Saal Eins")
         val lux = halls.getHall(saal1.id)!!
         val luxSeats = lux.layout!!.seatIds.sortedBy { it.value }
-        halls.updateHall(lux.copy(referenceImagePath = dev.writeFile("reference/hall-${lux.id}-a.jpg"), screenWidth = 12.5f))
+        halls.updateHall(
+            lux.copy(referenceImagePath = dev.writeFile("reference/hall-${lux.id}-a.jpg"), screenWidth = 12.5f, screenOffset = -1.5f),
+        )
+        cinemas.setFavourite(lux.cinemaId, true)
         visits.save(
             Visit(
                 hallId = lux.id,
@@ -228,6 +239,7 @@ internal abstract class BackupTestBase : DatabaseTest() {
         overrides.setFavouriteSeat(lux.id, luxSeats[3])
 
         val kino = cinemas.createCinema("Kiezkino", "Weserstraße 1", "Small and cosy")
+        cinemas.setFavourite(kino, true)
         val hallId = halls.createHall(kino, "Saal A")
         val empty = halls.getHall(hallId)!!
         val drawn = empty.startLayoutEdit().newGrid(4, 6)
@@ -246,6 +258,7 @@ internal abstract class BackupTestBase : DatabaseTest() {
             userHall.copy(
                 screenWidth = 8f,
                 screenDistance = 1.5f,
+                screenOffset = 2f,
                 notes = "Row C is best",
                 referenceImagePath = dev.writeFile("reference/hall-$hallId-b.jpg"),
             ),

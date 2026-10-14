@@ -122,16 +122,28 @@ Don't duplicate config in module build files.
   `seatStatesDescription()`, and a coloured map is shown with a `SeatLegend`.
   Overrides and the favourite are written only through `SeatOverrideRepository`
   (the fake in `core:testing` models them like Room: `FakeStore.overrides`).
-- **Schema changes:** bump the `CinexDatabase` version, add a migration to
-  `ALL_MIGRATIONS`, commit the exported `core/data/schemas/.../<n>.json` and add
-  a case to `MigrationTest`. No destructive fallback. A new table or column must
+- **Screen geometry** (`Hall`): `screenWidth` in seat widths, `screenDistance`
+  in row depths to row 1, `screenOffset` = shift of the screen's centre from the
+  grid's centre in seat widths (0.5 steps, negative = left as seen from the
+  seats, 0 = centred). The screen is a straight bar. Offset rules live in
+  `core:model` `ScreenOffsetRules` (`isValid`, `snap`, `maxMagnitude(columns)`);
+  `updateHall` rejects invalid offsets, so snap first. `viewingAngle(...,
+  screenOffset = hall.screenOffset)` uses it.
+- **Favourite cinemas:** `Cinema.isFavourite`, written only through
+  `CinemaRepository.setFavourite`; every cinema flow carries it.
+- **Schema changes:** the database is at version 2 (`MIGRATION_1_2` added
+  `cinema.is_favourite` and `hall.screen_offset`). Bump the `CinexDatabase`
+  version, add a migration to `ALL_MIGRATIONS`, commit the exported
+  `core/data/schemas/.../<n>.json` and add a case to `MigrationTest`. No destructive fallback. A new table or column must
   also reach the backup (next point).
 - **Backup** (`core/data/.../backup/`, format in `BackupFormat.kt`): a zip with
   `manifest.json`, `data.json` (every row, ids included, layouts as stored) and
   the referenced `photos/` and `reference/` files. The DTOs are the format and
-  are separate from the Room entities: any DTO change bumps `BACKUP_VERSION` and
+  are separate from the Room entities: any DTO change bumps `BACKUP_VERSION`
+  (now 2: favourites and screen offsets; step 1 → 2 fills the defaults) and
   adds a step to `BackupMigrations` (imports parse `data.json` strictly,
-  straight into the DTOs). `BackupValidator` holds the data rules; export and
+  straight into the DTOs; new DTO fields get no default value). The v1
+  fixture in `core/data/src/test/resources/backup/v1` is never changed. `BackupValidator` holds the data rules; export and
   safety copies run it too, so no backup is written that can't be imported.
   Imports validate everything before touching data (`BackupReader`; manifest
   and data must precede the files, unreferenced entries are skipped), make
@@ -167,7 +179,8 @@ Don't duplicate config in module build files.
 - **Seed data:** `core/data/src/main/assets/seed/yorck.json`. Bump `seedVersion`
   for every change; `seedKey`s are permanent. Seeding only inserts missing items
   and fills empty fields, it never overwrites or deletes (a renamed seed hall
-  only gets the new name on fresh installs).
+  only gets the new name on fresh installs). For `screenOffset`, 0 counts as
+  empty (see `Seeder`).
 - **Seed layouts** (`"layout"` of a seed hall, see `LayoutJson`): one object per
   grid row, closest to the screen first, e.g.
   `{ "label": "1", "cells": "W.W|SSSSSSSSS|W.W" }`. Cell characters: `S` seat,
@@ -179,7 +192,9 @@ Don't duplicate config in module build files.
   spacer row of gaps without a label. Omit `seatIds`: seed ids are assigned
   row-major from 1. Use `"formatVersion": 2` when a layout has `W`, `C` or `F`.
   `screenWidth` is in seat widths, `screenDistance` in row depths between the
-  screen and row 1 (0.5 steps; the screen is always centred over the grid).
+  screen and row 1 (0.5 steps). An optional `screenOffset` (seat widths, 0.5
+  steps) shifts the screen sideways; Yorck's plans don't show it, so omit it
+  (centred) unless the owner gives one.
 - **Adding transcribed halls:** measure the Yorck-app screenshot (seat box
   centres → columns by the seat pitch, rows by the row pitch; check each icon),
   mark an empty column between two blocks as `|` in the rows where both blocks
