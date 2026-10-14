@@ -18,6 +18,7 @@ import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
+import io.github.katznmeik.cinexperience.core.testing.FakeBackupRepository
 import io.github.katznmeik.cinexperience.di.AppContainer
 import io.github.katznmeik.cinexperience.feature.cinemas.closeDeletedCinema
 import kotlinx.coroutines.runBlocking
@@ -39,6 +40,7 @@ private class FakeAppContainer(repository: FakeCinexRepository) : AppContainer {
     override val seatOverrideRepository = repository
     override val referenceImageStore = FakeReferenceImageStore()
     override val visitPhotoStore = FakeVisitPhotoStore()
+    override val backupRepository = FakeBackupRepository()
 }
 
 /**

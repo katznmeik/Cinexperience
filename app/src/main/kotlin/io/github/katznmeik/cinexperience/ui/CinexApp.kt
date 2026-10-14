@@ -130,6 +130,7 @@ fun CinexApp(
             // Settings tab
             settingsScreen(
                 cinemaRepository = container.cinemaRepository,
+                backupRepository = container.backupRepository,
                 appVersion = container.appVersion,
                 onOpenManage = navController::navigateToManageCinemas,
                 onOpenAllVisits = navController::navigateToAllVisits,

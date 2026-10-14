@@ -1,25 +1,41 @@
 package io.github.katznmeik.cinexperience.feature.backup
 
+import android.content.ActivityNotFoundException
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.katznmeik.cinexperience.core.data.backup.BackupRepository
+import io.github.katznmeik.cinexperience.core.data.backup.ImportPreview
+import io.github.katznmeik.cinexperience.core.data.backup.ImportSource
 import io.github.katznmeik.cinexperience.core.ui.component.CinexScreen
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
@@ -28,7 +44,19 @@ import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
-private const val LATER_VERSION = "Coming in a later version"
+/** Backup callbacks of the Settings screen, implemented by [SettingsViewModel] and the file pickers. */
+internal interface BackupActions {
+    fun onExport() {}
+    fun onImport() {}
+    fun onRestoreSafetyCopy() {}
+    fun onConfirmImport() {}
+    fun onCancelImport() {}
+    fun onMessageShown() {}
+
+    companion object {
+        val None = object : BackupActions {}
+    }
+}
 
 @Composable
 internal fun SettingsEntry(
@@ -37,68 +65,197 @@ internal fun SettingsEntry(
     onOpenAllVisits: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    SettingsScreen(state, onOpenManage, onOpenAllVisits)
+    val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(BackupRepository.MIME_TYPE)) { uri ->
+        viewModel.onExportDestinationChosen(uri?.toString())
+    }
+    val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        viewModel.onImportSourceChosen(uri?.toString())
+    }
+    val actions = remember(viewModel) {
+        object : BackupActions {
+            override fun onExport() = launchPicker(viewModel) { exportPicker.launch(viewModel.exportFileName()) }
+            override fun onImport() = launchPicker(viewModel) { importPicker.launch(BackupRepository.IMPORT_MIME_TYPES) }
+            override fun onRestoreSafetyCopy() = viewModel.onRestoreSafetyCopy()
+            override fun onConfirmImport() = viewModel.onConfirmImport()
+            override fun onCancelImport() = viewModel.onCancelImport()
+            override fun onMessageShown() = viewModel.onMessageShown()
+        }
+    }
+    SettingsScreen(state, onOpenManage, onOpenAllVisits, actions = actions)
 }
 
-/** Settings (spec §6.7): backup (disabled until M6), data management, about. */
+private fun launchPicker(viewModel: SettingsViewModel, launch: () -> Unit) {
+    try {
+        launch()
+    } catch (e: ActivityNotFoundException) {
+        viewModel.onPickerUnavailable()
+    }
+}
+
+/** Settings (spec §6.7): backup, data management, about. */
 @Composable
 internal fun SettingsScreen(
     state: SettingsUiState,
     onOpenManage: () -> Unit,
     onOpenAllVisits: () -> Unit,
     modifier: Modifier = Modifier,
+    actions: BackupActions = BackupActions.None,
 ) {
-    CinexScreen(title = "Settings", modifier = modifier) {
-        Section("Backup") {
-            SettingsRow(CinexIcons.Export, "Export backup", LATER_VERSION, enabled = false)
-            RowDivider()
-            SettingsRow(CinexIcons.Import, "Import backup", LATER_VERSION, enabled = false)
-            RowDivider()
-            // The manifest allows Android Auto Backup (spec §8); a switch for it follows in M6.
-            SettingsRow(CinexIcons.Cloud, "Android auto backup", "Backs up to your Google account", onClick = null) {
-                Text("On", style = MaterialTheme.typography.labelLarge, color = CinexTheme.colors.textMuted)
+    val backup = state.backup
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(backup.message) {
+        backup.message?.let {
+            snackbarHostState.showSnackbar(it)
+            actions.onMessageShown()
+        }
+    }
+    Box(modifier.fillMaxSize()) {
+        CinexScreen(title = "Settings") {
+            Section("Backup") { BackupRows(backup, actions) }
+            Section("Data") {
+                val counts = state.counts
+                SettingsRow(
+                    icon = CinexIcons.Cinemas,
+                    title = "Manage cinemas & halls",
+                    subtitle = when {
+                        counts != null -> "${countText(counts.cinemas, "cinema")} · ${countText(counts.halls, "hall")} · " +
+                            "${countText(counts.layoutsDrawn, "layout")} drawn"
+                        state.countsError -> "Couldn't load the counts"
+                        else -> null
+                    },
+                    onClick = onOpenManage,
+                )
+                RowDivider()
+                SettingsRow(
+                    icon = CinexIcons.List,
+                    title = "All visits",
+                    subtitle = counts?.let { if (it.visits == 0) "No visits yet" else countText(it.visits, "visit") },
+                    onClick = onOpenAllVisits,
+                )
+            }
+            Section("About") {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "CINEXPERIENCE",
+                        style = CinexTheme.textStyles.cardTitle.copy(fontWeight = FontWeight.ExtraBold),
+                        color = CinexTheme.colors.text,
+                    )
+                    Text("Version ${state.appVersion}", style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
+                    Text(
+                        "Unofficial app, not affiliated with Yorck Kinos.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = CinexTheme.colors.textMuted,
+                    )
+                }
             }
         }
-        Section("Data") {
-            val counts = state.counts
-            SettingsRow(
-                icon = CinexIcons.Cinemas,
-                title = "Manage cinemas & halls",
-                subtitle = when {
-                    counts != null -> "${countText(counts.cinemas, "cinema")} · ${countText(counts.halls, "hall")} · " +
-                        "${countText(counts.layoutsDrawn, "layout")} drawn"
-                    state.countsError -> "Couldn't load the counts"
-                    else -> null
-                },
-                onClick = onOpenManage,
-            )
-            RowDivider()
-            SettingsRow(
-                icon = CinexIcons.List,
-                title = "All visits",
-                subtitle = counts?.let { if (it.visits == 0) "No visits yet" else countText(it.visits, "visit") },
-                onClick = onOpenAllVisits,
-            )
-        }
-        Section("About") {
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+    }
+    backup.preview?.let { ImportPreviewDialog(it, actions) }
+}
+
+@Composable
+private fun BackupRows(backup: BackupUiState, actions: BackupActions) {
+    val task = backup.task
+    val exporting = task as? BackupTask.Exporting
+    val importing = task as? BackupTask.Importing
+    val idle = !backup.isBusy
+
+    SettingsRow(
+        icon = CinexIcons.Export,
+        title = "Export backup",
+        subtitle = when {
+            exporting != null -> "Exporting… ${percentText(exporting.progress)}"
+            backup.lastExport != null -> lastExportText(backup.lastExport)
+            else -> "No export yet"
+        },
+        enabled = idle || exporting != null,
+        onClick = if (idle) actions::onExport else null,
+        progress = exporting?.let { RowProgress(it.progress) },
+    )
+    RowDivider()
+    val importFromFile = importing?.source == ImportSource.FILE
+    SettingsRow(
+        icon = CinexIcons.Import,
+        title = "Import backup",
+        subtitle = when {
+            task == BackupTask.CheckingBackup -> "Checking the backup…"
+            importing != null && importFromFile -> "Importing… ${percentText(importing.progress)}"
+            else -> "Replaces all current data"
+        },
+        enabled = idle || task == BackupTask.CheckingBackup || importFromFile,
+        onClick = if (idle) actions::onImport else null,
+        progress = when {
+            task == BackupTask.CheckingBackup -> RowProgress(null)
+            importing != null && importFromFile -> RowProgress(importing.progress)
+            else -> null
+        },
+    )
+    val safetyCopy = backup.safetyCopy
+    val restoring = importing?.source == ImportSource.SAFETY_COPY
+    if (safetyCopy != null || restoring) {
+        RowDivider()
+        SettingsRow(
+            icon = CinexIcons.Undo,
+            title = "Restore safety copy",
+            subtitle = when {
+                restoring -> "Restoring… ${percentText(importing!!.progress)}"
+                safetyCopy != null -> "Before the import on ${dateTimeText(safetyCopy.createdAt)}"
+                else -> null
+            },
+            enabled = idle || restoring,
+            onClick = if (idle) actions::onRestoreSafetyCopy else null,
+            progress = if (restoring) RowProgress(importing!!.progress) else null,
+        )
+    }
+    RowDivider()
+    // The manifest allows Android Auto Backup (spec §8) for the database and preferences.
+    SettingsRow(CinexIcons.Cloud, "Android auto backup", "Backs up to your Google account", onClick = null) {
+        Text("On", style = MaterialTheme.typography.labelLarge, color = CinexTheme.colors.textMuted)
+    }
+}
+
+/** Preview of a validated backup (spec §8): what it contains and that it replaces everything. */
+@Composable
+private fun ImportPreviewDialog(preview: ImportPreview, actions: BackupActions) {
+    val fromSafetyCopy = preview.source == ImportSource.SAFETY_COPY
+    AlertDialog(
+        onDismissRequest = actions::onCancelImport,
+        title = { Text(if (fromSafetyCopy) "Restore safety copy?" else "Import backup?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "CINEXPERIENCE",
-                    style = CinexTheme.textStyles.cardTitle.copy(fontWeight = FontWeight.ExtraBold),
+                    text = if (fromSafetyCopy) {
+                        "Saved ${dateTimeText(preview.exportedAt)}, before an import"
+                    } else {
+                        "Exported ${dateTimeText(preview.exportedAt)} · app version ${preview.appVersion}"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CinexTheme.colors.textMuted,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    previewCountLines(preview.counts).forEach { line ->
+                        Text(line, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text)
+                    }
+                }
+                Text(
+                    "This replaces all current data.",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = CinexTheme.colors.text,
                 )
-                Text("Version ${state.appVersion}", style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
                 Text(
-                    "Unofficial app, not affiliated with Yorck Kinos.",
+                    "A safety copy of your current data is saved first. You can restore it in Settings.",
                     style = MaterialTheme.typography.bodySmall,
                     color = CinexTheme.colors.textMuted,
                 )
             }
-        }
-    }
+        },
+        confirmButton = { TextButton(onClick = actions::onConfirmImport) { Text("Replace") } },
+        dismissButton = { TextButton(onClick = actions::onCancelImport) { Text("Cancel") } },
+    )
 }
 
 @Composable
@@ -109,9 +266,13 @@ private fun Section(title: String, content: @Composable () -> Unit) {
     }
 }
 
+/** A progress bar under a row's text; [fraction] `null` = indeterminate. */
+private data class RowProgress(val fraction: Float?)
+
 /**
  * Icon, title, muted subtitle and a trailing chevron (or [trailing]). Disabled rows
  * are drawn muted and can't be tapped; rows without [onClick] are informational.
+ * With [progress], a progress bar is drawn under the subtitle.
  */
 @Composable
 private fun SettingsRow(
@@ -120,6 +281,7 @@ private fun SettingsRow(
     subtitle: String?,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = {},
+    progress: RowProgress? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val titleColor = if (enabled) CinexTheme.colors.text else CinexTheme.colors.textMuted
@@ -143,6 +305,30 @@ private fun SettingsRow(
             )
             if (subtitle != null) {
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
+            }
+            if (progress != null) {
+                val barModifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                if (progress.fraction != null) {
+                    LinearProgressIndicator(
+                        progress = { progress.fraction },
+                        modifier = barModifier,
+                        color = CinexTheme.colors.text,
+                        trackColor = CinexTheme.colors.outline,
+                        strokeCap = StrokeCap.Round,
+                        gapSize = 0.dp,
+                        drawStopIndicator = {},
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = barModifier,
+                        color = CinexTheme.colors.text,
+                        trackColor = CinexTheme.colors.outline,
+                        strokeCap = StrokeCap.Round,
+                        gapSize = 0.dp,
+                    )
+                }
             }
         }
         when {
