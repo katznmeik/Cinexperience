@@ -49,6 +49,10 @@ jobs:
       - name: Unit tests and screenshots
         run: ./gradlew testDebugUnitTest recordRoborazziDebug --stacktrace
 
+      # Android Lint; fails the build on errors (warnings are only reported).
+      - name: Lint
+        run: ./gradlew lintDebug --stacktrace
+
       - name: Decode signing key
         if: env.HAS_SIGNING_KEY == 'true'
         env:
@@ -105,4 +109,5 @@ jobs:
           path: |
             **/build/reports/tests/
             **/build/test-results/
+            **/build/reports/lint-results-*.html
           if-no-files-found: warn
