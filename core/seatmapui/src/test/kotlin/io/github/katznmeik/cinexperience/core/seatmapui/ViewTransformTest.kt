@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -69,6 +70,44 @@ class ViewTransformTest {
         assertEquals(2.5f, tall.fitScale)
         assertEquals(1f, tall.minScale) // 300 / 300
         assertTrue(tall.canPan(tall.fitted()))
+    }
+
+    @Test
+    fun tallContentFittedWholeIsScaledToTheHeightAndCentred() {
+        // 100 × 300 content in 400 × 300: the width alone would fit it at 2.5 (750 px high).
+        val whole = ViewBounds.of(Size(400f, 300f), Rect(0f, 0f, 100f, 300f), maxFitScale = 2.5f, maxZoomScale = 3f, fitHeight = true)
+        assertEquals(1f, whole.fitScale)
+        assertEquals(1f, whole.minScale)
+        assertEquals(10f, whole.maxScale) // zooming in still goes as far as with the width fit (4 × 2.5)
+        val fitted = whole.fitted()
+        assertOffset(Offset(150f, 0f), fitted.toScreen(Offset.Zero)) // (400 − 100) / 2, top at 0
+        assertOffset(Offset(250f, 300f), fitted.toScreen(Offset(100f, 300f))) // the last row in view
+        // Nothing to pan at the fitted view: one-finger drags scroll the page.
+        assertFalse(whole.canPan(fitted))
+        // Double tap zooms in and back to the whole hall.
+        val zoomedIn = whole.toggleZoom(fitted, Offset(200f, 150f))!!
+        assertEquals(2.5f, zoomedIn.scale)
+        assertTrue(whole.canPan(zoomedIn))
+        assertNull(whole.toggleZoom(zoomedIn, Offset(200f, 150f)))
+    }
+
+    @Test
+    fun fittingWholeChangesNothingForContentThatFitsTheWidth() {
+        val whole = ViewBounds.of(Size(400f, 300f), content, maxFitScale = 2.5f, maxZoomScale = 3f, fitHeight = true)
+        assertEquals(bounds, whole)
+        val small = Rect(0f, 0f, 40f, 20f)
+        assertEquals(
+            ViewBounds.of(Size(400f, 300f), small, maxFitScale = 2.5f, maxZoomScale = 3f),
+            ViewBounds.of(Size(400f, 300f), small, maxFitScale = 2.5f, maxZoomScale = 3f, fitHeight = true),
+        )
+    }
+
+    @Test
+    fun aPageMapIsAsTallAsTheWindowBetweenTheBarsButNeverShorterThanBefore() {
+        assertEquals(715.dp, seatMapMaxHeightFor(915.dp)) // phone: 915 − 200
+        assertEquals(DEFAULT_SEAT_MAP_MAX_HEIGHT, seatMapMaxHeightFor(720.dp)) // 520 floor
+        assertEquals(DEFAULT_SEAT_MAP_MAX_HEIGHT, seatMapMaxHeightFor(412.dp)) // landscape: the page scrolls
+        assertEquals(1080.dp, seatMapMaxHeightFor(1280.dp))
     }
 
     @Test

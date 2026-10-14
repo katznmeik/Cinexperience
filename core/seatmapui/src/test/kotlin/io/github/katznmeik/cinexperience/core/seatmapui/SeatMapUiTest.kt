@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
@@ -71,6 +72,35 @@ class SeatMapUiTest {
         assertEquals(CHOOSE_BY_LABEL_ACTION, action.label)
         composeRule.runOnIdle { action.action() }
         assertTrue(pickerRequested)
+    }
+
+    /**
+     * A hall taller than the map's maximum height, fitted whole: the map keeps that
+     * height, and the back row is at its bottom, where a tap finds it without panning.
+     */
+    @Test
+    fun aTallHallFittedWholeShowsItsBackRow() {
+        val layout = SeatLayout.fromPatterns(List(30) { "SSS" }, firstSeatId = 1) // back row: 88 89 90
+        val clicks = mutableListOf<SeatId>()
+        composeRule.setContent {
+            CinexTheme {
+                Box(Modifier.width(300.dp)) {
+                    SeatMap(
+                        layout = layout,
+                        contentDescription = "Seat map",
+                        onSeatClick = { clicks += it },
+                        maxHeight = 200.dp,
+                        fitWholeHall = true,
+                    )
+                }
+            }
+        }
+        val map = composeRule.onNodeWithContentDescription("Seat map")
+        map.assertHeightIsEqualTo(200.dp)
+        map.performTouchInput { click(Offset(centerX, bottom - 6.dp.toPx())) }
+        composeRule.mainClock.advanceTimeBy(1_000)
+        composeRule.waitForIdle()
+        assertEquals(listOf(SeatId(89)), clicks)
     }
 
     /**
