@@ -5,9 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -114,9 +114,9 @@ private fun Header(state: CinemasUiState, onSortChange: (CinemaSort) -> Unit) {
         modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 28.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(Modifier.fillMaxWidth()) {
-            ScreenTitle("Cinemas", Modifier.alignByBaseline())
-            Spacer(Modifier.weight(1f))
+        // Title left, counts right; with large text the counts wrap below the title.
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            ScreenTitle("Cinemas", Modifier.alignByBaseline().padding(end = 12.dp))
             if (!state.isLoading && state.errorMessage == null) {
                 Text(
                     text = "${countText(state.cinemas.size, "venue")} · ${countText(state.totalVisits, "visit")}",

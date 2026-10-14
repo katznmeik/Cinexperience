@@ -25,19 +25,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.model.NO_SCORE_TEXT
@@ -199,8 +202,8 @@ private fun RankedCard(item: RankedItem, onClick: () -> Unit) {
             color = CinexTheme.colors.textMuted,
             textAlign = TextAlign.Center,
             maxLines = 1,
-            // Fixed width so one- and two-digit positions keep the titles aligned.
-            modifier = Modifier.width(32.dp),
+            // Wide enough for two digits at any text size, so the titles stay aligned.
+            modifier = Modifier.width(rankWidth()),
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
@@ -228,6 +231,17 @@ private fun RankedCard(item: RankedItem, onClick: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+/** Width of the position column: two digits in the score style, at least 32 dp. */
+@Composable
+private fun rankWidth(): Dp {
+    val measurer = rememberTextMeasurer()
+    val style = CinexTheme.textStyles.score
+    val density = LocalDensity.current
+    return remember(style, density) {
+        with(density) { measurer.measure("88", style).size.width.toDp() }.coerceAtLeast(32.dp)
     }
 }
 

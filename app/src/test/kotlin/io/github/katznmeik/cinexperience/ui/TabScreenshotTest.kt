@@ -33,7 +33,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /** App container backed by the in-memory fake repositories. */
-private class FakeAppContainer(
+internal class FakeAppContainer(
     repository: FakeCinexRepository,
     override val backupRepository: FakeBackupRepository = FakeBackupRepository(),
 ) : AppContainer {
@@ -145,8 +145,8 @@ class TabScreenshotTest {
         composeRule.onNodeWithText("Saal 3").performClick()
         composeRule.onNodeWithText("Add visit").performScrollTo().performClick()
         composeRule.onNodeWithText("ADD VISIT").assertExists()
-        composeRule.onNodeWithText("Kant Kino").assertExists()
-        composeRule.onNodeWithText("Saal 3").assertExists()
+        composeRule.onNodeWithContentDescription("Cinema, Kant Kino").assertExists()
+        composeRule.onNodeWithContentDescription("Hall, Saal 3").assertExists()
         composeRule.onNodeWithContentDescription("Close").performClick()
         composeRule.onNodeWithText("NO LAYOUT YET").assertExists()
     }
@@ -157,7 +157,7 @@ class TabScreenshotTest {
         showApp()
         composeRule.onNodeWithText("Add visit", useUnmergedTree = true).performClick()
         composeRule.onNodeWithText("ADD VISIT").assertExists()
-        composeRule.onNodeWithText("Choose cinema first").assertExists()
+        composeRule.onNodeWithContentDescription("Hall, not chosen, choose cinema first").assertExists()
         composeRule.onNodeWithContentDescription("Close").performClick()
 
         composeRule.onNodeWithTag(TopLevelDestination.Settings.testTag).performClick()

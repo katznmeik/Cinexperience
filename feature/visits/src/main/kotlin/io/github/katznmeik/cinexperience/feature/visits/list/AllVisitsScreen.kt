@@ -109,11 +109,11 @@ private fun VisitRow(item: VisitListItem, onClick: () -> Unit) {
                 text = visit.filmTitle ?: UNTITLED,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = if (visit.filmTitle == null) CinexTheme.colors.textMuted else CinexTheme.colors.text,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(item.placeText(), style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(item.detailText(), style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.placeText(), style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(item.detailText(), style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         if (visit.seatRating != null) StarRatingDisplay(visit.seatRating?.value)
     }

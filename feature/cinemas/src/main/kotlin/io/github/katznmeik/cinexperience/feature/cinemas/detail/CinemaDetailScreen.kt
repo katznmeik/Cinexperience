@@ -35,6 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,9 +56,9 @@ import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialogActions
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialogHost
-import io.github.katznmeik.cinexperience.feature.cinemas.hallMeta
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.ItemMenu
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.MenuEntry
+import io.github.katznmeik.cinexperience.feature.cinemas.hallMeta
 
 @Composable
 internal fun CinemaDetailEntry(
@@ -225,7 +228,9 @@ private fun ScoreCard(detail: CinemaDetail, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
-            modifier = Modifier.widthIn(min = 72.dp),
+            modifier = Modifier
+                .widthIn(min = 72.dp)
+                .clearAndSetSemantics { contentDescription = "Overall score ${spokenScore(detail.scores.overall)}" },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -239,8 +244,10 @@ private fun ScoreCard(detail: CinemaDetail, modifier: Modifier = Modifier) {
             thickness = 1.dp,
             color = CinexTheme.colors.divider,
         )
+        // Two columns; one with large text, so the category names aren't broken mid-word.
+        val perRow = if (LocalDensity.current.fontScale > 1.3f) 1 else 2
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            CinemaCategory.entries.chunked(2).forEach { pair ->
+            CinemaCategory.entries.chunked(perRow).forEach { pair ->
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     pair.forEach { category ->
                         CategoryScore(category, detail, Modifier.weight(1f))
@@ -254,7 +261,10 @@ private fun ScoreCard(detail: CinemaDetail, modifier: Modifier = Modifier) {
 @Composable
 private fun CategoryScore(category: CinemaCategory, detail: CinemaDetail, modifier: Modifier = Modifier) {
     val score = detail.scores[category]
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+    Column(
+        modifier.clearAndSetSemantics { contentDescription = "${category.displayName} ${spokenScore(score?.average)}" },
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
         Text(category.displayName, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal), color = CinexTheme.colors.textMuted)
         Text(
             text = if (score == null) NO_SCORE_TEXT else "★ ${formatScore(score.average)}",
@@ -263,6 +273,9 @@ private fun CategoryScore(category: CinemaCategory, detail: CinemaDetail, modifi
         )
     }
 }
+
+/** "4.1" or "not rated" for screen readers (instead of "–" or "★ 4.1"). */
+private fun spokenScore(score: Double?): String = if (score == null) "not rated" else formatScore(score)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

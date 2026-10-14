@@ -46,6 +46,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -68,9 +69,13 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -464,7 +469,23 @@ private fun FieldBox(
             .clip(FieldShape)
             .background(CinexTheme.colors.surface)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-            .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
+            .then(
+                // The description replaces the visible texts (e.g. "Hall, not chosen" instead of "Choose").
+                if (contentDescription != null) {
+                    Modifier.clearAndSetSemantics {
+                        this.contentDescription = contentDescription
+                        if (onClick != null) {
+                            role = Role.Button
+                            onClick {
+                                onClick()
+                                true
+                            }
+                        }
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
@@ -498,7 +519,11 @@ private fun DropdownField(
     Box {
         FieldBox(
             onClick = if (options.isEmpty()) null else ({ open = true }),
-            contentDescription = "$contentDescription, ${text ?: "not chosen"}",
+            contentDescription = when {
+                text != null -> "$contentDescription, $text"
+                options.isEmpty() -> "$contentDescription, not chosen, ${placeholder.lowercase()}"
+                else -> "$contentDescription, not chosen"
+            },
         ) {
             FieldText(text ?: placeholder, Modifier.weight(1f), muted = text == null)
             Icon(
@@ -558,7 +583,14 @@ private fun TextInput(
                 contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart,
             ) {
                 if (value.isEmpty()) {
-                    Text(placeholder, style = style.copy(fontWeight = FontWeight.Normal), color = CinexTheme.colors.textMuted, maxLines = 1)
+                    // Not read out: the field's description already names it.
+                    Text(
+                        placeholder,
+                        style = style.copy(fontWeight = FontWeight.Normal),
+                        color = CinexTheme.colors.textMuted,
+                        maxLines = 1,
+                        modifier = Modifier.clearAndSetSemantics {},
+                    )
                 }
                 inner()
             }
@@ -590,7 +622,8 @@ private fun SeatCard(state: VisitEditUiState, actions: VisitEditActions) {
                     text = title.uppercase(),
                     style = CinexTheme.textStyles.cardTitle.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize),
                     color = if (muted) CinexTheme.colors.textMuted else CinexTheme.colors.text,
-                    modifier = Modifier.semantics { this.contentDescription = state.seatLabel?.description ?: title },
+                    // "Row 7, Seat 10" instead of "R7 · S10"; other titles are read as shown.
+                    modifier = state.seatLabel?.let { label -> Modifier.semantics { contentDescription = label.description } } ?: Modifier,
                 )
             }
             val canPick = state.seatPickerUnavailable == null
@@ -601,7 +634,7 @@ private fun SeatCard(state: VisitEditUiState, actions: VisitEditActions) {
                 shape = RoundedCornerShape(18.dp),
                 border = BorderStroke(1.dp, if (canPick) CinexTheme.colors.outline else CinexTheme.colors.divider),
                 contentPadding = PaddingValues(horizontal = 14.dp),
-                modifier = Modifier.height(40.dp),
+                modifier = Modifier.minimumInteractiveComponentSize().heightIn(min = 40.dp),
             ) {
                 Icon(CinexIcons.Grid, contentDescription = null, modifier = Modifier.size(16.dp), tint = pickColor)
                 Spacer(Modifier.size(6.dp))
@@ -642,6 +675,14 @@ private fun SeatCard(state: VisitEditUiState, actions: VisitEditActions) {
 /** One rating row: label on the left, five stars on the right, at least 52 dp tall. */
 @Composable
 private fun StarRow(label: String, rating: Int?, onRate: (Int) -> Unit) {
+    // With large text the label goes above the stars, so it isn't broken mid-word.
+    if (LocalDensity.current.fontScale > 1.3f) {
+        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 4.dp)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text)
+            StarRatingInput(rating = rating, onRate = onRate, label = label, modifier = Modifier.align(Alignment.End))
+        }
+        return
+    }
     Row(
         Modifier
             .fillMaxWidth()
@@ -659,7 +700,7 @@ private fun CollapsibleHeader(text: String, expanded: Boolean, onToggle: () -> U
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp)
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(8.dp))
             .clickable(role = Role.Button, onClick = onToggle)
             .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
@@ -718,16 +759,25 @@ private fun PhotoField(photo: ImageBitmap?, hasPhoto: Boolean, busy: Boolean, ac
         }
         if (hasPhoto) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { menuOpen = true }, enabled = !busy) {
-                    Text("Replace", style = MaterialTheme.typography.labelLarge, color = CinexTheme.colors.text)
-                }
-                TextButton(onClick = actions::onRemovePhoto, enabled = !busy) {
-                    Text("Remove", style = MaterialTheme.typography.labelLarge, color = CinexTheme.colors.text)
-                }
+                PhotoButton("Replace", "Replace photo", enabled = !busy, onClick = { menuOpen = true })
+                PhotoButton("Remove", "Remove photo", enabled = !busy, onClick = actions::onRemovePhoto)
             }
         } else if (busy) {
             Text("Adding photo…", style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
         }
+    }
+}
+
+/** "Replace" / "Remove" next to the photo, read out with their object ("Remove photo"). */
+@Composable
+private fun PhotoButton(text: String, description: String, enabled: Boolean, onClick: () -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.semantics { contentDescription = description }) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            color = CinexTheme.colors.text,
+            modifier = Modifier.clearAndSetSemantics {},
+        )
     }
 }
 
@@ -745,8 +795,7 @@ private fun DashedTile(modifier: Modifier) {
                     cornerRadius = CornerRadius(14.dp.toPx()),
                     style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx()))),
                 )
-            }
-            .semantics { contentDescription = "Add photo" },
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

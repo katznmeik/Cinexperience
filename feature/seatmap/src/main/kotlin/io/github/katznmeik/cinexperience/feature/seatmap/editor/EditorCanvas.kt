@@ -114,6 +114,15 @@ private val HANDLE_TOUCH_RADIUS = 24.dp
 private val HINT_SPACE = 28.dp
 
 /**
+ * Opacity of the muted gap dashes and aisle hatching: at least 3:1 against the
+ * canvas (non-text contrast), still quieter than the seats. Checked by EditorContrastTest.
+ */
+internal const val EDITOR_MARK_ALPHA = 0.65f
+
+/** The hint's own padding and margins (horizontal 2 × 8 dp; vertical 2 × 2 dp + 6 dp below + 4 dp gap). */
+private val HINT_PADDING = 16.dp
+
+/**
  * Default placement of the reference screenshot: as wide as the whole drawing,
  * top-aligned with it (in grid units, see [ReferenceAlignment]).
  */
@@ -273,13 +282,27 @@ internal fun EditorCanvas(
     val alignmentState = rememberUpdatedState(referenceAlignment)
     fun bounds(size: Size) = ViewBounds.of(size, currentGeometry.contentBounds, MAX_FIT_SCALE, maxZoomScale)
 
+    val hint = when {
+        referenceImage != null -> "Reference screenshot · ${(referenceOpacity * 100).roundToInt()} % opacity" +
+            if (referenceMode) " · drag to align" else ""
+        referenceMode -> "Add a screenshot below to trace it"
+        else -> "Tap or drag to paint · two fingers to zoom"
+    }
+    val hintStyle = MaterialTheme.typography.labelSmall
+
     // As tall as the grid fitted to the width (plus room for the hint), within the limits.
     Box(
         modifier.layout { measurable, constraints ->
             val content = geometry.contentBounds
             val width = constraints.maxWidth
             val fit = min(width / max(content.width, 1f), MAX_FIT_SCALE)
-            val height = (content.height * fit + HINT_SPACE.toPx()).roundToInt()
+            // The hint wraps with large text: reserve its real height, so it never covers the grid.
+            val hintHeight = textMeasurer.measure(
+                hint,
+                hintStyle,
+                constraints = Constraints(maxWidth = (width - HINT_PADDING.roundToPx()).coerceAtLeast(0)),
+            ).size.height + HINT_PADDING.toPx()
+            val height = (content.height * fit + max(HINT_SPACE.toPx(), hintHeight)).roundToInt()
                 .coerceIn(minHeight.roundToPx(), maxHeight.roundToPx())
                 .coerceIn(constraints.minHeight, constraints.maxHeight)
             val placeable = measurable.measure(Constraints.fixed(width, height))
@@ -385,15 +408,9 @@ internal fun EditorCanvas(
                     }
                 },
         )
-        val hint = when {
-            referenceImage != null -> "Reference screenshot · ${(referenceOpacity * 100).roundToInt()} % opacity" +
-                if (referenceMode) " · drag to align" else ""
-            referenceMode -> "Add a screenshot below to trace it"
-            else -> "Tap or drag to paint · two fingers to zoom"
-        }
         Text(
             hint,
-            style = MaterialTheme.typography.labelSmall,
+            style = hintStyle,
             color = colors.text.copy(alpha = 0.75f),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -546,9 +563,9 @@ private class EditorGridDrawing(
         // Translucent, so a reference screenshot still shows through.
         drawPath(aisles, colors.surface.copy(alpha = 0.6f))
         clipPath(aisles, ClipOp.Intersect) {
-            drawPath(hatch, colors.textMuted.copy(alpha = 0.35f), style = Stroke(width = 1.4f * dp))
+            drawPath(hatch, colors.textMuted.copy(alpha = EDITOR_MARK_ALPHA), style = Stroke(width = 1.4f * dp))
         }
-        drawPath(gaps, colors.textMuted.copy(alpha = 0.45f), style = Stroke(width = 1f * dp, pathEffect = dash))
+        drawPath(gaps, colors.textMuted.copy(alpha = EDITOR_MARK_ALPHA), style = Stroke(width = 1f * dp, pathEffect = dash))
         drawPath(seats, colors.text.copy(alpha = 0.12f))
         drawPath(seats, colors.text.copy(alpha = 0.9f), style = Stroke(width = 1.5f * dp))
         glyphs.forEach { (rect, kind) -> SeatGlyphs.of(kind)?.let { strokeGlyph(it, rect.innerSquare(0.78f), colors.text) } }

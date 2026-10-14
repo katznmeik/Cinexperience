@@ -4,13 +4,14 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
@@ -68,7 +69,10 @@ fun TopBarIconButton(
     }
 }
 
-/** Small outlined pill button from the mockups, e.g. "+ Add hall": 36 dp tall, 48 dp touch target. */
+/**
+ * Small outlined pill button from the mockups, e.g. "+ Add hall": 36 dp tall
+ * (taller with large text), 48 dp touch target.
+ */
 @Composable
 fun OutlinedPillButton(
     text: String,
@@ -80,7 +84,7 @@ fun OutlinedPillButton(
         onClick = onClick,
         modifier = modifier
             .minimumInteractiveComponentSize()
-            .height(36.dp),
+            .heightIn(min = 36.dp),
         shape = RoundedCornerShape(18.dp),
         border = BorderStroke(1.dp, CinexTheme.colors.outline),
         contentPadding = PaddingValues(horizontal = 12.dp),
@@ -95,7 +99,7 @@ fun OutlinedPillButton(
 
 /**
  * Single-choice chip (e.g. sort mode): filled light when selected, outlined otherwise.
- * Drawn 36 dp tall with a 48 dp touch target. The default is a pill; the layout
+ * Drawn 36 dp tall (taller with large text) with a 48 dp touch target. The default is a pill; the layout
  * editor's tool chips pass [SegmentChipShape]. An optional [icon] precedes the
  * text; with an empty [text] the chip shows only the icon (give it a content
  * description through [modifier]).
@@ -111,7 +115,7 @@ fun ChoiceChip(
 ) {
     val base = modifier
         .minimumInteractiveComponentSize()
-        .height(36.dp)
+        .heightIn(min = 36.dp)
         .clip(shape)
         .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
     val contentColor = if (selected) CinexTheme.colors.onPrimary else CinexTheme.colors.text
@@ -142,10 +146,13 @@ fun ChoiceChip(
 /** Shape of segmented tool chips (layout editor mockup): rounded rectangle, not a pill. */
 val SegmentChipShape: Shape = RoundedCornerShape(10.dp)
 
-/** Horizontal row of [ChoiceChip]s with the mockup spacing. */
+/**
+ * Row of [ChoiceChip]s with the mockup spacing. Wraps onto further lines when the
+ * chips don't fit (large text); inside a horizontal scroll it stays one line.
+ */
 @Composable
-fun ChoiceChipRow(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
-    Row(
+fun ChoiceChipRow(modifier: Modifier = Modifier, content: @Composable FlowRowScope.() -> Unit) {
+    FlowRow(
         modifier = modifier.selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         content = content,
