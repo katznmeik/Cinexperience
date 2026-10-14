@@ -31,6 +31,25 @@ class SeatChoicesTest {
     }
 
     @Test
+    fun splitRowsNameTheirBlocks() {
+        val choices = seatChoices(layout)
+        val rowA = choices[0]
+        assertEquals(2, rowA.blocks.size)
+        assertEquals(listOf("Left", "Right"), rowA.blocks.indices.map { rowA.blockCaption(it) })
+        assertEquals("Row A, Seat 1, left block", rowA.descriptionOf(rowA.seats[0]))
+        assertEquals("Row A, Seat 1, right block", rowA.descriptionOf(rowA.seats[2]))
+
+        val three = seatChoices(SeatLayout.fromPatterns("S|S|S", firstSeatId = 1))[0]
+        assertEquals(listOf("Left", "Centre", "Right"), three.blocks.indices.map { three.blockCaption(it) })
+        val four = seatChoices(SeatLayout.fromPatterns("S|S|S|S", firstSeatId = 1))[0]
+        assertEquals("Block 4", four.blockCaption(3))
+
+        val single = seatChoices(SeatLayout.fromPatterns("SSS", firstSeatId = 1))[0]
+        assertNull(single.blockCaption(0))
+        assertEquals("Row 1, Seat 2", single.descriptionOf(single.seats[1]))
+    }
+
+    @Test
     fun findSeatByRowAndNumber() {
         val choices = seatChoices(layout.labels())
         assertEquals(SeatId(1), choices.findSeat("A", 1)) // restart: the first "A 1" wins

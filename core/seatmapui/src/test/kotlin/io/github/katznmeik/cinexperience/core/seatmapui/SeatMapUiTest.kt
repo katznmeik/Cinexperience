@@ -2,6 +2,9 @@ package io.github.katznmeik.cinexperience.core.seatmapui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
@@ -9,6 +12,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
@@ -74,9 +78,25 @@ class SeatMapUiTest {
         }
         composeRule.onNodeWithContentDescription("Row J").performClick()
         composeRule.onNodeWithContentDescription("Row J").assertIsSelected()
-        composeRule.onNodeWithContentDescription("Row J, Wheelchair 2").performClick()
-        composeRule.onNodeWithContentDescription("Row J, Seat 3, sofa").performClick()
+        composeRule.onNodeWithContentDescription("Row J, Wheelchair 2, right block").performClick()
+        composeRule.onNodeWithContentDescription("Row J, Seat 3, sofa, centre block").performClick()
         val rowJ = SampleLayouts.splitHall.rows[9].seatIds
         assertEquals(listOf(rowJ.last(), rowJ[4]), chosen)
+        // Split rows show a caption per block.
+        composeRule.onNodeWithText("Centre").assertExists()
+    }
+
+    @Test
+    fun seatPickerFollowsASeatSelectedElsewhere() {
+        val choices = seatChoices(SampleLayouts.splitHall)
+        var selected by mutableStateOf<SeatId?>(null)
+        composeRule.setContent {
+            CinexTheme { SeatPicker(choices, selectedSeatId = selected, onSeatSelected = {}) }
+        }
+        composeRule.onNodeWithContentDescription("Row A").assertIsSelected()
+        selected = SampleLayouts.splitHall.rows[6].seatIds[13] // tapped on the map: row G, seat 10
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Row G").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Row G, Seat 10, centre block").assertIsSelected()
     }
 }
