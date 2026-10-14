@@ -8,10 +8,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
@@ -55,10 +58,13 @@ class SeatMapScreenshotTest {
 
     private var repository = FakeCinexRepository(SampleData.storeWithSplitHall())
 
-    private fun capture(name: String, content: @Composable () -> Unit) {
+    private fun capture(name: String, fontScale: Float? = null, content: @Composable () -> Unit) {
         composeRule.setContent {
-            CinexTheme {
-                Box(Modifier.fillMaxSize().background(CinexTheme.colors.background)) { content() }
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
+                CinexTheme {
+                    Box(Modifier.fillMaxSize().background(CinexTheme.colors.background)) { content() }
+                }
             }
         }
         composeRule.waitForIdle()
@@ -138,6 +144,23 @@ class SeatMapScreenshotTest {
         repository = FakeCinexRepository(RatedHallFixture.store())
         val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.manualAvoid) }
         capture("hall_detail_manual_override") { hallDetail(state) }
+    }
+
+    /** Large font sizes: the colour buttons wrap into two rows, labels and scores stay whole. */
+    @Test
+    @Config(qualifiers = "w412dp-h2400dp-port-night-xxhdpi")
+    fun hallDetailFontScale150() {
+        repository = FakeCinexRepository(RatedHallFixture.store())
+        val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.manualAvoid) }
+        capture("hall_detail_font_150", fontScale = 1.5f) { hallDetail(state) }
+    }
+
+    @Test
+    @Config(qualifiers = "w412dp-h2800dp-port-night-xxhdpi")
+    fun hallDetailFontScale200() {
+        repository = FakeCinexRepository(RatedHallFixture.store())
+        val state = hallState(RatedHallFixture.HALL) { it.onSeatClick(RatedHallFixture.favourite) }
+        capture("hall_detail_font_200", fontScale = 2f) { hallDetail(state) }
     }
 
     /** A drawn hall without any visits: grey map, "–" scores. */

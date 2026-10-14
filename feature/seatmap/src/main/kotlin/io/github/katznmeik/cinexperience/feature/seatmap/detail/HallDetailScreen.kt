@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -34,7 +36,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,15 +47,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.katznmeik.cinexperience.core.model.NO_SCORE_TEXT
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatKind
@@ -369,7 +376,8 @@ private fun SelectedSeatCard(seat: SelectedSeat, onSetColour: (SeatColour?) -> U
                     },
                 )
                 Text(
-                    text = seat.detailText() ?: "No visits in this seat yet",
+                    // No line break right after "★" or "≈" when the line wraps.
+                    text = seat.detailText()?.replace("★ ", "★\u00A0")?.replace("≈ ", "≈\u00A0") ?: "No visits in this seat yet",
                     style = MaterialTheme.typography.bodySmall,
                     color = CinexTheme.colors.textMuted,
                 )
@@ -378,12 +386,7 @@ private fun SelectedSeatCard(seat: SelectedSeat, onSetColour: (SeatColour?) -> U
                 Icon(CinexIcons.Star, contentDescription = null, tint = CinexTheme.colors.text, modifier = Modifier.size(22.dp))
             }
         }
-        Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ColourButton("Auto", selected = seat.overrideColour == null, fill = null, onClick = { onSetColour(null) })
-            ColourButton("Great", seat.overrideColour == SeatColour.GREEN, CinexTheme.colors.seat.great) { onSetColour(SeatColour.GREEN) }
-            ColourButton("OK", seat.overrideColour == SeatColour.YELLOW, CinexTheme.colors.seat.ok) { onSetColour(SeatColour.YELLOW) }
-            ColourButton("Avoid", seat.overrideColour == SeatColour.RED, CinexTheme.colors.seat.avoid) { onSetColour(SeatColour.RED) }
-        }
+        ColourChoice(seat.overrideColour, onSetColour)
         OutlinedButton(
             onClick = onToggleFavourite,
             modifier = Modifier
@@ -409,32 +412,76 @@ private fun SelectedSeatCard(seat: SelectedSeat, onSetColour: (SeatColour?) -> U
     }
 }
 
+/** The colour override options: label, colour (`null` = automatic) and fill. */
+@Composable
+private fun colourOptions(): List<Triple<String, SeatColour?, Color?>> = listOf(
+    Triple("Auto", null, null),
+    Triple("Great", SeatColour.GREEN, CinexTheme.colors.seat.great),
+    Triple("OK", SeatColour.YELLOW, CinexTheme.colors.seat.ok),
+    Triple("Avoid", SeatColour.RED, CinexTheme.colors.seat.avoid),
+)
+
+/** Screen-reader name of a colour option: "Seat colour: Great", "Seat colour: Auto, from ratings". */
+internal fun colourOptionDescription(label: String, colour: SeatColour?): String =
+    if (colour == null) "Seat colour: $label, from ratings" else "Seat colour: $label"
+
+/**
+ * "Seat colour" caption and the four override buttons (Auto · Great · OK · Avoid),
+ * one row normally and two rows of two at large font sizes.
+ */
+@Composable
+private fun ColourChoice(active: SeatColour?, onSetColour: (SeatColour?) -> Unit) {
+    val perRow = if (LocalDensity.current.fontScale >= 1.5f) 2 else 4
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            "Seat colour",
+            style = MaterialTheme.typography.labelMedium,
+            color = CinexTheme.colors.textMuted,
+            modifier = Modifier.semantics { heading() },
+        )
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            colourOptions().chunked(perRow).forEach { options ->
+                // Equal heights when one label wraps at a large font size.
+                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    options.forEach { (label, colour, fill) ->
+                        ColourButton(label, colourOptionDescription(label, colour), selected = active == colour, fill = fill) {
+                            onSetColour(colour)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /**
  * One of the colour override buttons: "Auto" is outlined, the colours are filled
  * with their seat colour and dark text. The active one gets a light ring and a
- * check mark, so it does not rely on colour alone.
+ * check badge in its corner, so it does not rely on colour alone. The label may
+ * wrap at large font sizes; the button grows with it.
  */
 @Composable
-private fun RowScope.ColourButton(text: String, selected: Boolean, fill: Color?, onClick: () -> Unit) {
+private fun RowScope.ColourButton(text: String, description: String, selected: Boolean, fill: Color?, onClick: () -> Unit) {
     val shape = RoundedCornerShape(12.dp)
+    val inner = RoundedCornerShape(8.dp)
     val ring = CinexTheme.colors.text
     val contentColor = if (fill == null) CinexTheme.colors.text else CinexTheme.colors.onPrimary
     Box(
         modifier = Modifier
             .weight(1f)
-            .minimumInteractiveComponentSize()
-            .height(46.dp)
+            .fillMaxHeight()
             .clip(shape)
             .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+            .semantics { contentDescription = description }
             .then(if (selected) Modifier.border(2.dp, ring, shape) else Modifier)
             // The gap between the ring and the fill keeps the ring visible on every colour.
             .padding(4.dp),
-        contentAlignment = Alignment.Center,
     ) {
-        val inner = RoundedCornerShape(8.dp)
-        Row(
+        Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .heightIn(min = 40.dp)
+                .fillMaxHeight()
                 .clip(inner)
                 .then(
                     when {
@@ -442,20 +489,28 @@ private fun RowScope.ColourButton(text: String, selected: Boolean, fill: Color?,
                         selected -> Modifier
                         else -> Modifier.border(1.dp, CinexTheme.colors.outline, inner)
                     },
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+                )
+                .padding(horizontal = 6.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            if (selected) {
-                Icon(CinexIcons.Check, contentDescription = null, tint = contentColor, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-            }
             Text(
                 text,
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = contentColor,
-                maxLines = 1,
+                textAlign = TextAlign.Center,
             )
+        }
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(ring),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(CinexIcons.Check, contentDescription = null, tint = CinexTheme.colors.onPrimary, modifier = Modifier.size(11.dp))
+            }
         }
     }
 }
@@ -468,16 +523,38 @@ private fun ScoreBreakdown(rows: List<CategoryScoreRow>) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         SectionHeader("Scores", Modifier.padding(vertical = 6.dp))
+        // Columns sized to their widest text at the current font size, so the bars line
+        // up in every row and nothing wraps at large font sizes.
+        val measurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        val labelStyle = MaterialTheme.typography.bodyMedium
+        val valueStyle = labelStyle.copy(fontWeight = FontWeight.SemiBold)
+        val countStyle = MaterialTheme.typography.bodySmall
+        val widths = remember(rows, density, labelStyle, countStyle) {
+            fun widest(texts: List<String>, style: TextStyle, min: Dp): Dp = with(density) {
+                maxOf(min, texts.maxOf { measurer.measure(it, style, softWrap = false).size.width }.toDp())
+            }
+            ScoreColumnWidths(
+                label = widest(rows.map { it.label }, labelStyle, 104.dp),
+                value = widest(listOf("0.0", NO_SCORE_TEXT), valueStyle, 28.dp),
+                count = widest(rows.map { it.countText() } + "×00", countStyle, 30.dp),
+            )
+        }
         RowGroup {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                rows.forEach { ScoreRow(it) }
+                rows.forEach { ScoreRow(it, widths) }
             }
         }
     }
 }
 
+private data class ScoreColumnWidths(val label: Dp, val value: Dp, val count: Dp)
+
+/** "×4", or nothing for an unrated category. */
+private fun CategoryScoreRow.countText(): String = if (count == 0) "" else "×$count"
+
 @Composable
-private fun ScoreRow(row: CategoryScoreRow) {
+private fun ScoreRow(row: CategoryScoreRow, widths: ScoreColumnWidths) {
     val description = row.description()
     Row(
         modifier = Modifier
@@ -491,8 +568,8 @@ private fun ScoreRow(row: CategoryScoreRow) {
             style = MaterialTheme.typography.bodyMedium,
             color = CinexTheme.colors.text,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(104.dp),
+            softWrap = false,
+            modifier = Modifier.width(widths.label),
         )
         ScoreBar(fraction = ((row.score ?: 0.0) / 5.0).toFloat(), modifier = Modifier.weight(1f))
         Text(
@@ -500,15 +577,18 @@ private fun ScoreRow(row: CategoryScoreRow) {
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
             color = if (row.score == null) CinexTheme.colors.textMuted else CinexTheme.colors.text,
             textAlign = TextAlign.End,
-            modifier = Modifier.width(28.dp),
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.width(widths.value),
         )
         Text(
-            if (row.count == 0) "" else "×${row.count}",
+            row.countText(),
             style = MaterialTheme.typography.bodySmall,
             color = CinexTheme.colors.textMuted,
             textAlign = TextAlign.End,
             maxLines = 1,
-            modifier = Modifier.width(30.dp),
+            softWrap = false,
+            modifier = Modifier.width(widths.count),
         )
     }
 }
