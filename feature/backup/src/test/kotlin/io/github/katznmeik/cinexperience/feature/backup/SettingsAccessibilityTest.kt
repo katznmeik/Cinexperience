@@ -54,7 +54,7 @@ class SettingsAccessibilityTest(private val fontScale: Float) {
 
     private fun check(name: String, backup: BackupUiState) {
         val cinemas = runBlocking { FakeCinexRepository(SampleData.store()).observeCinemaDetails().first() }
-        val state = SettingsUiState(appVersion = "1.0.0", counts = DataCounts.of(cinemas), backup = backup)
+        val state = SettingsUiState(appVersion = "1.0.0", buildId = "abc1234", counts = DataCounts.of(cinemas), backup = backup)
         // Through the configuration (not ScreenshotSurface), so the dialog windows get the font scale too.
         RuntimeEnvironment.setFontScale(fontScale)
         composeRule.setContent { ScreenshotSurface { SettingsScreen(state, onOpenManage = {}, onOpenAllVisits = {}) } }

@@ -41,6 +41,9 @@ PATCH). Pushing a tag `v<version>` runs `.github/workflows/release.yml` (tag mus
 match the version; tests, lint, signed APK with `CINEX_REQUIRE_RELEASE_SIGNING`,
 release-certificate check, GitHub Release with `cinexperience-<version>.apk`). Agents never
 create tags or releases; the owner does. R8/minify stays off in v1.
+The build ID (`BuildConfig.BUILD_ID`, first 7 characters of `git rev-parse HEAD`,
+`unknown` without git) is set in `app/build.gradle.kts`, shown in Settings → About
+and matches the CI APK name `cinexperience-<sha>.apk`.
 
 Look at the screenshot PNGs after every UI change.
 

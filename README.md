@@ -121,6 +121,10 @@ artifacts contain the APK (`cinexperience-<sha>.apk`), the screenshots and the
 test reports. These APKs are for testing on the PC emulator or the phone (spec
 §14.2, §14.3); releases come from the release workflow below.
 
+Settings → About shows the build ID next to the version, e.g. `Version 1.0.0 ·
+Build 413a117`. It is the short commit hash the APK was built from, the same as
+`<sha>` in the APK file name, so name it in bug reports.
+
 ### Versions and releases
 
 The version lives in one place, `cinexVersionName` in `gradle.properties`

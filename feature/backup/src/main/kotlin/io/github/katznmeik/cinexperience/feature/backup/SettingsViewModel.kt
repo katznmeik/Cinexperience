@@ -78,6 +78,8 @@ data class BackupUiState(
 
 data class SettingsUiState(
     val appVersion: String,
+    /** Short commit hash the APK was built from, or `unknown`. */
+    val buildId: String,
     /** `null` while loading or if the counts couldn't be loaded. */
     val counts: DataCounts? = null,
     val countsError: Boolean = false,
@@ -89,6 +91,7 @@ class SettingsViewModel(
     cinemaRepository: CinemaRepository,
     private val backupRepository: BackupRepository,
     private val appVersion: String,
+    private val buildId: String,
     private val today: () -> LocalDate = LocalDate::now,
 ) : ViewModel() {
 
@@ -106,11 +109,12 @@ class SettingsViewModel(
         combine(counts.onStart<Result<DataCounts>?> { emit(null) }, lastExport, safetyCopies, transient) { counts, last, copies, backup ->
             SettingsUiState(
                 appVersion = appVersion,
+                buildId = buildId,
                 counts = counts?.getOrNull(),
                 countsError = counts?.isFailure == true,
                 backup = backup.copy(lastExport = last, safetyCopies = copies),
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState(appVersion))
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState(appVersion, buildId))
 
     /** Default name for the export file picker, e.g. `cinexperience-backup-2026-10-03.zip`. */
     fun exportFileName(): String = BackupRepository.suggestedFileName(today())
@@ -241,8 +245,9 @@ class SettingsViewModel(
             cinemaRepository: CinemaRepository,
             backupRepository: BackupRepository,
             appVersion: String,
+            buildId: String,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { SettingsViewModel(cinemaRepository, backupRepository, appVersion) }
+            initializer { SettingsViewModel(cinemaRepository, backupRepository, appVersion, buildId) }
         }
     }
 }
