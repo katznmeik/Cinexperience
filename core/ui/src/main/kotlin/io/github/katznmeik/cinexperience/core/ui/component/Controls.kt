@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -94,7 +95,10 @@ fun OutlinedPillButton(
 
 /**
  * Single-choice chip (e.g. sort mode): filled light when selected, outlined otherwise.
- * Drawn 36 dp tall with a 48 dp touch target.
+ * Drawn 36 dp tall with a 48 dp touch target. The default is a pill; the layout
+ * editor's tool chips pass [SegmentChipShape]. An optional [icon] precedes the
+ * text; with an empty [text] the chip shows only the icon (give it a content
+ * description through [modifier]).
  */
 @Composable
 fun ChoiceChip(
@@ -102,30 +106,41 @@ fun ChoiceChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(18.dp),
+    icon: ImageVector? = null,
 ) {
-    val shape = RoundedCornerShape(18.dp)
     val base = modifier
         .minimumInteractiveComponentSize()
         .height(36.dp)
         .clip(shape)
         .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
-    Box(
+    val contentColor = if (selected) CinexTheme.colors.onPrimary else CinexTheme.colors.text
+    Row(
         modifier = if (selected) {
             base.background(CinexTheme.colors.text)
         } else {
             base.border(1.dp, CinexTheme.colors.outline, shape)
-        }.padding(horizontal = 14.dp),
-        contentAlignment = Alignment.Center,
+        }.padding(horizontal = if (icon == null) 14.dp else 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            ),
-            color = if (selected) CinexTheme.colors.onPrimary else CinexTheme.colors.text,
-        )
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
+        }
+        if (text.isNotEmpty()) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                ),
+                color = contentColor,
+            )
+        }
     }
 }
+
+/** Shape of segmented tool chips (layout editor mockup): rounded rectangle, not a pill. */
+val SegmentChipShape: Shape = RoundedCornerShape(10.dp)
 
 /** Horizontal row of [ChoiceChip]s with the mockup spacing. */
 @Composable

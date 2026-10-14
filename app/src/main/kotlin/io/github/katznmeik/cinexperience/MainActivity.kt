@@ -18,6 +18,7 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         val container = (application as CinexApplication).container
+        container.onAppStart()
         setContent {
             CinexTheme {
                 CinexApp(container)

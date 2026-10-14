@@ -93,6 +93,9 @@ internal interface HallDao {
     @Transaction
     @Query("SELECT * FROM hall WHERE id = :id")
     fun observeWithCinema(id: Long): Flow<HallWithCinema?>
+
+    @Query("SELECT reference_image_path FROM hall WHERE reference_image_path IS NOT NULL")
+    suspend fun referenceImagePaths(): List<String>
 }
 
 @Dao

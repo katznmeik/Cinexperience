@@ -1,0 +1,526 @@
+package io.github.katznmeik.cinexperience.feature.seatmap.editor
+
+import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
+import io.github.katznmeik.cinexperience.core.model.CellPosition
+import io.github.katznmeik.cinexperience.core.model.CellType
+import io.github.katznmeik.cinexperience.core.model.Cinema
+import io.github.katznmeik.cinexperience.core.model.Hall
+import io.github.katznmeik.cinexperience.core.model.LayoutCell
+import io.github.katznmeik.cinexperience.core.model.LayoutPattern
+import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.SeatKind
+import io.github.katznmeik.cinexperience.core.model.SeatLabel
+import io.github.katznmeik.cinexperience.core.model.SeatLayout
+import io.github.katznmeik.cinexperience.core.model.SeatNumbering
+import io.github.katznmeik.cinexperience.core.model.Visit
+import io.github.katznmeik.cinexperience.core.model.labels
+import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
+import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
+import io.github.katznmeik.cinexperience.core.testing.FakeStore
+import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import java.io.IOException
+import java.time.LocalDate
+
+class LayoutEditorViewModelTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
+    private val stored = SeatLayout.fromPatterns("SSSS", "SSSS", "SSSS", firstSeatId = 1) // ids 1..12
+    private val hall = Hall(
+        id = HALL,
+        cinemaId = 1,
+        name = "Saal 1",
+        layout = stored,
+        screenWidth = 4f,
+        screenDistance = 2f,
+        referenceImagePath = OLD_IMAGE,
+    )
+    private val visitInSeat12 = Visit(id = 1, hallId = HALL, date = LocalDate.of(2026, 9, 1), seatId = SeatId(12))
+
+    private val repository = FakeCinexRepository(
+        FakeStore(cinemas = listOf(Cinema(id = 1, name = "Kino")), halls = listOf(hall), visits = listOf(visitInSeat12)),
+    )
+    private val images = FakeReferenceImageStore(setOf(OLD_IMAGE))
+
+    private fun viewModel() = LayoutEditorViewModel(HALL, repository, images)
+
+    private val LayoutEditorViewModel.state get() = uiState.value
+    private val LayoutEditorViewModel.draft get() = uiState.value.draft!!
+    private fun LayoutEditorViewModel.patterns() = draft.layout.rows.map { LayoutPattern.encode(it.cells) }
+    private fun storedHall() = repository.store.value.halls.single { it.id == HALL }
+
+    @Test
+    fun loadsTheStoredHall() {
+        val vm = viewModel()
+        assertEquals(EditorStatus.Ready, vm.state.status)
+        assertEquals("Saal 1", vm.state.hallName)
+        assertEquals(listOf("SSSS", "SSSS", "SSSS"), vm.patterns())
+        assertEquals(4f, vm.draft.screenWidth)
+        assertFalse(vm.state.canUndo)
+        assertFalse(vm.state.hasUnsavedChanges)
+        assertNull(vm.state.row)
+    }
+
+    @Test
+    fun aPaintStrokeIsOneUndoStep() {
+        val vm = viewModel()
+        vm.selectTool(CellType.GAP)
+        vm.beginGesture()
+        vm.paintCells(listOf(CellPosition(0, 0), CellPosition(0, 1)))
+        vm.paintCells(listOf(CellPosition(0, 2)))
+        vm.endGesture()
+        assertEquals("...S", vm.patterns()[0])
+        assertTrue(vm.state.canUndo)
+        assertTrue(vm.state.hasUnsavedChanges)
+
+        vm.undo()
+        assertEquals("SSSS", vm.patterns()[0])
+        assertFalse(vm.state.canUndo)
+        assertTrue(vm.state.canRedo)
+        assertFalse(vm.state.hasUnsavedChanges)
+        vm.redo()
+        assertEquals("...S", vm.patterns()[0])
+
+        // Toggled back: the seats get their ids back.
+        vm.selectTool(CellType.SEAT)
+        vm.tapCell(0, 0)
+        assertEquals(LayoutCell.Seat(SeatId(1)), vm.draft.layout.cell(0, 0))
+    }
+
+    @Test
+    fun tapsThatChangeNothingRecordNoStep() {
+        val vm = viewModel()
+        vm.tapCell(1, 1) // already a seat
+        vm.beginGesture()
+        vm.endGesture()
+        assertFalse(vm.state.canUndo)
+        vm.selectTool(CellType.AISLE)
+        vm.tapCell(1, 1)
+        vm.tapCell(1, 2)
+        assertEquals("S||S", vm.patterns()[1])
+        vm.undo()
+        assertEquals("S|SS", vm.patterns()[1])
+    }
+
+    @Test
+    fun seatKindsArePaintedOnExistingSeatsKeepingTheirIds() {
+        val vm = viewModel()
+        vm.selectSeatKind(SeatKind.WHEELCHAIR)
+        assertEquals(CellType.SEAT, vm.state.tool)
+        vm.tapCell(2, 0)
+        vm.selectSeatKind(SeatKind.COMPANION)
+        vm.tapCell(2, 1)
+        assertEquals(LayoutCell.Seat(SeatId(9), SeatKind.WHEELCHAIR), vm.draft.layout.cell(2, 0))
+        assertEquals(LayoutCell.Seat(SeatId(10), SeatKind.COMPANION), vm.draft.layout.cell(2, 1))
+        assertEquals(SeatLabel("3", 1, SeatKind.WHEELCHAIR), vm.state.labels!!.labelOf(SeatId(9)))
+        assertEquals(SeatLabel("3", 1, SeatKind.COMPANION), vm.state.labels!!.labelOf(SeatId(10)))
+        vm.undo()
+        assertEquals(LayoutCell.Seat(SeatId(10)), vm.draft.layout.cell(2, 1))
+    }
+
+    @Test
+    fun selectedRowSettings() {
+        val vm = viewModel()
+        vm.selectRow(1)
+        assertEquals("Row 2 · 1 block", vm.state.row!!.title)
+        assertEquals("", vm.state.labelInput)
+
+        // Typing a label is one undo step.
+        vm.setRowLabel("B")
+        vm.setRowLabel("Bx ")
+        assertEquals("Bx ", vm.state.labelInput)
+        assertEquals("Bx", vm.draft.layout.rows[1].label)
+        vm.undo()
+        assertNull(vm.draft.layout.rows[1].label)
+        assertEquals("", vm.state.labelInput)
+        vm.setRowLabel("TOOLONGLABEL")
+        assertEquals("TOOLON", vm.draft.layout.rows[1].label)
+        vm.setRowLabel("  ")
+        assertNull(vm.draft.layout.rows[1].label) // blank = automatic
+
+        vm.setHalfSeatOffset(true)
+        assertTrue(vm.state.row!!.halfSeatOffset)
+
+        // Block starts and numbering.
+        vm.selectTool(CellType.AISLE)
+        vm.tapCell(1, 2)
+        assertEquals(2, vm.state.row!!.blocks.size)
+        assertEquals(listOf("", ""), vm.state.blockStartInputs)
+        vm.setNumbering(SeatNumbering.RESTART_PER_BLOCK)
+        assertEquals(listOf(1, 2, 1), vm.state.labels!!.seats.values.filter { it.position.row == 1 }.map { it.label.number })
+        vm.setBlockStart(1, "1a0")
+        assertEquals(listOf("", "10"), vm.state.blockStartInputs)
+        assertEquals(listOf("1–2", "10"), vm.state.row!!.blocks.map { it.rangeText })
+        vm.setBlockStart(1, "")
+        assertEquals(listOf("1–2", "1"), vm.state.row!!.blocks.map { it.rangeText })
+
+        vm.selectRow(1) // tapping the selected row again clears the selection
+        assertNull(vm.state.row)
+    }
+
+    @Test
+    fun rowsAndColumnsAreAddedAndRemoved() {
+        val vm = viewModel()
+        vm.selectTool(CellType.GAP)
+        vm.tapCell(0, 0)
+        vm.selectRow(0)
+        vm.insertRowBelow()
+        assertEquals(listOf(".SSS", ".SSS", "SSSS", "SSSS"), vm.patterns())
+        assertEquals(1, vm.state.selectedRow) // the new row
+        vm.insertRowAbove()
+        assertEquals(5, vm.draft.rowCount)
+        assertEquals(1, vm.state.selectedRow)
+        vm.removeSelectedRow()
+        assertEquals(4, vm.draft.rowCount)
+        assertEquals(listOf(SeatId(1), SeatId(2), SeatId(3), SeatId(4)).drop(1), vm.draft.layout.rows[0].seatIds)
+
+        vm.changeRowCount(-2)
+        assertEquals(2, vm.draft.rowCount)
+        vm.changeColumnCount(+2)
+        assertEquals(listOf(".SSSSS", ".SSSSS"), vm.patterns())
+        assertEquals(6f, vm.draft.screenWidth) // the screen was as wide as the grid and stays so
+        vm.changeColumnCount(-5)
+        assertEquals(listOf(".", "."), vm.patterns())
+        assertEquals(1f, vm.draft.screenWidth)
+        vm.changeColumnCount(-1) // at least one column
+        assertEquals(1, vm.draft.columnCount)
+
+        vm.changeScreenWidth(+5f)
+        assertEquals(2f, vm.draft.screenWidth) // at most twice the grid
+        vm.changeColumnCount(+3)
+        assertEquals(2f, vm.draft.screenWidth) // a custom width stays
+    }
+
+    @Test
+    fun screenGeometryFromHandlesAndSteppers() {
+        val vm = viewModel()
+        vm.beginGesture()
+        vm.dragScreenWidth(5.3f)
+        vm.dragScreenWidth(6.1f)
+        vm.dragScreenDistance(3.24f)
+        vm.endGesture()
+        assertEquals(6f, vm.draft.screenWidth)
+        assertEquals(3f, vm.draft.screenDistance)
+        vm.undo() // the whole drag is one step
+        assertEquals(4f, vm.draft.screenWidth)
+        assertEquals(2f, vm.draft.screenDistance)
+        assertFalse(vm.state.canUndo)
+
+        vm.changeScreenDistance(ScreenRules.STEP)
+        assertEquals(2.5f, vm.draft.screenDistance)
+        vm.changeScreenWidth(-100f)
+        assertEquals(1f, vm.draft.screenWidth)
+        vm.changeScreenDistance(-100f)
+        assertEquals(0f, vm.draft.screenDistance)
+    }
+
+    @Test
+    fun saveWritesTheHallAndCloses() {
+        val vm = viewModel()
+        vm.selectTool(CellType.AISLE)
+        vm.tapCell(0, 1)
+        vm.changeScreenWidth(1f)
+        vm.save()
+        assertTrue(vm.state.isClosed)
+        assertNull(vm.state.dialog)
+        val saved = storedHall()
+        assertEquals("S|SS", LayoutPattern.encode(saved.layout!!.rows[0].cells))
+        assertEquals(5f, saved.screenWidth)
+        assertEquals(OLD_IMAGE, saved.referenceImagePath)
+        assertTrue(images.deleted.isEmpty())
+    }
+
+    @Test
+    fun saveWarnsBeforeRemovingSeatsWithVisits() {
+        val vm = viewModel()
+        vm.changeRowCount(-1) // removes seat 12, which has a visit
+        vm.save()
+        val dialog = vm.state.dialog as EditorDialog.ConfirmSave
+        assertEquals(listOf(SeatLabel("3", 4)), dialog.removedSeats)
+        assertFalse(dialog.replacesUnreadableLayout)
+        assertTrue(confirmSaveText(dialog).contains("Row 3, Seat 4"))
+
+        // Cancel: nothing saved, still editing.
+        vm.dismissDialog()
+        assertFalse(vm.state.isClosed)
+        assertEquals(3, storedHall().layout!!.rowCount)
+
+        // Confirm: saved.
+        vm.save()
+        vm.confirmSave()
+        assertTrue(vm.state.isClosed)
+        assertEquals(2, storedHall().layout!!.rowCount)
+    }
+
+    @Test
+    fun removingSeatsWithoutDataSavesWithoutAsking() {
+        val vm = viewModel()
+        vm.selectTool(CellType.GAP)
+        vm.tapCell(0, 0)
+        vm.save()
+        assertNull(vm.state.dialog)
+        assertTrue(vm.state.isClosed)
+    }
+
+    @Test
+    fun aStaleSessionCanBeReloaded() {
+        val vm = viewModel()
+        vm.changeRowCount(+1) // new seats 13..16 in a new back row
+
+        // Meanwhile the stored layout changed: a front row with ids 13..16 was added elsewhere.
+        val other = storedHall().startLayoutEdit().insertRow(0)
+        runBlocking { repository.updateHall(storedHall().copy(layout = other.layout)) }
+
+        vm.save()
+        val dialog = vm.state.dialog as EditorDialog.SaveFailed
+        assertTrue(dialog.canReload)
+        assertEquals(LayoutEditorViewModel.STALE_EDIT, dialog.message)
+        assertFalse(vm.state.isClosed)
+        assertEquals(other.layout, storedHall().layout) // nothing overwritten
+
+        vm.reload()
+        assertNull(vm.state.dialog)
+        assertEquals(4, vm.draft.rowCount)
+        assertEquals(other.layout!!.rows, vm.draft.layout.rows)
+        assertFalse(vm.state.canUndo)
+        assertFalse(vm.state.hasUnsavedChanges)
+    }
+
+    @Test
+    fun otherSaveFailuresShowAMessage() {
+        val vm = viewModel()
+        vm.tapCell(0, 0)
+        vm.selectTool(CellType.GAP)
+        vm.tapCell(0, 0)
+        repository.failure = IllegalStateException("disk full")
+        vm.save()
+        assertEquals(EditorDialog.SaveFailed(LayoutEditorViewModel.SAVE_FAILED, canReload = false), vm.state.dialog)
+        vm.dismissDialog()
+        repository.failure = null
+        vm.save()
+        assertTrue(vm.state.isClosed)
+    }
+
+    @Test
+    fun discardAsksOnlyWithUnsavedChanges() {
+        val untouched = viewModel()
+        untouched.requestDiscard()
+        assertTrue(untouched.state.isClosed)
+
+        val vm = viewModel()
+        vm.selectTool(CellType.GAP)
+        vm.tapCell(0, 0)
+        vm.requestDiscard()
+        assertEquals(EditorDialog.ConfirmDiscard, vm.state.dialog)
+        vm.dismissDialog()
+        assertFalse(vm.state.isClosed)
+        vm.requestDiscard()
+        vm.discard()
+        assertTrue(vm.state.isClosed)
+        assertEquals(stored, storedHall().layout)
+
+        // Undoing every change counts as unchanged again.
+        val undone = viewModel()
+        undone.selectTool(CellType.GAP)
+        undone.tapCell(0, 0)
+        undone.undo()
+        undone.requestDiscard()
+        assertTrue(undone.state.isClosed)
+    }
+
+    @Test
+    fun referenceImageCanBeReplacedUndoneAndRemoved() {
+        val vm = viewModel()
+        vm.onReferenceImagePicked("content://picker/1")
+        val first = "reference/hall-$HALL-1.jpg"
+        assertEquals(first, vm.draft.referenceImagePath)
+        assertTrue(vm.state.referenceMode)
+        assertTrue(vm.state.hasUnsavedChanges)
+        assertEquals(listOf("content://picker/1"), images.importedSources)
+
+        vm.setReferenceAlignment(ReferenceAlignment(1f, 2f, 30f))
+        vm.setReferenceOpacity(2f)
+        assertEquals(LayoutEditorUiState.MAX_REFERENCE_OPACITY, vm.state.referenceOpacity)
+
+        vm.undo()
+        assertEquals(OLD_IMAGE, vm.draft.referenceImagePath)
+        assertNull(vm.state.referenceAlignment) // a different image starts at the default placement
+        vm.redo()
+        assertEquals(first, vm.draft.referenceImagePath)
+
+        vm.removeReferenceImage()
+        assertNull(vm.draft.referenceImagePath)
+        vm.onReferenceImagePicked("content://picker/2")
+        val second = "reference/hall-$HALL-2.jpg"
+        vm.onReferenceImagePicked(null) // cancelled picker: nothing happens
+        assertEquals(second, vm.draft.referenceImagePath)
+
+        vm.save()
+        assertTrue(vm.state.isClosed)
+        assertEquals(second, storedHall().referenceImagePath)
+        assertEquals(setOf(first, OLD_IMAGE), images.deleted.toSet()) // the unused import and the replaced file
+        assertEquals(setOf(second), images.files)
+    }
+
+    @Test
+    fun discardingDeletesOnlyScreenshotsPickedInThisSession() {
+        val vm = viewModel()
+        vm.onReferenceImagePicked("content://picker/1")
+        vm.requestDiscard()
+        vm.discard()
+        assertEquals(listOf("reference/hall-$HALL-1.jpg"), images.deleted)
+        assertEquals(setOf(OLD_IMAGE), images.files)
+        assertEquals(OLD_IMAGE, storedHall().referenceImagePath)
+    }
+
+    @Test
+    fun removingTheScreenshotDeletesItsFileOnlyAfterSaving() {
+        val vm = viewModel()
+        vm.removeReferenceImage()
+        assertTrue(images.deleted.isEmpty())
+        vm.save()
+        assertNull(storedHall().referenceImagePath)
+        assertEquals(listOf(OLD_IMAGE), images.deleted)
+    }
+
+    @Test
+    fun aFailedImportShowsAMessage() {
+        val vm = viewModel()
+        images.importFailure = IOException("unreadable")
+        vm.onReferenceImagePicked("content://picker/1")
+        assertEquals(LayoutEditorViewModel.IMPORT_FAILED, vm.state.message)
+        assertFalse(vm.state.isImportingReference)
+        assertEquals(OLD_IMAGE, vm.draft.referenceImagePath)
+        vm.messageShown()
+        assertNull(vm.state.message)
+    }
+
+    @Test
+    fun aHallWithoutLayoutStartsWithTheDefaultGrid() {
+        repository.store.value = repository.store.value.copy(
+            halls = listOf(hall.copy(layout = null, screenWidth = null, screenDistance = null, nextSeatId = 50)),
+            visits = emptyList(),
+        )
+        val vm = viewModel()
+        assertEquals(10, vm.draft.rowCount)
+        assertEquals(16, vm.draft.columnCount)
+        assertEquals(16f, vm.draft.screenWidth)
+        assertEquals(2f, vm.draft.screenDistance)
+        assertFalse(vm.state.hasUnsavedChanges)
+        vm.save() // even unchanged, the default grid is saved
+        assertTrue(vm.state.isClosed)
+        val saved = storedHall()
+        assertEquals(160, saved.layout!!.seatCount)
+        assertTrue(saved.layout!!.seatIds.all { it.value >= 50 })
+        assertEquals(16f, saved.screenWidth)
+        assertEquals(2f, saved.screenDistance)
+    }
+
+    @Test
+    fun replacingAnUnreadableLayoutAsksFirst() {
+        repository.store.value = repository.store.value.copy(
+            halls = listOf(hall.copy(layout = null, layoutUnreadable = true, nextSeatId = 13)),
+        )
+        val vm = viewModel()
+        assertTrue(vm.state.replacesUnreadableLayout)
+        vm.save()
+        // The visit in seat 12 loses its seat: its count is part of the warning.
+        val dialog = EditorDialog.ConfirmSave(emptyList(), replacesUnreadableLayout = true, unreadableSeatsWithData = 1)
+        assertEquals(dialog, vm.state.dialog)
+        assertTrue(confirmSaveText(dialog).contains("1 of its seats has visits or seat settings"))
+        assertTrue(
+            confirmSaveText(dialog.copy(unreadableSeatsWithData = 3)).contains("3 of its seats have visits or seat settings"),
+        )
+        vm.confirmSave()
+        assertTrue(vm.state.isClosed)
+        assertFalse(storedHall().layoutUnreadable)
+        assertEquals(160, storedHall().layout!!.seatCount)
+    }
+
+    @Test
+    fun anUnreadableLayoutWithoutSeatDataWarnsWithoutCount() {
+        repository.store.value = repository.store.value.copy(
+            halls = listOf(hall.copy(layout = null, layoutUnreadable = true, nextSeatId = 13)),
+            visits = listOf(visitInSeat12.copy(seatId = null)),
+        )
+        val vm = viewModel()
+        vm.save()
+        assertEquals(EditorDialog.ConfirmSave(emptyList(), replacesUnreadableLayout = true, unreadableSeatsWithData = 0), vm.state.dialog)
+        assertFalse(confirmSaveText(vm.state.dialog as EditorDialog.ConfirmSave).contains("visits"))
+    }
+
+    /** A save waiting on a slow repository can't be undercut by Discard or Back. */
+    @Test
+    fun discardIsIgnoredWhileASaveIsRunning() {
+        val slow = SlowHallRepository(repository)
+        val vm = LayoutEditorViewModel(HALL, slow, images)
+        vm.onReferenceImagePicked("content://picker/1")
+        val picked = vm.draft.referenceImagePath!!
+        vm.save()
+        assertTrue(vm.state.isSaving)
+
+        vm.requestDiscard()
+        vm.discard()
+        vm.onReferenceImagePicked("content://picker/2") // no new imports mid-save either
+        assertNull(vm.state.dialog)
+        assertFalse(vm.state.isClosed)
+        assertTrue(picked in images.files)
+        assertEquals(1, images.importedSources.size)
+
+        slow.gate.complete(Unit)
+        assertTrue(vm.state.isClosed)
+        assertFalse(vm.state.isSaving)
+        assertEquals(picked, storedHall().referenceImagePath)
+        assertTrue(picked in images.files) // the saved screenshot still exists
+    }
+
+    /** Delegates to the fake but suspends [updateHall] until [gate] completes. */
+    private class SlowHallRepository(private val delegate: FakeCinexRepository) : HallRepository by delegate {
+        val gate = CompletableDeferred<Unit>()
+
+        override suspend fun updateHall(hall: Hall): Boolean {
+            gate.await()
+            return delegate.updateHall(hall)
+        }
+    }
+
+    @Test
+    fun missingHallAndLoadErrors() {
+        val missing = LayoutEditorViewModel(999, repository, images)
+        assertEquals(EditorStatus.NotFound, missing.state.status)
+        missing.save()
+        assertFalse(missing.state.isClosed)
+        missing.requestDiscard()
+        assertTrue(missing.state.isClosed)
+
+        repository.observeFailure = IllegalStateException("db")
+        val failing = viewModel()
+        assertEquals(EditorStatus.LoadFailed, failing.state.status)
+        repository.observeFailure = null
+        failing.reload()
+        assertEquals(EditorStatus.Ready, failing.state.status)
+    }
+
+    @Test
+    fun labelsOfTheDraftFollowEveryEdit() {
+        val vm = viewModel()
+        vm.selectRow(0)
+        vm.setRowLabel("A")
+        assertEquals(listOf("A", "2", "3"), vm.state.labels!!.rowLabels)
+        assertEquals(vm.draft.layout.labels(), vm.state.labels)
+    }
+
+    private companion object {
+        const val HALL = 10L
+        const val OLD_IMAGE = "reference/hall-10-old.jpg"
+    }
+}

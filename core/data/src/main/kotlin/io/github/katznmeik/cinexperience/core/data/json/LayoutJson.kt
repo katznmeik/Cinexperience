@@ -1,8 +1,10 @@
 package io.github.katznmeik.cinexperience.core.data.json
 
+import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.LayoutPattern
 import io.github.katznmeik.cinexperience.core.model.LayoutRow
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import kotlinx.serialization.Serializable
@@ -24,10 +26,18 @@ import kotlinx.serialization.json.Json
  * }
  * ```
  *
- * `cells` uses [LayoutPattern] (`S` seat, `.` gap, `|` aisle). `seatIds` lists the
- * row's seat ids left to right. In stored layouts `seatIds` and `nextSeatId` are
- * always written; seed layouts may omit them, then ids are assigned row-major
- * from 1 (see [LayoutJson.decode]).
+ * `cells` uses [LayoutPattern] (`S` seat, `W` wheelchair space, `C` companion
+ * seat, `F` sofa place, `.` gap, `|` aisle). `seatIds` lists the row's seats' ids
+ * left to right. In stored layouts `seatIds` and `nextSeatId` are always written;
+ * seed layouts may omit them, then ids are assigned row-major from 1 (see
+ * [LayoutJson.decode]).
+ *
+ * Format versions: 1 knows only `S` seats; 2 adds the seat kinds `W`, `C`, `F`.
+ * A layout is written with the lowest version that can hold it (1 unless it has
+ * a non-standard seat), so layouts without seat kinds stay readable by older app
+ * versions and their JSON does not change. Reading is lenient: every known cell
+ * character is accepted in every supported version (e.g. hand-written seed
+ * layouts that say version 1).
  */
 @Serializable
 internal data class SeatLayoutJson(
@@ -50,8 +60,11 @@ private const val NUMBERING_CONTINUOUS = "CONTINUOUS"
 private const val NUMBERING_RESTART = "RESTART_PER_BLOCK"
 
 internal object LayoutJson {
-    /** Version written by this app. Older versions must stay decodable. */
-    const val FORMAT_VERSION: Int = 1
+    /** Newest version this app reads and writes. Older versions must stay decodable. */
+    const val FORMAT_VERSION: Int = 2
+
+    /** The first version, without seat kinds. */
+    const val FORMAT_VERSION_STANDARD_SEATS_ONLY: Int = 1
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -76,7 +89,7 @@ internal object LayoutJson {
         }
 
     fun toJson(layout: SeatLayout): SeatLayoutJson = SeatLayoutJson(
-        formatVersion = FORMAT_VERSION,
+        formatVersion = minimumVersion(layout),
         nextSeatId = layout.nextSeatId,
         rows = layout.rows.map { row ->
             RowJson(
@@ -92,6 +105,13 @@ internal object LayoutJson {
             )
         },
     )
+
+    private fun minimumVersion(layout: SeatLayout): Int {
+        val hasSeatKinds = layout.rows.any { row ->
+            row.cells.any { it is LayoutCell.Seat && it.kind != SeatKind.STANDARD }
+        }
+        return if (hasSeatKinds) FORMAT_VERSION else FORMAT_VERSION_STANDARD_SEATS_ONLY
+    }
 
     /**
      * Converts and validates. Rows without `seatIds` get ids after the highest id

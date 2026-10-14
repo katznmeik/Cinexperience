@@ -7,6 +7,7 @@ import io.github.katznmeik.cinexperience.core.model.HallRatings
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
+import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import io.github.katznmeik.cinexperience.core.model.Visit
 import java.time.LocalDate
 
@@ -122,6 +123,53 @@ object SampleData {
 
     fun store(): FakeStore = FakeStore(cinemas, halls, visits, favourites)
 
+    /** [store] with Delphi LUX Saal 1 drawn as the realistic [SampleLayouts.splitHall]. */
+    fun storeWithSplitHall(): FakeStore = store().let { s ->
+        s.copy(
+            halls = s.halls.map {
+                if (it.id == DELPHI_LUX_SAAL_1) {
+                    it.copy(layout = SampleLayouts.splitHall, screenWidth = 16f, screenDistance = 2.5f)
+                } else {
+                    it
+                }
+            },
+            favourites = s.favourites - DELPHI_LUX_SAAL_1,
+        )
+    }
+
     /** The preloaded cinemas and halls without any visits, as after a fresh install. */
     fun freshInstallStore(): FakeStore = FakeStore(cinemas, halls.map { it.copy(layout = null) })
+}
+
+/** Invented but realistic layouts for screenshots and tests (see [SampleData]). */
+object SampleLayouts {
+    /**
+     * A 10-row hall in three blocks split by two aisles, rows labelled A–J: short
+     * front rows, a staggered row D (half-seat offset), seat numbers restarting in
+     * every block, and a back row with wheelchair spaces, companion seats and sofa
+     * places. 183 seats.
+     */
+    val splitHall: SeatLayout = SeatLayout.fromPatterns(
+        "..SS|SSSSSSSSSSSS|SS..",
+        ".SSS|SSSSSSSSSSSS|SSS.",
+        "SSSS|SSSSSSSSSSSS|SSSS",
+        "SSSS|SSSSSSSSSSS.|SSSS",
+        "SSSS|SSSSSSSSSSSS|SSSS",
+        "SSSS|SSSSSSSSSSSS|SSSS",
+        "SSSS|SSSSSSSSSSSS|SSSS",
+        "SSSS|SSSSSSSSSSSS|SSSS",
+        ".SSS|SSSSSSSSSSSS|SSS.",
+        "WC..|..FFFFFFFF..|..CW",
+        firstSeatId = 1,
+    ).let { layout ->
+        (0 until layout.rowCount).fold(layout) { acc, row ->
+            acc.updateRow(row) {
+                it.copy(
+                    label = "ABCDEFGHIJ"[row].toString(),
+                    numbering = SeatNumbering.RESTART_PER_BLOCK,
+                    halfSeatOffset = row == 3,
+                )
+            }
+        }
+    }
 }

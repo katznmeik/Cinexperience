@@ -15,6 +15,8 @@ data class CinexColors(
     val background: Color,
     val surface: Color,
     val surfaceRaised: Color,
+    /** Slightly darker than [surface]: drawing areas such as the layout editor canvas. */
+    val canvas: Color,
     val divider: Color,
     val outline: Color,
     val text: Color,
@@ -41,6 +43,7 @@ internal object CinexPalette {
     val Background = Color(0xFF0E0D0C)
     val Surface = Color(0xFF1A1918)
     val SurfaceRaised = Color(0xFF232220)
+    val Canvas = Color(0xFF161514)
     val Divider = Color(0xFF2B2A28)
     val Outline = Color(0xFF3A3835)
     val Text = Color(0xFFF3F0EA)
@@ -58,6 +61,7 @@ val DarkCinexColors = CinexColors(
     background = CinexPalette.Background,
     surface = CinexPalette.Surface,
     surfaceRaised = CinexPalette.SurfaceRaised,
+    canvas = CinexPalette.Canvas,
     divider = CinexPalette.Divider,
     outline = CinexPalette.Outline,
     text = CinexPalette.Text,

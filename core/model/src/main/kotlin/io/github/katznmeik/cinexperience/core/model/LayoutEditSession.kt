@@ -63,6 +63,21 @@ class LayoutEditSession private constructor(
         return copyWith(edited, ghosts)
     }
 
+    /**
+     * Makes the cell a seat of [kind]. An existing seat keeps its id and only
+     * changes its kind (it is the same seat); a gap or aisle becomes a seat as
+     * with [setCellType] (getting its original id back where possible).
+     */
+    fun setSeat(row: Int, column: Int, kind: SeatKind): LayoutEditSession {
+        val current = requireLayout()
+        val cell = current.cell(row, column)
+        if (cell is LayoutCell.Seat) {
+            return if (cell.kind == kind) this else copyWith(current.withSeatKind(row, column, kind), ghosts)
+        }
+        val seated = setCellType(row, column, CellType.SEAT)
+        return seated.copyWith(seated.requireLayout().withSeatKind(row, column, kind), seated.ghosts)
+    }
+
     /** SEAT → GAP → AISLE → SEAT. */
     fun cycleCell(row: Int, column: Int): LayoutEditSession =
         setCellType(row, column, requireLayout().cell(row, column).type.next())

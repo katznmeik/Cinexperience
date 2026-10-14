@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Auto Backup (spec §8): only the database and shared preferences.
+  Listing includes leaves out every other domain, in particular the files domain:
+  the layout editor's reference screenshots (files/reference/) and, later, visit
+  photos would count against the 25 MB backup quota. Those are covered by the
+  app's own export / import (M6).
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="." />
+        <include domain="sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="." />
+        <include domain="sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

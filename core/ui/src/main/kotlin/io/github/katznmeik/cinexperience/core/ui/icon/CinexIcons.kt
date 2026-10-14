@@ -56,6 +56,42 @@ object CinexIcons {
         strokeIcon("List", "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01")
     }
 
+    /** Four squares: "Edit layout". */
+    val Grid: ImageVector by lazy {
+        strokeIcon("Grid", "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z")
+    }
+
+    /** Picture frame with a mountain: reference screenshot. */
+    val Image: ImageVector by lazy {
+        strokeIcon(
+            "Image",
+            "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
+            "M7 9a2 2 0 1 0 4 0a2 2 0 1 0-4 0",
+            "M21 15l-5-5L5 21",
+        )
+    }
+
+    val Undo: ImageVector by lazy { strokeIcon("Undo", "M9 14L4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 0 11H11") }
+
+    val Redo: ImageVector by lazy { strokeIcon("Redo", "M15 14l5-5-5-5", "M20 9H9.5a5.5 5.5 0 0 0 0 11H13") }
+
+    /** Four corners: fit the view to the content. */
+    val Fit: ImageVector by lazy {
+        strokeIcon(
+            "Fit",
+            "M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3",
+        )
+    }
+
+    val Delete: ImageVector by lazy { strokeIcon("Delete", "M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6") }
+
+    /** Seat kind glyphs (see [SeatKindGlyphs]), as icons for the editor's seat type chips. */
+    val Wheelchair: ImageVector by lazy { strokeIcon("Wheelchair", *SeatKindGlyphs.Wheelchair.toTypedArray()) }
+
+    val CompanionSeat: ImageVector by lazy { strokeIcon("CompanionSeat", *SeatKindGlyphs.CompanionSeat.toTypedArray()) }
+
+    val Sofa: ImageVector by lazy { strokeIcon("Sofa", *SeatKindGlyphs.Sofa.toTypedArray()) }
+
     /** Filled star marking the favourite seat (spec §5). */
     val Star: ImageVector by lazy {
         ImageVector.Builder(

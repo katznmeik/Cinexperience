@@ -12,6 +12,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
+import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
@@ -34,6 +35,7 @@ private class FakeAppContainer(repository: FakeCinexRepository) : AppContainer {
     override val hallRepository = repository
     override val visitRepository = repository
     override val seatOverrideRepository = repository
+    override val referenceImageStore = FakeReferenceImageStore()
 }
 
 /**
@@ -89,9 +91,22 @@ class TabScreenshotTest {
         showApp()
         composeRule.onNodeWithText("KANT KINO").performClick()
         composeRule.onNodeWithText("Saal 3").performClick()
-        composeRule.onNodeWithText("Seat map coming in M4").assertExists()
-        composeRule.onNodeWithText("Kant Kino").assertExists()
-        capture("hall_detail_placeholder")
+        composeRule.onNodeWithText("NO LAYOUT YET").assertExists()
+        composeRule.onNodeWithText("Kant Kino · no visits").assertExists()
+        capture("hall_detail_no_layout")
+    }
+
+    /** "Draw layout" opens the editor with a default grid; Discard without changes goes straight back. */
+    @Test
+    fun hallToLayoutEditorAndBack() {
+        showApp()
+        composeRule.onNodeWithText("KANT KINO").performClick()
+        composeRule.onNodeWithText("Saal 3").performClick()
+        composeRule.onNodeWithText("Draw layout").performClick()
+        composeRule.onNodeWithText("SAAL 3 · LAYOUT").assertExists()
+        composeRule.onNodeWithText("16 seats").assertExists() // default screen width = 16 columns
+        composeRule.onNodeWithText("Discard").performClick()
+        composeRule.onNodeWithText("NO LAYOUT YET").assertExists()
     }
 
     /**

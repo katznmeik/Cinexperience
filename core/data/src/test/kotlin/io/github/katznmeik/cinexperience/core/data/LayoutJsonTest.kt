@@ -2,7 +2,9 @@ package io.github.katznmeik.cinexperience.core.data
 
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.model.CellType
+import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -68,8 +70,33 @@ class LayoutJsonTest {
     }
 
     @Test
+    fun seatKindsUseVersion2AndRoundTrip() {
+        val layout = layoutOf("SWCF|S.", "SSSS|SS").withSeatKind(1, 5, SeatKind.SOFA)
+        val json = LayoutJson.encode(layout)
+        assertTrue(json, json.contains("\"formatVersion\":2"))
+        assertTrue(json, json.contains("\"cells\":\"SWCF|S.\""))
+        assertEquals(layout, LayoutJson.decode(json))
+        // Without seat kinds the JSON stays version 1, byte for byte as before.
+        val plain = layout.withSeatKind(0, 1, SeatKind.STANDARD).withSeatKind(0, 2, SeatKind.STANDARD)
+            .withSeatKind(0, 3, SeatKind.STANDARD).withSeatKind(1, 5, SeatKind.STANDARD)
+        assertTrue(LayoutJson.encode(plain).contains("\"formatVersion\":1"))
+    }
+
+    @Test
+    fun version1LayoutsAndSeedsWithKindsStillDecode() {
+        val v1 = LayoutJson.decode("""{"formatVersion":1,"nextSeatId":3,"rows":[{"cells":"SS","seatIds":[1,2]}]}""")
+        assertEquals(LayoutCell.Seat(SeatId(1)), v1.cell(0, 0))
+        // Reading is lenient: a hand-written seed layout may use the kind characters with version 1.
+        val seed = LayoutJson.decode("""{"formatVersion":1,"rows":[{"cells":"WC|F"}]}""")
+        assertEquals(LayoutCell.Seat(SeatId(1), SeatKind.WHEELCHAIR), seed.cell(0, 0))
+        assertEquals(LayoutCell.Seat(SeatId(2), SeatKind.COMPANION), seed.cell(0, 1))
+        assertEquals(LayoutCell.Seat(SeatId(3), SeatKind.SOFA), seed.cell(0, 3))
+    }
+
+    @Test
     fun invalidLayoutsAreRejected() {
-        assertInvalid("""{"formatVersion":2,"rows":[{"cells":"S"}]}""")
+        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"S"}]}""")
+        assertInvalid("""{"formatVersion":2,"rows":[{"cells":"SX"}]}""")
         assertInvalid("""{"formatVersion":0,"rows":[{"cells":"S"}]}""")
         assertInvalid("""{"formatVersion":1,"rows":[{"cells":"SX"}]}""")
         assertInvalid("""{"formatVersion":1,"rows":[{"cells":"SS","seatIds":[1]}]}""")

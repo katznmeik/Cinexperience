@@ -15,7 +15,7 @@ import java.time.LocalDate
 /** A layout this app cannot read must not break any Flow, nor be lost by unrelated edits. */
 internal class UnreadableLayoutTest : DatabaseTest() {
 
-    private val futureJson = """{"formatVersion":2,"rows":[{"cells":"SS"}]}"""
+    private val futureJson = """{"formatVersion":99,"rows":[{"cells":"SS"}]}"""
 
     private suspend fun hallWithFutureLayout(): Long {
         val cinemaId = cinemas.createCinema("Kino")
