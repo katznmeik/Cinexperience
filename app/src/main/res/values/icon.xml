@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The mark of the launcher icon and the splash screen. There are three concepts,
+         drawable/ic_launcher_concept_1.xml, _2 and _3 (previews from IconPreviewTest:
+         app/build/outputs/roborazzi/icon_concept_*.png). Switching is this one line. -->
+    <item name="ic_launcher_mark" type="drawable">@drawable/ic_launcher_concept_1</item>
+</resources>
