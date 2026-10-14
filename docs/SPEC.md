@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-14 (rev. 16)
+**Last updated:** 2026-10-14 (rev. 17)
 
 ---
 
@@ -57,6 +57,7 @@ All data is stored locally in a Room (SQLite) database.
 | notes | String? | free text |
 | isPreloaded | Boolean | shipped with the app vs. user-added |
 | seedKey | String? | stable key of a preloaded cinema (seed updates) |
+| isFavourite | Boolean | marked as a favourite cinema by the user (§6.1, §6.2) |
 
 ### 4.2 Hall
 | Field | Type | Notes |
@@ -67,6 +68,7 @@ All data is stored locally in a Room (SQLite) database.
 | layout | SeatLayout? | null until drawn by the user |
 | screenWidth | Float? | screen width, in seat-widths (grid columns); adjustable |
 | screenDistance | Float? | gap between screen and first row, in row-depths; adjustable |
+| screenOffset | Float | horizontal shift of the screen's centre from the grid's centre, in seat-widths (0.5 steps; negative = to the left, as seen from the seats facing the screen); 0 = centred; adjustable. Yorck's plans don't show it, so it is set by hand |
 | referenceImagePath | String? | screenshot of the hall plan from the Yorck app (see §6.5); app-private relative path |
 | isPreloaded, seedKey | | as for Cinema |
 | notes | String? | |
@@ -92,7 +94,8 @@ runs continuously across blocks or restarts in each block, and can set the
 starting number of each block. A row can also be shifted by half a seat
 (staggered rows), as seen in some halls.
 
-The screen is always drawn at the top, with the width and distance from §4.2.
+The screen is drawn at the top as a straight bar, with the width, distance and
+horizontal offset from §4.2.
 
 **Seat identity:** every seat cell carries a stable `seatId` that is never
 reused. Visits and overrides refer to seats by this id, so they survive
@@ -159,19 +162,23 @@ Bottom navigation with three tabs: **Cinemas**, **Rankings**, **Settings**.
 
 ### 6.1 Cinemas (home)
 - List of all cinemas: name, overall score, number of visits.
-- Sort: score (default; unrated last) / name / most visited.
+- Sort: score (default; unrated last) / name / most visited. A fourth chip,
+  **Favourites**, shows only the favourite cinemas (in score order); favourite
+  cinemas carry a ★ marker in the list.
 - FAB "Add visit" (quick entry: pick cinema → hall).
 
 ### 6.2 Cinema detail
-- Header: name, address, overall score, cinema category scores.
+- Header: name, address, overall score, cinema category scores, and a ☆/★
+  toggle to mark the cinema as a favourite.
 - List of halls with overall score and a ⭐ marker if a favourite seat is set.
 - Actions: edit cinema, add hall.
 
 ### 6.3 Hall detail
-- **Seat map** (zoomable/pannable) coloured per §5, with a legend (Great · OK ·
+- **Seat map** (zoomable/pannable) coloured per §5, every numbered seat showing
+  its seat number, with a legend (Great · OK ·
   Avoid · No data · Favourite). Tap a seat → an inline **seat card** below the map:
   average seat rating, visits in that seat, approximate viewing angle to the
-  screen (derived from screen width/distance), colour override (Auto / Great /
+  screen (derived from screen width, distance and offset), colour override (Auto / Great /
   OK / Avoid), mark/remove favourite.
 - **Score breakdown:** six categories with bars and rating counts.
 - **Visit history:** newest first; tap to open/edit a visit.
@@ -182,7 +189,7 @@ Bottom navigation with three tabs: **Cinemas**, **Rankings**, **Settings**.
 Single scrolling form:
 1. Cinema & hall (pre-filled when opened from a hall)
 2. Date, film title, screening format
-3. Seat — picked by tapping the seat map (or skipped)
+3. Seat — picked by tapping the seat map, which shows the seat numbers (or skipped)
 4. Seat rating
 5. Hall ratings (six star rows)
 6. Cinema ratings (collapsible)
@@ -207,8 +214,14 @@ Save is always allowed — nothing besides hall is required.
   Two fingers zoom and pan. Undo/redo for every change.
 - Edit row labels and starting seat numbers; per row: block numbering
   (continuous / restart per block) and half-seat offset.
-- **Screen:** drag handles to adjust the screen's width and its distance to the
-  first row; numeric entry is available as well.
+- **Seat numbers** are shown on every numbered seat and update live while
+  painting or renumbering.
+- **Screen:** tap the screen bar to select it; the selected screen is
+  highlighted in green (no extra box). Drag its handles to change its width,
+  drag the bar up/down to change its distance to the first row and sideways to
+  move it left or right: the screen is not always centred over the seats, and
+  this changes the viewing angles a lot. Steppers for width, distance and
+  position are available as well.
 - Preview with screen at the top; save / discard.
 - Changing a layout that already has visits warns if seats with data would
   disappear.
@@ -238,11 +251,17 @@ Save is always allowed — nothing besides hall is required.
 - **Dark theme only** in v1 (comfortable to use in a dark auditorium).
 - Visual style loosely inspired by Yorck's branding: near-black background,
   bold uppercase display type, **black-and-white only** — the seat colours
-  (green / yellow / red) are the only colours in the UI, so the seat map stands out. No Yorck logos or trademarks are
+  (green / yellow / red) are the only colours in the UI, so the seat map stands out
+  (the one exception: the layout editor highlights the selected screen in green). No Yorck logos or trademarks are
   used in the app.
 - Mockups of all v1 screens: https://claude.ai/artifact/24gq7hLsHPUoABFm2Ro8Q9
 - Seats to avoid carry a × mark; the favourite seat carries a ⭐. Seats without
   data have a subtle light rim so they stay visible (≥3:1 contrast).
+- Seat numbers on the seat map and in the editor are legible on every seat
+  colour (≥4.5:1 where the seat is large enough to hold them).
+- The screen is drawn as a **straight bar**: no Yorck screen is curved.
+- **Transitions** between screens are short and consistent: no long fade-out
+  and no hard cut at the end, also with Android's predictive back gesture.
 - **App icon:** a curved screen above a block of seats, light on near-black,
   with a monochrome layer for Android themed icons; the splash screen shows the
   same mark on the dark background.
@@ -283,6 +302,11 @@ name is known (delphi LUX "Luxbox"), and can be renamed in the app.
 from the owner's Yorck-app screenshots, including wheelchair/companion/sofa
 places; screen width and distance are estimated from the plans' "Leinwand" bar
 and can be adjusted in the editor.
+
+**Planned before v1.0 (M8):** the layouts of all halls of Rollberg, Neues Off
+and Passage, from the owner's Yorck-app screenshots. Their screen offset
+(§4.2) can't be read from the plans; it starts centred and is set in the
+editor.
 
 Verified in M1 (13 cinemas, 36 halls; Yorck states 14 cinemas, the 14th is unknown):
 
