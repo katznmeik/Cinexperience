@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 14)
+**Last updated:** 2026-10-13 (rev. 15)
 
 ---
 
@@ -240,7 +240,11 @@ Save is always allowed — nothing besides hall is required.
   (green / yellow / red) are the only colours in the UI, so the seat map stands out. No Yorck logos or trademarks are
   used in the app.
 - Mockups of all v1 screens: https://claude.ai/artifact/24gq7hLsHPUoABFm2Ro8Q9
-- Seats to avoid carry a × mark; the favourite seat carries a ⭐.
+- Seats to avoid carry a × mark; the favourite seat carries a ⭐. Seats without
+  data have a subtle light rim so they stay visible (≥3:1 contrast).
+- **App icon:** a curved screen above a block of seats, light on near-black,
+  with a monochrome layer for Android themed icons; the splash screen shows the
+  same mark on the dark background.
 - Seat colours must be distinguishable in the dark theme and also carry a
   secondary cue (icon/pattern) for colour-blind readability.
 - Material 3 components via Jetpack Compose.
@@ -475,4 +479,3 @@ but cannot run an emulator there — hands-on verification is done by the owner.
 - Verify the current list of Yorck cinemas and hall names (M1).
 - Sample ticket email/PDF for v1.1 parser.
 - Yorck-app screenshots of hall seat plans (for preloaded layouts).
-- App icon and final accent colour.
