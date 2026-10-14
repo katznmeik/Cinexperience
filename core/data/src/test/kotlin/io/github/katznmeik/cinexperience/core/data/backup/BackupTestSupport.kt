@@ -126,6 +126,13 @@ internal abstract class BackupTestBase : DatabaseTest() {
             .build()
             .also { extraDatabases += it }
 
+    /**
+     * Whether the devices seed after an import, from the bundled seed (like the app).
+     * A test that compares imported data exactly turns it off, so a later seed
+     * update doesn't add cinemas and halls to its result.
+     */
+    protected open val seedAfterImport: Boolean = true
+
     /** Device A, on the base class database. */
     protected val deviceA: Device by lazy { Device(db, "a") }
 
@@ -147,7 +154,7 @@ internal abstract class BackupTestBase : DatabaseTest() {
             documents = documents,
             lastExportStore = lastExports,
             appVersion = { "1.2.3" },
-            readSeed = { seedAsset },
+            readSeed = if (seedAfterImport) ({ seedAsset }) else null,
             ioDispatcher = Dispatchers.IO,
             clock = clock,
             limits = limits,
