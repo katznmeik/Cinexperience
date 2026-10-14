@@ -16,9 +16,9 @@ import io.github.katznmeik.cinexperience.core.data.DataContainer
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.SeatKind
+import io.github.katznmeik.cinexperience.core.seatmapui.SeatMap
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
-import io.github.katznmeik.cinexperience.feature.seatmap.map.SeatMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel

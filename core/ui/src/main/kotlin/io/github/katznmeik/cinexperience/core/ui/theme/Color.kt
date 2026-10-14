@@ -26,7 +26,7 @@ data class CinexColors(
     val seat: SeatColors,
 )
 
-/** Seat map colours (spec §5 "Seat colour"); used by the seat map in feature:seatmap. */
+/** Seat map colours (spec §5 "Seat colour"); drawn by the seat map in core:seatmapui. */
 @Immutable
 data class SeatColors(
     /** Average seat rating ≥ 4.0, or manual override GREEN. */

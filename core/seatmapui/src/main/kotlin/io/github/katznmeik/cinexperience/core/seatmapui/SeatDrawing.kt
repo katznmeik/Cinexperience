@@ -1,4 +1,4 @@
-package io.github.katznmeik.cinexperience.feature.seatmap.map
+package io.github.katznmeik.cinexperience.core.seatmapui
 
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -22,7 +22,7 @@ import io.github.katznmeik.cinexperience.core.ui.icon.SeatKindGlyphs
  */
 
 /** Seat shape from the mockups: a rounded square with rounder bottom corners. */
-internal fun seatRoundRect(rect: Rect): RoundRect {
+fun seatRoundRect(rect: Rect): RoundRect {
     val top = CornerRadius(rect.width * 3f / 14f)
     val bottom = CornerRadius(rect.width * 5f / 14f)
     return RoundRect(rect, topLeft = top, topRight = top, bottomRight = bottom, bottomLeft = bottom)
@@ -36,7 +36,7 @@ private fun parse(vararg data: String): Path = Path().apply {
 }
 
 /** Parsed seat kind and mark symbols (24×24 viewport). */
-internal object SeatGlyphs {
+object SeatGlyphs {
     private val wheelchair by lazy { parse(*SeatKindGlyphs.Wheelchair.toTypedArray()) }
     private val companion by lazy { parse(*SeatKindGlyphs.CompanionSeat.toTypedArray()) }
     private val sofa by lazy { parse(*SeatKindGlyphs.Sofa.toTypedArray()) }
@@ -55,7 +55,7 @@ internal object SeatGlyphs {
 }
 
 /** Draws a 24×24 [glyph] stroked into the square [box]. */
-internal fun DrawScope.strokeGlyph(glyph: Path, box: Rect, color: Color, strokeWidth: Float = 2.2f) {
+fun DrawScope.strokeGlyph(glyph: Path, box: Rect, color: Color, strokeWidth: Float = 2.2f) {
     translate(box.left, box.top) {
         scale(box.width / GLYPH_VIEWPORT, box.height / GLYPH_VIEWPORT, pivot = Offset.Zero) {
             drawPath(glyph, color, style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
@@ -73,7 +73,7 @@ internal fun DrawScope.fillGlyph(glyph: Path, box: Rect, color: Color) {
 }
 
 /** The centred square of [fraction] × the rect's width inside [rect]. */
-internal fun Rect.innerSquare(fraction: Float): Rect {
+fun Rect.innerSquare(fraction: Float): Rect {
     val side = width * fraction
     return Rect(center.x - side / 2f, center.y - side / 2f, center.x + side / 2f, center.y + side / 2f)
 }

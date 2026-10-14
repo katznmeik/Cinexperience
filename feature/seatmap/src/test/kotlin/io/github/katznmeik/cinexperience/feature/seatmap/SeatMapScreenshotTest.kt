@@ -7,17 +7,13 @@ import android.graphics.RectF
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
-import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
-import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
@@ -30,9 +26,6 @@ import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailViewMo
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutEditorActions
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutEditorScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutEditorViewModel
-import io.github.katznmeik.cinexperience.feature.seatmap.map.SeatMap
-import io.github.katznmeik.cinexperience.feature.seatmap.map.SeatTone
-import io.github.katznmeik.cinexperience.feature.seatmap.map.SeatVisual
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -108,29 +101,6 @@ class SeatMapScreenshotTest {
         )
         val state = hallState(SampleData.DELPHI_LUX_SAAL_6)
         capture("hall_detail_unreadable") { hallDetail(state) }
-    }
-
-    /**
-     * The visual states M4 will use (colours, favourite, avoid ×) on standard seats
-     * (top row) and on wheelchair, companion and sofa seats (bottom rows).
-     */
-    @Test
-    fun seatMapStates() {
-        val layout = SeatLayout.fromPatterns("SSSS|SSSS", "WCFS|WCFW", "WCF.|.FCW", firstSeatId = 1)
-        val tones = listOf(SeatTone.NO_DATA, SeatTone.GREAT, SeatTone.OK, SeatTone.AVOID)
-        val visuals = layout.seatIds.withIndex().associate { (index, id) ->
-            id to SeatVisual(tones[index % 4], isFavourite = index in setOf(4, 5, 13, 14))
-        }
-        capture("seat_map_states") {
-            SeatMap(
-                layout = layout,
-                contentDescription = "States",
-                screenWidth = 6f,
-                seatVisuals = visuals,
-                selectedSeatId = SeatId(3),
-                modifier = Modifier.padding(16.dp),
-            )
-        }
     }
 
     private val noActions = object : LayoutEditorActions {}

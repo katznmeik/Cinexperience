@@ -1,4 +1,4 @@
-package io.github.katznmeik.cinexperience.feature.seatmap.map
+package io.github.katznmeik.cinexperience.core.seatmapui
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.geometry.Offset

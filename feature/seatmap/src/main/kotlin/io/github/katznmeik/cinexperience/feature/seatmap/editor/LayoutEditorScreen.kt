@@ -76,14 +76,14 @@ import io.github.katznmeik.cinexperience.core.model.CellPosition
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
+import io.github.katznmeik.cinexperience.core.seatmapui.SeatMapViewState
+import io.github.katznmeik.cinexperience.core.seatmapui.icon
+import io.github.katznmeik.cinexperience.core.seatmapui.rememberSeatMapViewState
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.SegmentChipShape
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
-import io.github.katznmeik.cinexperience.feature.seatmap.map.SeatMapViewState
-import io.github.katznmeik.cinexperience.feature.seatmap.map.icon
-import io.github.katznmeik.cinexperience.feature.seatmap.map.rememberSeatMapViewState
 import kotlinx.coroutines.CancellationException
 import kotlin.math.roundToInt
 

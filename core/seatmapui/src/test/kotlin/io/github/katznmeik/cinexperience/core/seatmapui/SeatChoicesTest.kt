@@ -1,4 +1,4 @@
-package io.github.katznmeik.cinexperience.feature.seatmap.map
+package io.github.katznmeik.cinexperience.core.seatmapui
 
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatColourSource

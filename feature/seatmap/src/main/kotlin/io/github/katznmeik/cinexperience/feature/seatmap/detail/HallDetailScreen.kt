@@ -34,6 +34,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.seatmapui.SeatMap
+import io.github.katznmeik.cinexperience.core.seatmapui.SeatPicker
+import io.github.katznmeik.cinexperience.core.seatmapui.seatChoices
+import io.github.katznmeik.cinexperience.core.seatmapui.seatMapDescription
+import io.github.katznmeik.cinexperience.core.seatmapui.viewingAngleText
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.NavigationRow
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
@@ -41,11 +46,6 @@ import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
-import io.github.katznmeik.cinexperience.feature.seatmap.map.SeatMap
-import io.github.katznmeik.cinexperience.feature.seatmap.map.SeatPicker
-import io.github.katznmeik.cinexperience.feature.seatmap.map.seatChoices
-import io.github.katznmeik.cinexperience.feature.seatmap.map.seatMapDescription
-import io.github.katznmeik.cinexperience.feature.seatmap.map.viewingAngleText
 
 @Composable
 internal fun HallDetailEntry(

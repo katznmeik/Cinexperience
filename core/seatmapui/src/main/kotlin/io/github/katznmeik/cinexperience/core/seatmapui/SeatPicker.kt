@@ -1,4 +1,4 @@
-package io.github.katznmeik.cinexperience.feature.seatmap.map
+package io.github.katznmeik.cinexperience.core.seatmapui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -118,7 +118,7 @@ private fun PickerHeader(text: String) {
 }
 
 /** Icon of a non-standard seat kind, `null` for standard seats. */
-internal val SeatKind.icon
+val SeatKind.icon
     get() = when (this) {
         SeatKind.STANDARD -> null
         SeatKind.WHEELCHAIR -> CinexIcons.Wheelchair
