@@ -12,6 +12,8 @@ import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaDeleteListener
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaEditor
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialog
+import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditMessages
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 sealed interface CinemaDetailContent {
     data object Loading : CinemaDetailContent
@@ -48,7 +51,7 @@ private sealed interface OwnDelete {
 /** Cinema detail (spec §6.2): header scores, halls, edit / add hall / delete actions. */
 class CinemaDetailViewModel(
     private val cinemaId: Long,
-    cinemaRepository: CinemaRepository,
+    private val cinemaRepository: CinemaRepository,
     hallRepository: HallRepository,
 ) : ViewModel() {
 
@@ -100,6 +103,23 @@ class CinemaDetailViewModel(
 
     fun addHall() = editor.startAddHall(cinemaId)
 
+    /**
+     * The ☆/★ toggle (spec §6.2): marks or unmarks this cinema as a favourite. The
+     * screen updates through the repository flow; a failed write becomes a message.
+     */
+    fun toggleFavourite() {
+        val cinema = detail?.cinema ?: return
+        viewModelScope.launch {
+            try {
+                if (!cinemaRepository.setFavourite(cinema.id, !cinema.isFavourite)) editor.showMessage(EditMessages.GONE)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                editor.showMessage(FAVOURITE_FAILED)
+            }
+        }
+    }
+
     fun renameHall(hall: HallSummary) = editor.startRenameHall(hall.hall)
 
     fun deleteHall(hall: HallSummary) = editor.requestDeleteHall(hall)
@@ -125,6 +145,7 @@ class CinemaDetailViewModel(
 
     companion object {
         const val LOAD_FAILED = "Couldn't load this cinema."
+        const val FAVOURITE_FAILED = "Couldn't update your favourites. Please try again."
 
         fun factory(
             cinemaId: Long,

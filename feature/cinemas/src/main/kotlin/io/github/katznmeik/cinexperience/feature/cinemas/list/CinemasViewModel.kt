@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 
 /** Sort modes of the cinema list (spec §6.1), in chip order. */
 enum class CinemaSort(val label: String) {
@@ -22,13 +23,37 @@ enum class CinemaSort(val label: String) {
     MOST_VISITED("Most visited"),
 }
 
+/**
+ * Which cinemas the list shows (spec §6.1). A filter, independent of [CinemaSort]:
+ * - ALL: every cinema, in the chosen [CinemaSort].
+ * - FAVOURITES: only the favourite cinemas, always in [CinemaSort.SCORE] order;
+ *   the chosen sort is kept for when the list goes back to ALL.
+ *
+ * In the chip row, the "Favourites" chip stands for FAVOURITES and the three sort
+ * chips for ALL with that sort, so exactly one chip is selected.
+ */
+enum class CinemaFilter {
+    ALL,
+    FAVOURITES,
+}
+
 data class CinemasUiState(
     val isLoading: Boolean = true,
     val sort: CinemaSort = CinemaSort.SCORE,
+    /** The cinemas shown: filtered by [filter] and ordered. */
     val cinemas: List<CinemaSummary> = emptyList(),
     val errorMessage: String? = null,
+    val filter: CinemaFilter = CinemaFilter.ALL,
+    /** Every cinema, whatever the filter; the header counts come from these. */
+    val allCinemas: List<CinemaSummary> = cinemas,
 ) {
-    val totalVisits: Int get() = cinemas.sumOf { it.visitCount }
+    val venueCount: Int get() = allCinemas.size
+    val totalVisits: Int get() = allCinemas.sumOf { it.visitCount }
+
+    /** The "Favourites" chip is selected but no cinema is a favourite (yet). */
+    val showsNoFavourites: Boolean
+        get() = filter == CinemaFilter.FAVOURITES && !isLoading && errorMessage == null &&
+            allCinemas.isNotEmpty() && cinemas.isEmpty()
 }
 
 /**
@@ -44,26 +69,51 @@ fun List<CinemaSummary>.sortedFor(sort: CinemaSort): List<CinemaSummary> = when 
     CinemaSort.MOST_VISITED -> sortedByDescending { it.visitCount }
 }
 
-/** The cinema list (spec §6.1). Score order is the default (owner decision); the choice is not persisted. */
+/**
+ * What the list shows for [filter] and [sort] (same input as [sortedFor]):
+ * ALL → [sortedFor] [sort]; FAVOURITES → only favourite cinemas in score order.
+ */
+fun List<CinemaSummary>.shownFor(filter: CinemaFilter, sort: CinemaSort): List<CinemaSummary> = when (filter) {
+    CinemaFilter.ALL -> sortedFor(sort)
+    CinemaFilter.FAVOURITES -> this.filter { it.cinema.isFavourite }.sortedFor(CinemaSort.SCORE)
+}
+
+/**
+ * The cinema list (spec §6.1). Score order is the default (owner decision); the
+ * chosen sort and filter live in this ViewModel only (not persisted), like before
+ * the Favourites chip existed.
+ */
 class CinemasViewModel(cinemaRepository: CinemaRepository) : ViewModel() {
 
-    private val sort = MutableStateFlow(CinemaSort.SCORE)
+    /** The chip choice; one flow, so a chip changes sort and filter in one step. */
+    private data class Choice(val sort: CinemaSort = CinemaSort.SCORE, val filter: CinemaFilter = CinemaFilter.ALL)
+
+    private val choice = MutableStateFlow(Choice())
 
     private val cinemas = cinemaRepository.observeCinemas()
         .map { Result.success(it) }
         .catch { emit(Result.failure(it)) }
 
-    val uiState: StateFlow<CinemasUiState> = combine(cinemas, sort) { result, sort ->
+    val uiState: StateFlow<CinemasUiState> = combine(cinemas, choice) { result, choice ->
+        val all = result.getOrDefault(emptyList())
         CinemasUiState(
             isLoading = false,
-            sort = sort,
-            cinemas = result.getOrDefault(emptyList()).sortedFor(sort),
+            sort = choice.sort,
+            cinemas = all.shownFor(choice.filter, choice.sort),
             errorMessage = if (result.isFailure) LOAD_FAILED else null,
+            filter = choice.filter,
+            allCinemas = all,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CinemasUiState())
 
+    /** A sort chip: all cinemas in [sort] order (leaves the Favourites filter). */
     fun setSort(sort: CinemaSort) {
-        this.sort.value = sort
+        choice.value = Choice(sort, CinemaFilter.ALL)
+    }
+
+    /** The "Favourites" chip: only favourite cinemas, in score order. */
+    fun showFavourites() {
+        choice.update { it.copy(filter = CinemaFilter.FAVOURITES) }
     }
 
     companion object {

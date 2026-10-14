@@ -16,12 +16,15 @@ import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailCont
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailUiState
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialogActions
+import io.github.katznmeik.cinexperience.feature.cinemas.list.CinemaFilter
 import io.github.katznmeik.cinexperience.feature.cinemas.list.CinemaSort
 import io.github.katznmeik.cinexperience.feature.cinemas.list.CinemasScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.list.CinemasUiState
+import io.github.katznmeik.cinexperience.feature.cinemas.list.shownFor
 import io.github.katznmeik.cinexperience.feature.cinemas.list.sortedFor
 import io.github.katznmeik.cinexperience.feature.cinemas.manage.ManageCinemasScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.manage.ManageCinemasUiState
+import io.github.katznmeik.cinexperience.core.model.CinemaSummary
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -104,6 +107,59 @@ class CinemasScreenshotTest {
                 onEditCinema = {},
                 onDeleteCinema = {},
                 onAddHall = {},
+                onRenameHall = {},
+                onDeleteHall = {},
+                dialogActions = noDialogActions,
+                onMessageShown = {},
+            )
+        }
+    }
+
+    /** Two favourites: a rated one and an unrated one. */
+    private fun favouriteCinemas(): List<CinemaSummary> = runBlocking {
+        repository.setFavourite(SampleData.DELPHI_LUX, true)
+        repository.setFavourite(SampleData.BABYLON, true)
+        repository.observeCinemas().first()
+    }
+
+    private fun listState(all: List<CinemaSummary>, filter: CinemaFilter) = CinemasUiState(
+        isLoading = false,
+        sort = CinemaSort.SCORE,
+        cinemas = all.shownFor(filter, CinemaSort.SCORE),
+        filter = filter,
+        allCinemas = all,
+    )
+
+    @Test
+    fun cinemasListWithFavourites() {
+        val state = listState(favouriteCinemas(), CinemaFilter.ALL)
+        capture("cinemas_list_favourites") { CinemasScreen(state, onSortChange = {}, onOpenCinema = {}, onAddVisit = {}) }
+    }
+
+    @Test
+    fun cinemasFavouritesChip() {
+        val state = listState(favouriteCinemas(), CinemaFilter.FAVOURITES)
+        capture("cinemas_favourites_chip") { CinemasScreen(state, onSortChange = {}, onOpenCinema = {}, onAddVisit = {}) }
+    }
+
+    @Test
+    fun cinemasFavouritesEmpty() {
+        val all = runBlocking { repository.observeCinemas().first() }
+        val state = listState(all, CinemaFilter.FAVOURITES)
+        capture("cinemas_favourites_empty") { CinemasScreen(state, onSortChange = {}, onOpenCinema = {}, onAddVisit = {}) }
+    }
+
+    @Test
+    fun cinemaDetailFavourite() {
+        runBlocking { repository.setFavourite(SampleData.DELPHI_LUX, true) }
+        val detail = runBlocking { repository.observeCinemaDetail(SampleData.DELPHI_LUX).first()!! }
+        capture("cinema_detail_favourite") {
+            CinemaDetailScreen(
+                state = CinemaDetailUiState(CinemaDetailContent.Loaded(detail)),
+                onBack = {},
+                onEdit = {},
+                onAddHall = {},
+                onOpenHall = {},
                 onRenameHall = {},
                 onDeleteHall = {},
                 dialogActions = noDialogActions,
