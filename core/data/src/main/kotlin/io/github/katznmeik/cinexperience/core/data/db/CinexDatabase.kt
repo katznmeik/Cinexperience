@@ -38,6 +38,7 @@ internal abstract class CinexDatabase : RoomDatabase() {
     abstract fun seatOverrideDao(): SeatOverrideDao
     abstract fun metadataDao(): MetadataDao
     abstract fun seedSnapshotDao(): SeedSnapshotDao
+    abstract fun backupDao(): BackupDao
 
     companion object {
         /** Every migration, in order. Empty while the schema is at version 1. */

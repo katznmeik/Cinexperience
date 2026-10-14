@@ -2,6 +2,10 @@ package io.github.katznmeik.cinexperience.core.data
 
 import android.content.Context
 import android.util.Log
+import io.github.katznmeik.cinexperience.core.data.backup.BackupRepository
+import io.github.katznmeik.cinexperience.core.data.backup.ContentResolverDocuments
+import io.github.katznmeik.cinexperience.core.data.backup.LastExportStore
+import io.github.katznmeik.cinexperience.core.data.backup.RoomBackupRepository
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
 import io.github.katznmeik.cinexperience.core.data.files.FileReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.FileVisitPhotoStore
@@ -42,12 +46,13 @@ class DataContainer(
 
     private val database: CinexDatabase by lazy { CinexDatabase.build(appContext) }
 
+    private fun readSeedAsset(): String =
+        appContext.assets.open(DatabaseConfig.SEED_ASSET_PATH).bufferedReader().use { it.readText() }
+
     private val seeding: Deferred<Unit> by lazy {
         scope.async(ioDispatcher) {
             try {
-                Seeder(database) {
-                    appContext.assets.open(DatabaseConfig.SEED_ASSET_PATH).bufferedReader().use { it.readText() }
-                }.seedIfNeeded()
+                Seeder(database, ::readSeedAsset).seedIfNeeded()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -80,6 +85,25 @@ class DataContainer(
 
     /** Visit photos (spec §4.4), in app-private storage. */
     val visitPhotoStore: VisitPhotoStore by lazy { FileVisitPhotoStore(appContext, ioDispatcher) }
+
+    /** Backup export and import (spec §8). */
+    val backupRepository: BackupRepository by lazy {
+        RoomBackupRepository(
+            db = database,
+            filesDir = appContext.filesDir,
+            cacheDir = appContext.cacheDir,
+            documents = ContentResolverDocuments(appContext.contentResolver),
+            lastExportStore = LastExportStore(
+                appContext.getSharedPreferences(LastExportStore.PREFERENCES_NAME, Context.MODE_PRIVATE),
+            ),
+            appVersion = {
+                appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName.orEmpty()
+            },
+            readSeed = ::readSeedAsset,
+            ioDispatcher = ioDispatcher,
+            awaitReady = awaitReady,
+        ).also { seeding.start() }
+    }
 
     /**
      * The startup sweep: [sweepOrphanReferenceImages] and [sweepOrphanVisitPhotos].
