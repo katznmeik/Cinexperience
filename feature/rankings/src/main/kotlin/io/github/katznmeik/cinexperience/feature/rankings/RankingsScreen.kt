@@ -1,7 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.rankings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -23,13 +22,21 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,6 +52,8 @@ internal fun RankingsEntry(
     viewModel: RankingsViewModel,
     onOpenHall: (Long) -> Unit,
     onOpenCinema: (Long) -> Unit,
+    message: String?,
+    onMessageShown: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     RankingsScreen(
@@ -52,6 +61,8 @@ internal fun RankingsEntry(
         onScopeChange = viewModel::setScope,
         onCategoryChange = viewModel::selectCategory,
         onOpenItem = { id -> if (state.scope == RankingScope.HALLS) onOpenHall(id) else onOpenCinema(id) },
+        message = message,
+        onMessageShown = onMessageShown,
     )
 }
 
@@ -63,14 +74,38 @@ internal fun RankingsScreen(
     onCategoryChange: (index: Int) -> Unit,
     onOpenItem: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    message: String? = null,
+    onMessageShown: () -> Unit = {},
+) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            onMessageShown()
+        }
+    }
+    Box(modifier.fillMaxSize()) {
+        RankingsList(state, onScopeChange, onCategoryChange, onOpenItem)
+        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+@Composable
+private fun RankingsList(
+    state: RankingsUiState,
+    onScopeChange: (RankingScope) -> Unit,
+    onCategoryChange: (index: Int) -> Unit,
+    onOpenItem: (Long) -> Unit,
 ) {
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item(key = "header") { Header(state, onScopeChange, onCategoryChange) }
         when {
+            // Nothing below the header until the first data arrives, so no empty-state flash.
+            state.isLoading -> Unit
             state.errorMessage != null -> item(key = "error") { InfoText(state.errorMessage) }
             state.nothingRated -> item(key = "empty") {
                 InfoText("Nothing rated yet. Log a visit with ratings and your halls and cinemas are ranked here.")
@@ -102,16 +137,19 @@ private fun Header(
     }
 }
 
-/** Full-width two-option segmented control; the selected segment is filled light. */
+/**
+ * Full-width two-option segmented control on a filled surface track; the selected
+ * segment is filled light. Segments are 48 dp tall (touch target).
+ */
 @Composable
 private fun ScopeSwitch(scope: RankingScope, onScopeChange: (RankingScope) -> Unit) {
     val shape = RoundedCornerShape(12.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(44.dp)
+            .height(54.dp)
             .clip(shape)
-            .border(1.dp, CinexTheme.colors.outline, shape)
+            .background(CinexTheme.colors.surface)
             .padding(3.dp)
             .selectableGroup(),
     ) {
@@ -147,6 +185,10 @@ private fun RankedCard(item: RankedItem, onClick: () -> Unit) {
             .clip(RoundedCornerShape(14.dp))
             .background(CinexTheme.colors.surface)
             .clickable(role = Role.Button, onClick = onClick)
+            .clearAndSetSemantics {
+                contentDescription = item.accessibilityText()
+                role = Role.Button
+            }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -155,7 +197,10 @@ private fun RankedCard(item: RankedItem, onClick: () -> Unit) {
             text = item.position?.toString() ?: NO_SCORE_TEXT,
             style = CinexTheme.textStyles.score,
             color = CinexTheme.colors.textMuted,
-            modifier = Modifier.widthIn(min = 24.dp),
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            // Fixed width so one- and two-digit positions keep the titles aligned.
+            modifier = Modifier.width(32.dp),
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
@@ -184,6 +229,13 @@ private fun RankedCard(item: RankedItem, onClick: () -> Unit) {
             }
         }
     }
+}
+
+/** Spoken summary, e.g. "Rank 1, International, 1 hall · 3 visits, score 4.4" or "Capitol Dahlem, not rated". */
+internal fun RankedItem.accessibilityText(): String = if (position == null || score == null) {
+    "$title, ${subtitle.replace(" · ", ", ")}, not rated"
+} else {
+    "Rank $position, $title, ${subtitle.replace(" · ", ", ")}, score ${formatScore(score)}"
 }
 
 @Composable

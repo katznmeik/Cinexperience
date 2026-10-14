@@ -33,7 +33,7 @@ interface AppContainer {
     val seatOverrideRepository: SeatOverrideRepository
 
     /** Halls and cinemas with their scores for the Rankings tab, derived from [cinemaRepository]. */
-    val rankingsRepository: RankingsRepository get() = CinemaRankingsRepository(cinemaRepository)
+    val rankingsRepository: RankingsRepository get() = CinemaRankingsRepository(cinemaRepository, visitRepository)
     val referenceImageStore: ReferenceImageStore
     val visitPhotoStore: VisitPhotoStore
 

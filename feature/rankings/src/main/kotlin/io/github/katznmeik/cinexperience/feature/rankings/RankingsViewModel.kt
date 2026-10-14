@@ -27,24 +27,36 @@ enum class RankingScope(val label: String) {
     CINEMAS("Cinemas"),
 }
 
-/** Category chips for halls, in chip order; [category] `null` = overall. */
-enum class HallRankingCategory(val label: String, val category: HallCategory?) {
-    OVERALL("Overall", null),
-    SOUND("Sound", HallCategory.SOUND),
-    PICTURE("Picture", HallCategory.PICTURE),
-    SCREEN_SIZE("Screen size", HallCategory.SCREEN_SIZE),
-    SEAT_COMFORT("Seat comfort", HallCategory.SEAT_COMFORT),
-    LEGROOM("Legroom", HallCategory.LEGROOM),
-    STEEPNESS("Steepness", HallCategory.STEEPNESS),
+private const val OVERALL_LABEL = "Overall"
+
+/**
+ * Category chips for halls, in chip order; [category] `null` = overall. Labels are
+ * the categories' display names, except the deliberately short "Steepness" chip
+ * (display name "Seating steepness") so the scrolling chip row stays compact.
+ */
+enum class HallRankingCategory(val category: HallCategory?, shortLabel: String? = null) {
+    OVERALL(null, OVERALL_LABEL),
+    SOUND(HallCategory.SOUND),
+    PICTURE(HallCategory.PICTURE),
+    SCREEN_SIZE(HallCategory.SCREEN_SIZE),
+    SEAT_COMFORT(HallCategory.SEAT_COMFORT),
+    LEGROOM(HallCategory.LEGROOM),
+    STEEPNESS(HallCategory.STEEPNESS, "Steepness"),
+    ;
+
+    val label: String = shortLabel ?: category!!.displayName
 }
 
-/** Category chips for cinemas, in chip order; [category] `null` = overall. */
-enum class CinemaRankingCategory(val label: String, val category: CinemaCategory?) {
-    OVERALL("Overall", null),
-    ATMOSPHERE("Atmosphere", CinemaCategory.ATMOSPHERE),
-    BAR_SNACKS("Bar / snacks", CinemaCategory.BAR_SNACKS),
-    POPCORN("Popcorn quality", CinemaCategory.POPCORN),
-    SEAT_COMFORT("Seat comfort", CinemaCategory.SEAT_COMFORT),
+/** Category chips for cinemas, in chip order; [category] `null` = overall. Labels are the display names. */
+enum class CinemaRankingCategory(val category: CinemaCategory?) {
+    OVERALL(null),
+    ATMOSPHERE(CinemaCategory.ATMOSPHERE),
+    BAR_SNACKS(CinemaCategory.BAR_SNACKS),
+    POPCORN(CinemaCategory.POPCORN),
+    SEAT_COMFORT(CinemaCategory.SEAT_COMFORT),
+    ;
+
+    val label: String = category?.displayName ?: OVERALL_LABEL
 }
 
 /** A chip of the category row. */
@@ -56,7 +68,7 @@ data class CategoryChip(val label: String, val selected: Boolean)
  * @property id hall id or cinema id, depending on the scope.
  * @property position 1-based rank; `null` for unrated items (shown as "–").
  * @property score `null` = not rated in the chosen category.
- * @property ratingCount ratings behind [score] (visits for overall), the first tie-breaker.
+ * @property ratingCount ratings behind [score]; for overall the rated visits (`ratedVisitCount` of the ranking), the first tie-breaker.
  */
 data class RankedItem(
     val id: Long,
@@ -118,7 +130,7 @@ fun rankedItems(
             title = r.hall.name,
             subtitle = r.cinemaName,
             score = if (hallCategory.category == null) r.scores.overall else score?.average,
-            ratingCount = if (hallCategory.category == null) r.scores.visitCount else score?.count ?: 0,
+            ratingCount = if (hallCategory.category == null) r.ratedVisitCount else score?.count ?: 0,
             position = null,
         )
     }
@@ -129,7 +141,7 @@ fun rankedItems(
             title = r.cinema.name,
             subtitle = "${countText(r.hallCount, "hall")} · ${countText(r.scores.visitCount, "visit")}",
             score = if (cinemaCategory.category == null) r.scores.overall else score?.average,
-            ratingCount = if (cinemaCategory.category == null) r.scores.visitCount else score?.count ?: 0,
+            ratingCount = if (cinemaCategory.category == null) r.ratedVisitCount else score?.count ?: 0,
             position = null,
         )
     }

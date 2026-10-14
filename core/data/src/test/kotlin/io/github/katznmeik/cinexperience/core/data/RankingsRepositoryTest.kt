@@ -20,7 +20,7 @@ internal class RankingsRepositoryTest : DatabaseTest() {
 
     @Test
     fun emitsEveryHallAndCinemaWithScores() = runTest {
-        val rankings = CinemaRankingsRepository(cinemas)
+        val rankings = CinemaRankingsRepository(cinemas, visits)
         val kino = cinemas.createCinema("Kino")
         val empty = cinemas.createCinema("Empty")
         val saal2 = halls.createHall(kino, "Saal 2")
@@ -33,6 +33,8 @@ internal class RankingsRepositoryTest : DatabaseTest() {
             ),
         )
         visits.save(Visit(hallId = saal2, date = date, hallRatings = HallRatings(sound = Rating(5))))
+        visits.save(Visit(hallId = saal10, date = date, seatRating = Rating(3))) // no hall/cinema rating
+        visits.save(Visit(hallId = saal10, date = date, cinemaRatings = CinemaRatings(popcorn = Rating(3))))
 
         val result = rankings.observeRankings().first()
 
@@ -48,7 +50,10 @@ internal class RankingsRepositoryTest : DatabaseTest() {
         val k = result.cinemas.first { it.cinema.id == kino }
         assertEquals(2, k.hallCount)
         assertEquals(5.0, k.scores[CinemaCategory.ATMOSPHERE]!!.average, 1e-9)
-        assertEquals((5.0 + 3.25) / 2, k.scores.overall!!, 1e-9)
+        assertEquals((5.0 + 3.0 + 3.25) / 3, k.scores.overall!!, 1e-9)
+        assertEquals(2, result.halls.first { it.hall.id == saal2 }.ratedVisitCount)
+        assertEquals(0, result.halls.first { it.hall.id == saal10 }.ratedVisitCount)
+        assertEquals(3, k.ratedVisitCount) // the seat-only visit doesn't count
         val e = result.cinemas.first { it.cinema.id == empty }
         assertEquals(0, e.hallCount)
         assertNull(e.scores.overall)

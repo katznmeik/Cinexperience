@@ -47,7 +47,7 @@ class RankingsViewModelTest {
 
     private fun TestScope.viewModel(visits: List<Visit>): Pair<RankingsViewModel, FakeCinexRepository> {
         val repository = FakeCinexRepository(FakeStore(cinemas, halls, visits))
-        val vm = RankingsViewModel(CinemaRankingsRepository(repository))
+        val vm = RankingsViewModel(CinemaRankingsRepository(repository, repository))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         return vm to repository
     }
@@ -86,6 +86,38 @@ class RankingsViewModelTest {
             listOf(Triple(1, "Saal 1", "Beta"), Triple(2, "Saal 2", "Alpha"), Triple(3, "Saal 10", "Alpha")),
             vm.rows().take(3),
         )
+    }
+
+    @Test
+    fun overallTieBreakCountsRatedVisitsNotSeatOnlyVisits() = runTest {
+        val seatOnly = List(5) { visit(11).copy(seatRating = Rating(5)) }
+        val (vm, _) = viewModel(
+            listOf(visit(11, sound = 4)) + seatOnly + // Alpha Saal 10: 4.0, 1 rated of 6 visits
+                List(3) { visit(21, sound = 4) }, // Beta Saal 1: 4.0, 3 rated visits
+        )
+        assertEquals(listOf("Beta", "Alpha"), vm.rows().take(2).map { it.third })
+        assertEquals(listOf(3, 1), vm.uiState.value.items.take(2).map { it.ratingCount })
+    }
+
+    @Test
+    fun loadingBeforeFirstEmission() {
+        assertTrue(RankingsUiState().isLoading)
+    }
+
+    @Test
+    fun chipLabelsUseDisplayNamesWithShortSteepness() {
+        assertEquals(
+            listOf("Overall", "Sound", "Picture", "Screen size", "Seat comfort", "Legroom", "Steepness"),
+            HallRankingCategory.entries.map { it.label },
+        )
+    }
+
+    @Test
+    fun accessibilityText() {
+        val rated = RankedItem(1, "International", "1 hall · 3 visits", 4.4, 3, 1)
+        assertEquals("Rank 1, International, 1 hall, 3 visits, score 4.4", rated.accessibilityText())
+        val unrated = RankedItem(2, "Capitol Dahlem", "1 hall · 0 visits", null, 0, null)
+        assertEquals("Capitol Dahlem, 1 hall, 0 visits, not rated", unrated.accessibilityText())
     }
 
     @Test
@@ -136,7 +168,7 @@ class RankingsViewModelTest {
     @Test
     fun loadFailureBecomesMessage() = runTest {
         val repository = FakeCinexRepository(FakeStore(cinemas, halls)).apply { observeFailure = IllegalStateException() }
-        val vm = RankingsViewModel(CinemaRankingsRepository(repository))
+        val vm = RankingsViewModel(CinemaRankingsRepository(repository, repository))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         assertEquals(RankingsViewModel.LOAD_FAILED, vm.uiState.value.errorMessage)
     }

@@ -46,7 +46,7 @@ class RankingsScreenshotTest {
     }
 
     private val rankings = runBlocking {
-        CinemaRankingsRepository(FakeCinexRepository(SampleData.store())).observeRankings().first()
+        FakeCinexRepository(SampleData.store()).let { CinemaRankingsRepository(it, it) }.observeRankings().first()
     }
 
     @Test
