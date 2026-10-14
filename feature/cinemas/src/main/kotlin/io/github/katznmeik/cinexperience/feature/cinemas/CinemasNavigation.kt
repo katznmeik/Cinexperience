@@ -37,8 +37,13 @@ fun NavController.navigateToCinemaDetail(cinemaId: Long) = navigate(CinemaDetail
 
 fun NavController.navigateToManageCinemas() = navigate(ManageCinemasRoute)
 
-/** Saved-state key of a message handed to the screen below a closing cinema detail. */
-private const val RESULT_MESSAGE_KEY = "cinemas.resultMessage"
+/**
+ * Saved-state key of a message handed to the screen below a closing cinema detail.
+ * Screens of other features that open a cinema detail get it from the app and show it.
+ */
+const val CINEMA_RESULT_MESSAGE_KEY = "cinemas.resultMessage"
+
+private const val RESULT_MESSAGE_KEY = CINEMA_RESULT_MESSAGE_KEY
 
 /**
  * Closes a cinema detail whose cinema was just deleted and shows [message] on the
