@@ -4,8 +4,10 @@ import android.content.Context
 import io.github.katznmeik.cinexperience.core.data.DataContainer
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
+import io.github.katznmeik.cinexperience.core.data.repository.CinemaRankingsRepository
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
+import io.github.katznmeik.cinexperience.core.data.repository.RankingsRepository
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +31,9 @@ interface AppContainer {
     val hallRepository: HallRepository
     val visitRepository: VisitRepository
     val seatOverrideRepository: SeatOverrideRepository
+
+    /** Halls and cinemas with their scores for the Rankings tab, derived from [cinemaRepository]. */
+    val rankingsRepository: RankingsRepository get() = CinemaRankingsRepository(cinemaRepository)
     val referenceImageStore: ReferenceImageStore
     val visitPhotoStore: VisitPhotoStore
 

@@ -117,7 +117,11 @@ fun CinexApp(
             )
 
             // Rankings tab
-            rankingsScreen()
+            rankingsScreen(
+                rankingsRepository = container.rankingsRepository,
+                onOpenHall = navController::navigateToHallDetail,
+                onOpenCinema = navController::navigateToCinemaDetail,
+            )
 
             // Settings tab
             settingsScreen(
