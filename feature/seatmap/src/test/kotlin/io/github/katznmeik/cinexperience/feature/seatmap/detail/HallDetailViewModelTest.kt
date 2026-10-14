@@ -57,6 +57,15 @@ class HallDetailViewModelTest {
     }
 
     @Test
+    fun theScreenOffsetReachesTheMap() = runTest {
+        assertEquals(0f, loaded(SampleData.DELPHI_LUX_SAAL_1).second().screenOffset)
+        repository.store.value = repository.store.value.let { s ->
+            s.copy(halls = s.halls.map { if (it.id == SampleData.DELPHI_LUX_SAAL_1) it.copy(screenOffset = -2.5f) else it })
+        }
+        assertEquals(-2.5f, loaded(SampleData.DELPHI_LUX_SAAL_1).second().screenOffset)
+    }
+
+    @Test
     fun tappingASeatSelectsItAndTappingAgainClearsIt() = runTest {
         val (vm, state) = loaded(SampleData.DELPHI_LUX_SAAL_1)
         val seat = SampleLayouts.splitHall.rows[6].seatIds[8] // row 7, centre block

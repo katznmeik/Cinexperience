@@ -6,24 +6,31 @@ import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.LayoutEditSession
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
 import io.github.katznmeik.cinexperience.core.model.LayoutRow
+import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
  * Everything the layout editor saves (spec §6.5): the layout, edited only
  * through its [LayoutEditSession] so seat ids stay correct, the screen geometry
- * and the reference screenshot. Immutable; every edit returns a new draft, which
- * is what the undo history stores.
+ * (width, distance and the sideways [screenOffset]) and the reference
+ * screenshot. Immutable; every edit returns a new draft, which is what the undo
+ * history stores.
+ *
+ * @property screenOffset seat widths, see `Hall.screenOffset`; always
+ *   [ScreenOffsetRules.isValid].
  */
 data class LayoutDraft(
     val session: LayoutEditSession,
     val screenWidth: Float,
     val screenDistance: Float,
     val referenceImagePath: String?,
+    val screenOffset: Float = ScreenOffsetRules.CENTRED,
 ) {
     /** The editor always edits a grid (a hall without one starts with [start]'s default grid). */
     val layout: SeatLayout = checkNotNull(session.layout) { "The editor always has a layout" }
@@ -36,6 +43,7 @@ data class LayoutDraft(
         layout.rows == other.layout.rows &&
             screenWidth == other.screenWidth &&
             screenDistance == other.screenDistance &&
+            screenOffset == other.screenOffset &&
             referenceImagePath == other.referenceImagePath
 
     /**
@@ -64,7 +72,7 @@ data class LayoutDraft(
     /**
      * Grows (new columns copy the last column's cell types) or shrinks at the
      * right, within [1, MAX_COLUMNS]. A screen exactly as wide as the grid stays
-     * as wide as the grid.
+     * as wide as the grid; the screen's offset stays within the narrower grid.
      */
     fun withColumnCount(count: Int): LayoutDraft {
         val target = count.coerceIn(1, MAX_COLUMNS)
@@ -79,7 +87,11 @@ data class LayoutDraft(
         while (edited.layout!!.columnCount > target) edited = edited.removeColumn(edited.layout!!.columnCount - 1)
         val followsGrid = screenWidth == columnCount.toFloat()
         val width = if (followsGrid) target.toFloat() else screenWidth
-        return copy(session = edited, screenWidth = ScreenRules.width(width, target))
+        return copy(
+            session = edited,
+            screenWidth = ScreenRules.width(width, target),
+            screenOffset = ScreenOffsetRules.snap(screenOffset, target),
+        )
     }
 
     /** Inserts a new row before [index] with the cell types of row [template] (new seats are standard). */
@@ -104,6 +116,9 @@ data class LayoutDraft(
 
     fun withScreenDistance(value: Float): LayoutDraft = copy(screenDistance = ScreenRules.distance(value))
 
+    /** Moves the screen sideways: snapped to half seats, its centre within the grid (see [ScreenOffsetRules]). */
+    fun withScreenOffset(value: Float): LayoutDraft = copy(screenOffset = ScreenOffsetRules.snap(value, columnCount))
+
     fun withReferenceImage(path: String?): LayoutDraft = copy(referenceImagePath = path)
 
     companion object {
@@ -117,7 +132,8 @@ data class LayoutDraft(
          * The draft for [hall] as stored. A hall without a (readable) layout starts
          * with a [DEFAULT_ROWS] × [DEFAULT_COLUMNS] grid of new seats (ids from the
          * hall's mark); missing screen geometry starts as wide as the grid and
-         * [DEFAULT_SCREEN_DISTANCE] rows away.
+         * [DEFAULT_SCREEN_DISTANCE] rows away. The stored offset is kept (made
+         * valid if it isn't; the steppers then keep it within the grid).
          */
         fun start(hall: Hall): LayoutDraft {
             val started = hall.startLayoutEdit()
@@ -128,6 +144,7 @@ data class LayoutDraft(
                 screenWidth = hall.screenWidth?.takeIf { it > 0f } ?: columns.toFloat(),
                 screenDistance = hall.screenDistance?.takeIf { it >= 0f } ?: DEFAULT_SCREEN_DISTANCE,
                 referenceImagePath = hall.referenceImagePath,
+                screenOffset = ScreenOffsetRules.snap(hall.screenOffset),
             )
         }
     }
@@ -166,6 +183,14 @@ object ScreenRules {
     /** "2.0 rows", "1.0 row". */
     fun distanceText(distance: Float): String =
         "${String.format(Locale.US, "%.1f", distance)} ${if (distance == 1f) "row" else "rows"}"
+
+    /** "Centred", "1.5 seats left", "2 seats right", "1 seat left" (left = as seen from the seats). */
+    fun offsetText(offset: Float): String {
+        if (offset == 0f) return "Centred"
+        val seats = abs(offset)
+        val number = if (seats % 1f == 0f) seats.toInt().toString() else String.format(Locale.US, "%.1f", seats)
+        return "$number ${if (seats == 1f) "seat" else "seats"} ${if (offset < 0f) "left" else "right"}"
+    }
 }
 
 /** One block (seats between aisles) of a row, for the row panel. */

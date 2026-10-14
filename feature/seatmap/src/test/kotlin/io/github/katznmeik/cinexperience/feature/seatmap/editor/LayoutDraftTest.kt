@@ -118,6 +118,38 @@ class LayoutDraftTest {
     }
 
     @Test
+    fun theScreenOffsetSnapsToHalfSeatsWithinTheGrid() {
+        val draft = LayoutDraft.start(hall.copy(screenOffset = -1.5f)) // 5 columns: at most 2.5 seats either way
+        assertEquals(-1.5f, draft.screenOffset)
+        assertEquals(1f, draft.withScreenOffset(1.2f).screenOffset)
+        assertEquals(-2.5f, draft.withScreenOffset(-9f).screenOffset)
+        assertEquals(2.5f, draft.withScreenOffset(4f).screenOffset)
+        assertEquals(0f, draft.withScreenOffset(Float.NaN).screenOffset)
+        assertEquals(0f, draft.withScreenOffset(-0.1f).screenOffset) // no -0.0
+        assertTrue(draft.withScreenOffset(-0.1f).screenOffset.toBits() == 0f.toBits())
+
+        // The offset is part of the saved content (unsaved changes, undo).
+        assertFalse(draft.withScreenOffset(1f).hasSameContentAs(draft))
+        assertTrue(draft.withScreenOffset(-1.4f).hasSameContentAs(draft))
+
+        // Fewer columns: the screen's centre stays over the grid.
+        assertEquals(-1f, draft.withScreenOffset(-2.5f).withColumnCount(2).screenOffset)
+        assertEquals(-2.5f, draft.withScreenOffset(-2.5f).withColumnCount(9).screenOffset)
+
+        // A hall without an offset starts centred.
+        assertEquals(0f, LayoutDraft.start(hall).screenOffset)
+    }
+
+    @Test
+    fun screenOffsetTexts() {
+        assertEquals("Centred", ScreenRules.offsetText(0f))
+        assertEquals("1.5 seats left", ScreenRules.offsetText(-1.5f))
+        assertEquals("2 seats right", ScreenRules.offsetText(2f))
+        assertEquals("1 seat left", ScreenRules.offsetText(-1f))
+        assertEquals("0.5 seats right", ScreenRules.offsetText(0.5f))
+    }
+
+    @Test
     fun rowSummaryDerivesLabelsBlocksAndRanges() {
         val layout = SeatLayout.fromPatterns("SS|SSS|WS", "|||||||||", "SSSSSSSS.", firstSeatId = 1)
             .updateRow(0) { it.copy(label = "C", numbering = SeatNumbering.CONTINUOUS, blockStartNumbers = listOf(null, 10)) }

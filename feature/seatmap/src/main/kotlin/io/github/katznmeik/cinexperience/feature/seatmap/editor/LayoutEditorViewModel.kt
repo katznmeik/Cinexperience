@@ -11,6 +11,7 @@ import io.github.katznmeik.cinexperience.core.model.CellPosition
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
+import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
@@ -63,6 +64,12 @@ data class LayoutEditorUiState(
     val seatKind: SeatKind = SeatKind.STANDARD,
     val selectedRow: Int? = null,
     val row: RowSummary? = null,
+    /**
+     * The screen is selected (spec §6.5): drawn green with its handles, and the panel
+     * under the canvas shows its controls instead of the row panel. Never together
+     * with a selected row.
+     */
+    val screenSelected: Boolean = false,
     /** Text of the row label field (may differ from the stored label while typing). */
     val labelInput: String = "",
     /** Text of the block start fields, one per block of the selected row. */
@@ -191,25 +198,52 @@ class LayoutEditorViewModel(
         publishHistory()
     }
 
-    /** Paints [cells] with the current tool (part of the running gesture, or one step on its own). */
+    /**
+     * Paints [cells] with the current tool (part of the running gesture, or one step
+     * on its own). Painting deselects the screen.
+     */
     fun paintCells(cells: List<CellPosition>) {
+        deselectScreen()
         val tool = state.tool
         val kind = state.seatKind
         edit { draft -> cells.fold(draft) { acc, cell -> acc.paint(cell.row, cell.column, tool, kind) } }
     }
 
-    /** A tap on a cell: paints it as one undo step. */
+    /** A tap on a cell: paints it as one undo step (and deselects the screen). */
     fun tapCell(row: Int, column: Int) {
         beginGesture()
         paintCells(listOf(CellPosition(row, column)))
         endGesture()
     }
 
+    // ---- Screen selection ----
+
+    /**
+     * Selects the screen (a touch on its bar): it turns green with its handles, and
+     * the panel shows its controls. Clears the row selection.
+     */
+    fun selectScreen() {
+        val current = draft ?: return
+        if (state.screenSelected || state.referenceMode) return
+        history.breakCoalescing()
+        _uiState.update { it.copy(screenSelected = true, selectedRow = null).withDraft(current, syncInputs = true) }
+    }
+
+    fun deselectScreen() {
+        if (state.screenSelected) _uiState.update { it.copy(screenSelected = false) }
+    }
+
+    /** A tap on the canvas beside the grid, the row labels and the screen: deselects the screen. */
+    fun tapOutside() = deselectScreen()
+
     /** Screen width from a handle drag (seat widths; snapped and limited). */
     fun dragScreenWidth(width: Float) = edit { it.withScreenWidth(width) }
 
     /** Screen distance from a handle drag (row depths; snapped and limited). */
     fun dragScreenDistance(distance: Float) = edit { it.withScreenDistance(distance) }
+
+    /** Screen position from a sideways drag of the bar (seat widths; snapped to half seats, within the grid). */
+    fun dragScreenOffset(offset: Float) = edit { it.withScreenOffset(offset) }
 
     // ---- Steppers ----
 
@@ -221,14 +255,17 @@ class LayoutEditorViewModel(
 
     fun changeScreenDistance(delta: Float) = edit { it.withScreenDistance(it.screenDistance + delta) }
 
+    /** "Screen position" stepper: moves the screen by [delta] seat widths (negative = left). */
+    fun changeScreenOffset(delta: Float) = edit { it.withScreenOffset(it.screenOffset + delta) }
+
     // ---- Selected row ----
 
-    /** Selects a row (tap on its label); selecting it again clears the selection. */
+    /** Selects a row (tap on its label; deselects the screen); selecting it again clears the selection. */
     fun selectRow(index: Int?) {
         val current = draft ?: return
         val target = index?.takeIf { it in 0 until current.rowCount && it != state.selectedRow }
         history.breakCoalescing()
-        _uiState.update { it.copy(selectedRow = target).withDraft(current, syncInputs = true) }
+        _uiState.update { it.copy(selectedRow = target, screenSelected = false).withDraft(current, syncInputs = true) }
     }
 
     /** Adds a row above the selected one, copying its cells, and selects the new row. */
@@ -305,8 +342,9 @@ class LayoutEditorViewModel(
 
     // ---- Reference screenshot ----
 
+    /** Reference mode aligns the screenshot instead of editing; entering it deselects the screen. */
     fun toggleReferenceMode() {
-        _uiState.update { it.copy(referenceMode = !it.referenceMode) }
+        _uiState.update { it.copy(referenceMode = !it.referenceMode, screenSelected = false) }
     }
 
     /** Result of the photo picker; `null` if the user cancelled. */
@@ -318,7 +356,7 @@ class LayoutEditorViewModel(
                 val path = referenceImages.importImage(hallId, uri)
                 sessionImports += path
                 edit { it.withReferenceImage(path) }
-                _uiState.update { it.copy(referenceMode = true) }
+                _uiState.update { it.copy(referenceMode = true, screenSelected = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: IOException) {
@@ -397,9 +435,12 @@ class LayoutEditorViewModel(
 
     private suspend fun write(stored: Hall) {
         val current = draft ?: return
+        // The draft's offset is always valid; snapping again guards the repository's check.
+        val screenOffset = ScreenOffsetRules.snap(current.screenOffset)
         val unchanged = stored.layout?.rows == current.layout.rows &&
             stored.screenWidth == current.screenWidth &&
             stored.screenDistance == current.screenDistance &&
+            stored.screenOffset == screenOffset &&
             stored.referenceImagePath == current.referenceImagePath
         try {
             if (!unchanged) {
@@ -407,6 +448,7 @@ class LayoutEditorViewModel(
                     layout = current.layout,
                     screenWidth = current.screenWidth,
                     screenDistance = current.screenDistance,
+                    screenOffset = screenOffset,
                     referenceImagePath = current.referenceImagePath,
                 )
                 if (!hallRepository.updateHall(updated)) {

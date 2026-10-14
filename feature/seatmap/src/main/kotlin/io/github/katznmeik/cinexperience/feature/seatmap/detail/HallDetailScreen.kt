@@ -283,6 +283,7 @@ private fun Header(title: String, meta: String, overallScore: Double?) {
     }
 }
 
+/** The map's card: narrow side padding, so the seats (and their numbers) get the width. */
 @Composable
 private fun MapCard(content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -291,7 +292,7 @@ private fun MapCard(content: @Composable ColumnScope.() -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(CinexTheme.colors.surface)
-            .padding(start = 10.dp, end = 10.dp, top = 18.dp, bottom = 14.dp),
+            .padding(start = 6.dp, end = 6.dp, top = 16.dp, bottom = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         content = content,
     )
@@ -316,6 +317,7 @@ private fun ColumnScope.MapContent(
         contentDescription = description,
         screenWidth = state.screenWidth,
         screenDistance = state.screenDistance,
+        screenOffset = state.screenOffset,
         seatVisuals = state.seatVisuals,
         selectedSeatId = state.selectedSeat?.seatId,
         onSeatClick = onSeatClick,

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
@@ -17,6 +18,7 @@ import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.seatmapui.SeatMap
+import io.github.katznmeik.cinexperience.core.seatmapui.seatNumbersShownWhenFitted
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import kotlinx.coroutines.CoroutineScope
@@ -68,18 +70,27 @@ class DelphiLuxSeedScreenshotTest {
             "${kinds[SeatKind.COMPANION] ?: 0} C · ${kinds[SeatKind.SOFA] ?: 0} F · " +
             "screen ${hall.screenWidth} × ${hall.screenDistance}"
         composeRule.setContent {
+            // Numbers at the fitted zoom in the hall detail's map (412 dp phone: 376 dp wide).
+            val density = LocalDensity.current
+            val width = with(density) { 376.dp.toPx() }
+            val numbers = if (seatNumbersShownWhenFitted(layout, width, density, hall.screenWidth, hall.screenOffset)) {
+                "numbers when fitted"
+            } else {
+                "numbers after zooming in"
+            }
             CinexTheme {
                 Column(
                     Modifier.fillMaxSize().background(CinexTheme.colors.background).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(hall.name.uppercase(), style = CinexTheme.textStyles.screenTitle, color = CinexTheme.colors.text)
-                    Text(summary, color = CinexTheme.colors.textMuted)
+                    Text("$summary · ${layout.columnCount} columns · $numbers", color = CinexTheme.colors.textMuted)
                     SeatMap(
                         layout = layout,
                         contentDescription = hall.name,
                         screenWidth = hall.screenWidth,
                         screenDistance = hall.screenDistance,
+                        screenOffset = hall.screenOffset,
                         maxHeight = 760.dp,
                     )
                 }

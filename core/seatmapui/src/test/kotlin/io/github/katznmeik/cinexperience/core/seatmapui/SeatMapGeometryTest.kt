@@ -78,6 +78,33 @@ class SeatMapGeometryTest {
     }
 
     @Test
+    fun theStraightScreenMovesSidewaysByItsOffset() {
+        // Centred: 29 ± 24. One and a half seats to the left (towards column 0): 18 px.
+        val left = SeatMapGeometry(layout, metrics, 4f, 2f, screenOffset = -1.5f)
+        assertEquals(11f, left.screenCenterX)
+        assertEquals(-13f, left.screenLeft)
+        assertEquals(35f, left.screenRight)
+        assertEquals(-28f, left.screenY) // the distance is unchanged
+        // The screen sticks out past the labels on the left: the content grows with it.
+        assertEquals(-14f, left.contentBounds.left)
+        assertEquals(75f, left.contentBounds.right)
+
+        val right = SeatMapGeometry(layout, metrics, 4f, 2f, screenOffset = 2f)
+        assertEquals(53f, right.screenCenterX)
+        assertEquals(29f, right.screenLeft)
+        assertEquals(77f, right.screenRight)
+        assertEquals(78f, right.contentBounds.right)
+
+        // A caption centred on the screen (the seat map's "SCREEN") stays inside the content: 53 + 60 / 2 + 1.
+        val captioned = SeatMapGeometry(layout, metrics.copy(screenCaptionWidth = 60f), 4f, 2f, screenOffset = 2f)
+        assertEquals(84f, captioned.contentBounds.right)
+        assertEquals(-11f, captioned.contentBounds.left) // the labels reach further left
+
+        // An unusable offset draws the screen centred.
+        assertEquals(29f, SeatMapGeometry(layout, metrics, 4f, 2f, screenOffset = Float.NaN).screenCenterX)
+    }
+
+    @Test
     fun cellAtCoversTheGapsBetweenCells() {
         val g = geometry()
         assertEquals(CellPosition(0, 0), g.cellAt(Offset(5f, 5f)))

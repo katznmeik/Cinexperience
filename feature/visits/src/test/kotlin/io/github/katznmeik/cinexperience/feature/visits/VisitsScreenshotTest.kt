@@ -108,6 +108,20 @@ class VisitsScreenshotTest {
         capture("seat_picker") { VisitEditScreen(state, photo = null, actions = noActions) }
     }
 
+    /**
+     * The seat map of the picker shows every seat number (spec §6.4); here a companion
+     * seat in the back row is selected: its symbol sits above its number.
+     */
+    @Test
+    fun seatPickerWithNumbers() {
+        val vm = form(VisitEditMode.Add(SampleData.DELPHI_LUX_SAAL_1)) {
+            openSeatPicker()
+            tapPickerSeat(SampleLayouts.splitHall.rows[9].seatIds[1]) // row 10, companion seat 1
+        }
+        val state = vm.uiState.value
+        capture("seat_picker_numbers") { VisitEditScreen(state, photo = null, actions = noActions) }
+    }
+
     @Test
     fun allVisits() {
         val state = allVisitsState(VisitFixtures.store())
