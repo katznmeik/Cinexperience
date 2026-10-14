@@ -9,6 +9,8 @@ import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.Visit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,11 +31,24 @@ internal class LiveDetailTest : DatabaseTest() {
 
     private val date = LocalDate.of(2026, 10, 1)
 
-    /** Collects [flow] for the whole test; the returned state holds its latest value. */
+    /** The running collectors; [stopCollectors] ends them before the database is closed. */
+    private val collectors = mutableListOf<Job>()
+
+    /** Collects [flow] until [stopCollectors]; the returned state holds its latest value. */
     private fun <T> TestScope.observe(flow: Flow<T>): StateFlow<T?> {
         val latest = MutableStateFlow<T?>(null)
-        backgroundScope.launch(Dispatchers.Default) { flow.collect { latest.value = it } }
+        collectors += backgroundScope.launch(Dispatchers.Default) { flow.collect { latest.value = it } }
         return latest
+    }
+
+    /**
+     * Cancels the collectors and waits until they have stopped. Without the join a
+     * collector could still be re-querying when `@After` closes the database, and the
+     * resulting error would be reported against the next test class.
+     */
+    private suspend fun stopCollectors() {
+        collectors.forEach { it.cancelAndJoin() }
+        collectors.clear()
     }
 
     private suspend fun <T> StateFlow<T?>.awaitValue(predicate: (T) -> Boolean): T =
@@ -41,6 +56,14 @@ internal class LiveDetailTest : DatabaseTest() {
 
     @Test
     fun hallAndCinemaDetailFollowOverridesAndVisits() = runTest {
+        try {
+            followOverridesAndVisits()
+        } finally {
+            stopCollectors()
+        }
+    }
+
+    private suspend fun TestScope.followOverridesAndVisits() {
         val cinemaId = cinemas.createCinema("Kino")
         val hallId = halls.createHall(cinemaId, "Saal 1")
         halls.updateHall(halls.getHall(hallId)!!.copy(layout = layoutOf("SSSS")))
