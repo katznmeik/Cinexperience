@@ -16,10 +16,14 @@ class SeedParserTest {
     @Test
     fun shippedSeedAssetIsValid() {
         val seed = SeedParser.parse(asset.readText())
-        assertEquals(2, seed.seedVersion)
-        assertEquals(13, seed.cinemas.size)
-        assertEquals(36, seed.cinemas.sumOf { it.halls.size })
+        assertEquals(3, seed.seedVersion)
+        assertEquals(14, seed.cinemas.size)
+        assertEquals(38, seed.cinemas.sumOf { it.halls.size })
         assertTrue(seed.cinemas.all { it.address != null })
+        // Every hall comes with a layout and a screen (spec §9).
+        seed.cinemas.flatMap { it.halls }.forEach { hall ->
+            assertTrue(hall.seedKey, hall.layout != null && hall.screenWidth != null && hall.screenDistance != null)
+        }
         // Hall keys are namespaced by their cinema key.
         seed.cinemas.forEach { cinema ->
             cinema.halls.forEach { hall -> assertTrue(hall.seedKey, hall.seedKey.startsWith("${cinema.seedKey}/")) }

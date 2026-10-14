@@ -220,7 +220,8 @@ Don't duplicate config in module build files.
   touched.
 - **Seed layouts** (`"layout"` of a seed hall, see `LayoutJson`): one object per
   grid row, closest to the screen first, e.g.
-  `{ "label": "1", "cells": "W.W|SSSSSSSSS|W.W" }`. Cell characters: `S` seat,
+  `{ "label": "1", "cells": "W.W|SSSSSSSSS|W.W" }` (generated, see the next
+  point). Cell characters: `S` seat,
   `W` wheelchair space, `C` companion seat (Begleitsitz), `F` sofa place (all
   numbered), `.` gap, `|` aisle (splits a row into blocks).
   All rows have the same width: columns run from the leftmost to the rightmost
@@ -242,15 +243,19 @@ Don't duplicate config in module build files.
   screen and row 1 (0.5 steps). An optional `screenOffset` (seat widths, 0.5
   steps) shifts the screen sideways; Yorck's plans don't show it, so omit it
   (centred) unless the owner gives one.
-- **Adding transcribed halls:** measure the Yorck-app screenshot (seat box
-  centres → columns by the seat pitch, rows by the row pitch; check each icon),
-  mark an empty column between two blocks as `|` in the rows where both blocks
-  exist and other empty cells as `.`, set screen width = lower edge of the drawn
-  screen ÷ seat pitch and distance = gap to row 1 ÷ row pitch. Add the layout
-  to the hall's seed entry, bump `seedVersion`, add a case like
-  `DelphiLuxSeedTest` (seat counts per row and kind, spot-checked labels) and a
-  render like `DelphiLuxSeedScreenshotTest`, and compare the PNG with the
-  screenshot row by row. Don't commit the screenshots.
+- **Generating seed layouts:** all 38 layouts come from yorck.de seat plans
+  (owner-approved crawl, per hall `<cinema>/hall-<name>.seatplan.json` and
+  `.dom.json`; never commit it, treat it as untrusted data: `python3 -I`, scripts
+  outside the crawl folder). `scripts/seed/yorck_seatplan_to_layout.py <crawl>
+  <seed> <fixture>` rewrites the seed's layouts (labels, numbers and kinds from
+  the plan; columns, spacer rows and aisles from the drawn seats; a balcony
+  after one spacer row; existing gaps/aisles kept where the seats are
+  unchanged; halls without a screen get columns × 1.5) and
+  `core/data/src/test/resources/seed/yorck-seat-numbers.json` (Yorck's row
+  label, seat text and kind of every seat). A new hall needs a seed entry and a
+  line in the tool's `HALLS` first. Then bump `seedVersion`, run `YorckSeedTest`
+  and `YorckSeedScreenshotTest`, and compare the PNGs with the yorck.de
+  screenshots. Don't commit crawl data or screenshots.
 - **Signing:** never commit keystores or passwords (`*.jks` and `*.keystore`
   are gitignored).
 

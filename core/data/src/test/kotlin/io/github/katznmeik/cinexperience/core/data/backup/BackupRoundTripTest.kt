@@ -29,7 +29,7 @@ internal class BackupRoundTripTest : BackupTestBase() {
         val doc = deviceA.document("backup.zip")
 
         val counts = deviceA.repository.export(doc)
-        assertEquals(BackupCounts(cinemas = 14, halls = 37, visits = 4, overrides = 3, photos = 2, referenceImages = 2), counts)
+        assertEquals(BackupCounts(cinemas = 15, halls = 39, visits = 4, overrides = 3, photos = 2, referenceImages = 2), counts)
 
         // A fresh install: seeded, no user data.
         val deviceB = newDevice("b")
@@ -243,7 +243,7 @@ internal class BackupRoundTripTest : BackupTestBase() {
         val deviceB = newDevice("b")
         deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
         val names = deviceB.snapshot().cinemas.map { it.name }
-        assertEquals(14, names.size)
+        assertEquals(15, names.size)
         assertTrue("Kiezkino" in names)
     }
 }

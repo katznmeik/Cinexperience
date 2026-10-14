@@ -203,8 +203,8 @@ internal abstract class BackupTestBase : DatabaseTest() {
         SafetyCopies(File(filesDir, SafetyCopies.FOLDER)).latest()?.file?.inputStream()?.use { BackupReader().readDataOrNull(it) }
 
     /**
-     * Realistic data on device A: the shipped seed (13 cinemas, 36 halls, delphi
-     * LUX layouts with seat kinds), two favourite cinemas (one preloaded, one
+     * Realistic data on device A: the shipped seed (14 cinemas, 38 halls, all
+     * with layouts and seat kinds), two favourite cinemas (one preloaded, one
      * user-added), two halls with a shifted screen, a renamed preloaded hall with a reference image,
      * visits with seats, ratings, photos and formats, seat colours and a favourite,
      * a user-added cinema whose hall has seat kinds, an aisle, a seat id mark above
