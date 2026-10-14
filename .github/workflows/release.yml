@@ -18,10 +18,16 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    defaults:
+      run:
+        # bash -eo pipefail: a failing command in a pipeline fails the step.
+        shell: bash
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Tag must match the app version
         run: |
@@ -79,14 +85,10 @@ jobs:
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk "dist/cinexperience-$VERSION.apk"
 
-      - name: Verify the APK signature
-        run: |
-          apksigner="$ANDROID_HOME/build-tools/36.1.0/apksigner"
-          "$apksigner" verify --print-certs "dist/cinexperience-$VERSION.apk" | tee signature.txt
-          if grep -q "CN=Android Debug" signature.txt; then
-            echo "::error::The APK is signed with the debug key."
-            exit 1
-          fi
+      # Fails unless the APK verifies and its only signer is the release certificate
+      # in signing/release-cert.sha256 (otherwise it would not install as an update).
+      - name: Verify the APK is signed with the release key
+        run: scripts/verify-release-apk.sh "dist/cinexperience-$VERSION.apk"
 
       - name: Remove decoded signing key
         if: always()

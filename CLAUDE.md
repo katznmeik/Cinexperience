@@ -22,21 +22,24 @@ is required.
 ./gradlew testDebugUnitTest recordRoborazziDebug assembleDebug lintDebug   # local pre-push check
 ./gradlew :core:model:test                                       # pure JVM unit tests
 ./gradlew recordRoborazziDebug    # PNGs -> app/ and feature/*/build/outputs/roborazzi/
-./gradlew lintDebug               # Android Lint; errors fail CI (warnings are reported only)
+./gradlew lintDebug               # Android Lint: no errors allowed; 16 intentional warnings (README)
 ./gradlew assembleRelease         # needs CINEX_* env vars, else debug-signed + warning
 ```
 
 CI (`.github/workflows/android.yml`) first runs `testDebugUnitTest recordRoborazziDebug`,
 then `lintDebug`. If the `CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
 `CINEX_REQUIRE_RELEASE_SIGNING=true`, so a missing or blank signing value fails
-the build instead of falling back to the debug key. Without that secret it runs
-`assembleDebug` and uploads a `-debug` APK.
+the build instead of falling back to the debug key, and
+`scripts/verify-release-apk.sh` requires the APK's only signer to be the release
+certificate in `signing/release-cert.sha256`. Without that secret it runs
+`assembleDebug` and uploads a `-debug` APK. Workflow steps run with
+`shell: bash` (pipefail) and check out without persisted credentials.
 
 **Versions and releases:** the version is `cinexVersionName` in `gradle.properties`
 (MAJOR.MINOR.PATCH); `versionCode` is derived from it (MAJOR*10000 + MINOR*100 +
 PATCH). Pushing a tag `v<version>` runs `.github/workflows/release.yml` (tag must
 match the version; tests, lint, signed APK with `CINEX_REQUIRE_RELEASE_SIGNING`,
-signature check, GitHub Release with `cinexperience-<version>.apk`). Agents never
+release-certificate check, GitHub Release with `cinexperience-<version>.apk`). Agents never
 create tags or releases; the owner does. R8/minify stays off in v1.
 
 Look at the screenshot PNGs after every UI change.
@@ -70,8 +73,10 @@ Don't duplicate config in module build files.
   modules. Seat colours (`CinexTheme.colors.seat.*`) are the only hues in the app.
   Titles are uppercase Archivo; body text is Instrument Sans.
 - **Accessibility** (M7): every main screen has a `*AccessibilityTest` that runs
-  `assertAccessible()` (core:testing: every clickable has a label and a ≥48 dp
-  layout, nothing is announced twice, a heading exists) at font scale 1, 1.5
+  `assertAccessible()` (core:testing: every clickable has a label; the clickable
+  itself is ≥48 dp, or Material's `minimumInteractiveComponentSize()` reserves
+  48 dp around it, padding doesn't count; nothing is announced twice; a heading
+  exists; self-tests in `AccessibilityChecksTest`) at font scale 1, 1.5
   and 2 and records `<screen>_font_150/200.png`. Add new screens there and look
   at the PNGs. Rules: icon-only buttons get a content description, decorative
   icons `null`; a control's description replaces its visible texts (clear the
@@ -80,7 +85,9 @@ Don't duplicate config in module build files.
   `minimumInteractiveComponentSize()` or a 48 dp min height; nothing has a
   fixed height that text must fit in (`heightIn(min = …)`), rows of chips wrap
   (`ChoiceChipRow` is a `FlowRow`), and two-column layouts become one column
-  when `LocalDensity.current.fontScale > 1.3f` instead of breaking words.
+  when `LocalDensity.current.fontScale > 1.3f` instead of breaking words. Text
+  drawn inside a zoomable canvas (editor row labels) is sized in dp, not sp: it
+  grows with zoom, not with the system font size.
 - **Contrast:** text ≥4.5:1, meaningful graphics and outline-only controls
   ≥3:1 against their background (checked in `ThemeContrastTest` and
   `EditorContrastTest`). `outline` and `divider` are decorative only; borders

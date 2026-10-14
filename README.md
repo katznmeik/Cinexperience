@@ -98,10 +98,15 @@ Then:
 ```sh
 ./gradlew testDebugUnitTest         # unit, UI and accessibility tests
 ./gradlew recordRoborazziDebug      # screenshots -> <module>/build/outputs/roborazzi/*.png
-./gradlew lintDebug                 # Android Lint (CI fails on errors)
+./gradlew lintDebug                 # Android Lint: CI fails on errors (see below)
 ./gradlew assembleDebug             # debug APK -> app/build/outputs/apk/debug/
 ./gradlew assembleRelease           # release APK (see Signing)
 ```
+
+Lint reports no errors. It reports 16 warnings that are kept on purpose: the
+portrait lock (2) and targetSdk 36 (1), both set by the spec; 2 dependency-update
+hints; the framework `ExifInterface` (2, fine on minSdk 34); and 9 "use the KTX
+extension" style hints. There is no lint baseline.
 
 R8 / minification is off in v1 (the APK is small and only sideloaded); turning it
 on later needs keep rules for kotlinx.serialization and Room checked on a device.
@@ -109,7 +114,9 @@ on later needs keep rules for kotlinx.serialization and Room checked on a device
 ### CI builds
 
 Every push to a `claude/**` branch and every pull request runs GitHub Actions
-(`.github/workflows/android.yml`): tests, screenshots, lint and an APK. The run's
+(`.github/workflows/android.yml`): tests, screenshots, lint and an APK (when the
+signing secrets exist, a release-signed APK whose certificate is checked like in a
+release). The run's
 artifacts contain the APK (`cinexperience-<sha>.apk`), the screenshots and the
 test reports. These APKs are for testing on the PC emulator or the phone (spec
 §14.2, §14.3); releases come from the release workflow below.
@@ -131,8 +138,9 @@ git push origin v1.0.0
 
 `.github/workflows/release.yml` then checks that the tag matches the version,
 runs the tests and lint, builds the release APK signed with the fixed key (it
-fails if a signing secret is missing), checks the signature and creates the
-GitHub Release with `cinexperience-<version>.apk` and short notes.
+fails if a signing secret is missing), checks with `scripts/verify-release-apk.sh`
+that the APK verifies and its only signer is the release certificate, and creates
+the GitHub Release with `cinexperience-<version>.apk` and short notes.
 
 ### Signing
 
@@ -152,6 +160,17 @@ To build a signed release locally, set `CINEX_KEYSTORE_PATH` (path to the
 If they are missing, `assembleRelease` falls back to the debug key and prints a
 warning. Keep a copy of the keystore and its passwords outside GitHub: without
 them no future version can update the installed app.
+
+The SHA-256 of the release key's certificate is committed in
+`signing/release-cert.sha256` (public information, not a secret). CI and the
+release workflow refuse an APK signed with any other certificate, because it
+would not install over the existing app. Check a local build with
+`scripts/verify-release-apk.sh app/build/outputs/apk/release/app-release.apk`
+(set `CINEX_RELEASE_CERT_SHA256` to test a build signed with another key). The
+key should never change; if it ever has to, every installed copy must be
+uninstalled (losing its data unless restored from a backup) and the new
+certificate's SHA-256 (`apksigner verify --print-certs`, "certificate SHA-256
+digest") goes into that file.
 
 ## Licences
 
