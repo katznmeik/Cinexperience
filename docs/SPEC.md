@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-13 (rev. 13)
+**Last updated:** 2026-10-13 (rev. 14)
 
 ---
 
@@ -220,7 +220,7 @@ Save is always allowed — nothing besides hall is required.
 
 ### 6.7 Settings
 - **Backup:** Export backup (shows date and contents of the last export),
-  Import backup (warns that it replaces all data), Android Auto Backup on/off (§8)
+  Import backup (validates, previews, warns that it replaces all data), Restore safety copy, Android Auto Backup shown as "On" (§8)
 - **Data:** Manage cinemas & halls (add, rename, delete user-added ones; shows
   counts and how many layouts are drawn); All visits (§6.8)
 - **About:** version, note that the app is unofficial and not affiliated with
@@ -247,13 +247,24 @@ Save is always allowed — nothing besides hall is required.
 
 ## 8. Backup & restore
 
-- **Export:** writes one `.zip` file containing `data.json` (all cinemas,
-  halls, layouts, visits, overrides) and the `photos/` folder. Saved through
-  the Android file picker (e.g. Google Drive, Downloads).
-- **Import:** pick a backup file → preview counts → replace all current data
-  (with confirmation).
-- The JSON includes a `schemaVersion` so older backups can be migrated.
-- **Android Auto Backup** is enabled for the database as an additional safety net.
+- **Export:** writes one `.zip` file with `manifest.json` (format, `backupVersion`,
+  app version, export date, counts), `data.json` (every cinema, hall incl.
+  layout, visit, seat override and the seed state, with their ids) and the
+  `photos/` and `reference/` files those rows refer to. Saved through the
+  Android file picker (e.g. Google Drive, Downloads). Settings shows the date
+  and counts of the last export.
+- **Import:** pick a backup file → the whole file is validated before any data
+  is touched (zip safety and size limits, format and version, data
+  consistency, every layout readable, every referenced file present) →
+  preview (export date, counts) → confirm → all current data is replaced in
+  one step. If anything fails, the previous data and files stay untouched.
+- **Safety copy:** right before an import replaces the data, the current data is
+  saved as an internal backup (the latest 2 are kept) and can be restored from
+  Settings ("Restore safety copy").
+- `backupVersion` lets later app versions migrate older backups; backups from a
+  newer app version are rejected with a clear message.
+- **Android Auto Backup** covers the database and settings (not photos or
+  screenshots) as an additional safety net; Settings shows it as "On".
 
 ## 9. Preloaded data
 
