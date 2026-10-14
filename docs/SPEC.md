@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-14 (rev. 17)
+**Last updated:** 2026-10-14 (rev. 18)
 
 ---
 
@@ -84,9 +84,14 @@ A rectangular grid of `rows × columns` cells. Each cell is one of:
 
 Row labels and seat numbers are auto-generated (row 1…n, seat 1…m per row,
 skipping gaps/aisles) and can be edited to match the cinema's real labels.
-Seats are numbered **left to right from 1, facing the screen**. Wheelchair
-spaces are not counted in the numbering; they are labelled e.g.
-"Row 1, Wheelchair 2". Companion and sofa places are counted like seats.
+**Seat numbers must match Yorck's booking exactly.** Per row, numbering runs
+either **left to right** or **right to left** as drawn (screen at the top);
+Yorck uses both, even within one cinema. Every seat place is numbered,
+including wheelchair spaces, companion seats and sofa places, as Yorck does.
+A row's first number can be any number (Yorck rows often start at 2, 3 or 4).
+For the rare seat whose Yorck label is not a plain number (e.g. a wheelchair
+space labelled "R"), a seat can carry a fixed label that replaces its number.
+Row labels can be numbers or letters (e.g. "R1" for balcony rows).
 
 **Split rows:** a row interrupted by an aisle forms separate *blocks*
 (e.g. left / centre / right). Per row, the user chooses whether seat numbering
@@ -212,8 +217,9 @@ Save is always allowed — nothing besides hall is required.
 - **Paint tool:** choose Seat / Gap / Aisle (and for seats a type: standard,
   wheelchair, companion, sofa), then tap or drag across cells to paint them.
   Two fingers zoom and pan. Undo/redo for every change.
-- Edit row labels and starting seat numbers; per row: block numbering
-  (continuous / restart per block) and half-seat offset.
+- Edit row labels and starting seat numbers; per row: numbering direction
+  (left to right / right to left), block numbering (continuous / restart per
+  block) and half-seat offset.
 - **Seat numbers** are shown on every numbered seat and update live while
   painting or renumbering.
 - **Screen:** tap the screen bar to select it; the selected screen is
@@ -293,34 +299,35 @@ Save is always allowed — nothing besides hall is required.
 ## 9. Preloaded data
 
 The app ships with a seed list of Yorck cinemas and their halls
-(`core/data/src/main/assets/seed/yorck.json`). Seat layouts are preloaded for
-every hall the owner supplies a Yorck-app screenshot for; all other halls are
-drawn in the app. Hall names are generic ("Saal 1", "Saal 2", …) unless the real
-name is known (delphi LUX "Luxbox"), and can be renamed in the app.
+(`core/data/src/main/assets/seed/yorck.json`). Hall names are generic
+("Saal 1", "Saal 2", …) unless the real name is known (delphi LUX "Luxbox",
+Yorck "Yorck"/"New Yorck"), and can be renamed in the app.
 
-**Preloaded layouts (seed version 2):** all seven delphi LUX halls, transcribed
-from the owner's Yorck-app screenshots, including wheelchair/companion/sofa
-places; screen width and distance are estimated from the plans' "Leinwand" bar
-and can be adjusted in the editor.
+**Preloaded layouts (M8):** every hall of all 14 cinemas (38 halls), built from
+the seat plans on yorck.de's seat selection pages (October 2026, owner-approved,
+no seat was ever selected): seat positions, seat types (wheelchair, companion,
+sofa, permanently blocked seats count as normal seats), row labels and seat
+numbers exactly as Yorck has them. Halls with a stalls and a balcony area
+("Parkett"/"Rang") show the balcony rows behind the stalls with Yorck's labels
+(e.g. "R1"). Screen width and distance come from the drawn screen and can be
+adjusted; the screen offset (§4.2) can't be read from the plans, starts centred
+and is set in the editor. The delphi LUX layouts that were transcribed from the
+owner's Yorck-app screenshots in M2 are replaced by the ones from yorck.de.
 
-**Planned before v1.0 (M8):** the layouts of all halls of Rollberg, Neues Off
-and Passage, from the owner's Yorck-app screenshots. Their screen offset
-(§4.2) can't be read from the plans; it starts centred and is set in the
-editor.
-
-Verified in M1 (13 cinemas, 36 halls; Yorck states 14 cinemas, the 14th is unknown):
+Verified in M8 against yorck.de (14 cinemas, 38 halls; where yorck.de names a hall differently, its name is in brackets):
 
 | Cinema | Address | Halls |
 |---|---|---|
-| Babylon Kreuzberg | Dresdener Straße 126 | 2 |
-| Capitol Dahlem | Thielallee 36 | 1 |
-| Cinema Paris | Kurfürstendamm 211 | 1 |
+| Babylon Kreuzberg | Dresdener Straße 126 | 2 (A, B) |
+| Blauer Stern | Hermann-Hesse-Straße 11, 13156 Berlin | 2 |
+| Capitol Dahlem | Thielallee 36 | 1 (A) |
+| Cinema Paris | Kurfürstendamm 211 | 1 (CP) |
 | Delphi Filmpalast | Kantstraße 12a | 1 |
 | delphi LUX | Kantstraße 10 | 7 (Saal 1–6, Luxbox) |
 | Filmtheater am Friedrichshain | Bötzowstraße 1–5 | 5 |
-| International | Karl-Marx-Allee 33 | 1 |
+| International (yorck.de: Kino International) | Karl-Marx-Allee 33 | 1 |
 | Kant Kino | Kantstraße 54 | 5 |
-| Neues Off | Hermannstraße 20 | 1 |
+| Neues Off | Hermannstraße 20 | 1 (Kino 1) |
 | Odeon | Hauptstraße 116 | 1 |
 | Passage | Karl-Marx-Straße 131 | 4 |
 | Rollberg | Rollbergstraße 70 | 5 |
@@ -330,7 +337,11 @@ Verified in M1 (13 cinemas, 36 halls; Yorck states 14 cinemas, the 14th is unkno
 stable `seedKey`. When a newer seed version ships, missing cinemas/halls are
 added and still-empty fields (address, layout, screen geometry) are filled in;
 names, notes and anything the user has set are never overwritten, and nothing
-is deleted.
+is deleted. One exception: a layout that is still exactly the one an older seed
+supplied (the user never edited it) is replaced by the newer seed's layout,
+together with its screen width and distance, if the hall has no visits and no
+seat colour overrides or favourite; otherwise it is kept, and the user can
+redraw it.
 
 Users can add, rename or delete cinemas and halls at any time (preloaded ones
 can be renamed but not deleted).
