@@ -228,13 +228,24 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
             nextSeatId = maxOf(mark, newLayout?.nextSeatId ?: 0),
             layoutUnreadable = keepUnreadable,
         )
-        val remaining = newLayout?.seatIds ?: stored?.seatIds.orEmpty()
+        // Like Room: only a changed layout touches the overrides. A kept unreadable
+        // layout is unchanged; replacing an unreadable one, or clearing a layout, is a change.
+        val layoutChanged = !keepUnreadable && (newLayout != stored || existing.layoutUnreadable)
         store.update { s ->
-            s.copy(
-                halls = s.halls.map { if (it.id == hall.id) updated else it },
-                // Like Room: overrides of seats that no longer exist are deleted.
-                overrides = s.overrides.filter { it.hallId != hall.id || it.seatId in remaining },
-            )
+            if (!layoutChanged) {
+                s.copy(halls = s.halls.map { if (it.id == hall.id) updated else it })
+            } else {
+                // Overrides of seats that no longer exist are deleted. The label shortcut
+                // is resolved against the stored layout first, so the favourite cannot
+                // jump to a new seat that happens to have the same label.
+                val remaining = newLayout?.seatIds.orEmpty()
+                val kept = s.overridesOf(hall.id).filter { it.seatId in remaining }
+                s.copy(
+                    halls = s.halls.map { if (it.id == hall.id) updated else it },
+                    favourites = s.favourites - hall.id,
+                    overrides = s.overrides.filter { it.hallId != hall.id } + kept,
+                )
+            }
         }
         return true
     }
