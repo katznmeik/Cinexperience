@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
+import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailEntry
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailViewModel
@@ -69,13 +70,15 @@ fun NavGraphBuilder.cinemasScreen(
 ) {
     composable<CinemasRoute> { entry ->
         val (message, onMessageShown) = entry.resultMessage()
-        CinemasEntry(
-            viewModel = viewModel(factory = CinemasViewModel.factory(cinemaRepository)),
-            onOpenCinema = dropUnlessResumedWith(onOpenCinema),
-            onAddVisit = dropUnlessResumed(block = onAddVisit),
-            message = message,
-            onMessageShown = onMessageShown,
-        )
+        ScreenBackground {
+            CinemasEntry(
+                viewModel = viewModel(factory = CinemasViewModel.factory(cinemaRepository)),
+                onOpenCinema = dropUnlessResumedWith(onOpenCinema),
+                onAddVisit = dropUnlessResumed(block = onAddVisit),
+                message = message,
+                onMessageShown = onMessageShown,
+            )
+        }
     }
 }
 
@@ -88,12 +91,14 @@ fun NavGraphBuilder.cinemaDetailScreen(
 ) {
     composable<CinemaDetailRoute> { entry ->
         val cinemaId = entry.toRoute<CinemaDetailRoute>().cinemaId
-        CinemaDetailEntry(
-            viewModel = viewModel(factory = CinemaDetailViewModel.factory(cinemaId, cinemaRepository, hallRepository)),
-            onBack = dropUnlessResumed(block = onBack),
-            onOpenHall = dropUnlessResumedWith(onOpenHall),
-            onCinemaDeleted = dropUnlessResumedWith(onCinemaDeleted),
-        )
+        ScreenBackground {
+            CinemaDetailEntry(
+                viewModel = viewModel(factory = CinemaDetailViewModel.factory(cinemaId, cinemaRepository, hallRepository)),
+                onBack = dropUnlessResumed(block = onBack),
+                onOpenHall = dropUnlessResumedWith(onOpenHall),
+                onCinemaDeleted = dropUnlessResumedWith(onCinemaDeleted),
+            )
+        }
     }
 }
 
@@ -105,12 +110,14 @@ fun NavGraphBuilder.manageCinemasScreen(
 ) {
     composable<ManageCinemasRoute> { entry ->
         val (message, onMessageShown) = entry.resultMessage()
-        ManageCinemasEntry(
-            viewModel = viewModel(factory = ManageCinemasViewModel.factory(cinemaRepository, hallRepository)),
-            onBack = dropUnlessResumed(block = onBack),
-            onOpenCinema = dropUnlessResumedWith(onOpenCinema),
-            message = message,
-            onMessageShown = onMessageShown,
-        )
+        ScreenBackground {
+            ManageCinemasEntry(
+                viewModel = viewModel(factory = ManageCinemasViewModel.factory(cinemaRepository, hallRepository)),
+                onBack = dropUnlessResumed(block = onBack),
+                onOpenCinema = dropUnlessResumedWith(onOpenCinema),
+                message = message,
+                onMessageShown = onMessageShown,
+            )
+        }
     }
 }

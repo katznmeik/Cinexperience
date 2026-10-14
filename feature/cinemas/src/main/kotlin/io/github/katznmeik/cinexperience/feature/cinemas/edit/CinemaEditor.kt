@@ -175,6 +175,11 @@ internal class CinemaEditor(
         _dialog.value = null
     }
 
+    /** Shows [text] as a one-off [message], e.g. for a write that is not a dialog. */
+    fun showMessage(text: String) {
+        _message.value = text
+    }
+
     fun messageShown() {
         _message.value = null
     }

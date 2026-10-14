@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.core.ui.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -98,4 +99,18 @@ fun CinexScreen(
             content = content,
         )
     }
+}
+
+/**
+ * Opaque background of one navigation destination: every screen draws the app
+ * background itself, so nothing of another screen shows through it during a
+ * screen transition (spec §7). Wrap a destination's content in it.
+ */
+@Composable
+fun ScreenBackground(content: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(CinexTheme.colors.background),
+    ) { content() }
 }

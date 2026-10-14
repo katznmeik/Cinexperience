@@ -6,6 +6,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import io.github.katznmeik.cinexperience.core.data.repository.RankingsRepository
+import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
 import kotlinx.serialization.Serializable
 
@@ -30,12 +31,14 @@ fun NavGraphBuilder.rankingsScreen(
             val value by handle.getStateFlow<String?>(key, null).collectAsStateWithLifecycle()
             value
         }
-        RankingsEntry(
-            viewModel = viewModel(factory = RankingsViewModel.factory(rankingsRepository)),
-            onOpenHall = dropUnlessResumedWith(onOpenHall),
-            onOpenCinema = dropUnlessResumedWith(onOpenCinema),
-            message = message,
-            onMessageShown = { resultMessageKey?.let { handle[it] = null } },
-        )
+        ScreenBackground {
+            RankingsEntry(
+                viewModel = viewModel(factory = RankingsViewModel.factory(rankingsRepository)),
+                onOpenHall = dropUnlessResumedWith(onOpenHall),
+                onOpenCinema = dropUnlessResumedWith(onOpenCinema),
+                message = message,
+                onMessageShown = { resultMessageKey?.let { handle[it] = null } },
+            )
+        }
     }
 }

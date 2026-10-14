@@ -57,7 +57,7 @@ Look at the screenshot PNGs after every UI change.
 | `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories and file stores, illustrative screenshot fixtures, `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips) |
 | `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
-| `feature:cinemas` | feature | cinema list (start tab), cinema detail, manage cinemas & halls |
+| `feature:cinemas` | feature | cinema list (start tab; sort chips and the Favourites filter), cinema detail (☆/★ favourite toggle), manage cinemas & halls |
 | `feature:seatmap` | feature | hall detail with seat map, layout editor |
 | `feature:visits` | feature | add/edit visit (seat picker, photos), all visits |
 | `feature:rankings` | feature | rankings tab |
@@ -108,11 +108,26 @@ Don't duplicate config in module build files.
   routes, `NavGraphBuilder.xxxScreen(...)` and `NavController.navigateToXxx()`.
   Features never depend on each other; `app/.../ui/CinexApp.kt` wires them
   together with callbacks.
+- **Transitions** (spec §7) live only in `app/.../ui/CinexTransitions.kt`, passed
+  to the NavHost in `CinexApp` (features never set their own): opening a screen
+  slides it in from the right while the old one slides out left by the full
+  width (no overlap, no crossfade), Back and the predictive back gesture reverse
+  it (the gesture seeks a linear slide), switching tabs is a 90 + 210 ms
+  fade-through; pushes and pops take 300 ms. The bottom bar slides and resizes
+  with them. Every destination draws an opaque background (`ScreenBackground`
+  in core:ui around the entry composable). `TransitionFramesTest` (app) captures
+  frames at 0/25/50/75/100 % into `app/build/outputs/transitions`; look at them
+  after changing transitions.
 - **DI:** manual (`app/.../di/AppContainer.kt`), no Hilt. `CinexApp` hands the
   repositories to the features' `xxxScreen(...)` functions; each ViewModel has a
   `factory(...)` and exposes a `StateFlow` UI state. Repository failures become
   user-facing messages, never crashes.
 - **Data:** no invented sample data in the app.
+- **Favourite cinemas:** `Cinema.isFavourite`, written only through
+  `CinemaRepository.setFavourite` (detail's ☆/★ `IconToggleButton`, read as
+  "Favourite, checked"). In the list, `CinemaFilter.FAVOURITES` is a filter, not
+  a sort: only favourites, always in score order; the sort chips go back to
+  `ALL` with their sort. Sort and filter live in the ViewModel (not persisted).
 - **Seats** are identified by a stable `SeatId` stored in the layout (see
   `core/model/.../SeatLayout.kt`), never by grid position or label. Ids are never
   reused within a hall (`Hall.nextSeatId` is the hall's mark; the repository

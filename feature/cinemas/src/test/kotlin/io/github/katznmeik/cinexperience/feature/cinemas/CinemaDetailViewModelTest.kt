@@ -212,4 +212,31 @@ class CinemaDetailViewModelTest {
             viewModel().uiState.value.content,
         )
     }
+
+    @Test
+    fun favouriteToggleMarksAndUnmarksThroughTheFlow() = runTest {
+        val vm = viewModel()
+        assertFalse(vm.detail.cinema.isFavourite)
+
+        vm.toggleFavourite()
+        assertTrue(vm.detail.cinema.isFavourite)
+        assertTrue(repository.store.value.cinemas.first { it.id == SampleData.DELPHI_LUX }.isFavourite)
+
+        vm.toggleFavourite()
+        assertFalse(vm.detail.cinema.isFavourite)
+        assertNull(vm.uiState.value.message)
+    }
+
+    @Test
+    fun failedFavouriteToggleBecomesMessage() = runTest {
+        val vm = viewModel()
+        repository.failure = IllegalStateException("disk full")
+
+        vm.toggleFavourite()
+        assertFalse(vm.detail.cinema.isFavourite)
+        assertEquals(CinemaDetailViewModel.FAVOURITE_FAILED, vm.uiState.value.message)
+
+        vm.messageShown()
+        assertNull(vm.uiState.value.message)
+    }
 }

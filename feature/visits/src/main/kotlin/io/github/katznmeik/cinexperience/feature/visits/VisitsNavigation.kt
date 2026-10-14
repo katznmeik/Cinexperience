@@ -9,6 +9,7 @@ import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
+import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
 import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditEntry
 import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditMode
@@ -51,23 +52,27 @@ fun NavGraphBuilder.visitEditScreens(
 ) {
     composable<AddVisitRoute> { entry ->
         val hallId = entry.toRoute<AddVisitRoute>().hallId
-        VisitEditEntry(
-            viewModel = viewModel(
-                factory = VisitEditViewModel.factory(VisitEditMode.Add(hallId), cinemaRepository, visitRepository, visitPhotoStore),
-            ),
-            photoStore = visitPhotoStore,
-            onClose = onClose,
-        )
+        ScreenBackground {
+            VisitEditEntry(
+                viewModel = viewModel(
+                    factory = VisitEditViewModel.factory(VisitEditMode.Add(hallId), cinemaRepository, visitRepository, visitPhotoStore),
+                ),
+                photoStore = visitPhotoStore,
+                onClose = onClose,
+            )
+        }
     }
     composable<EditVisitRoute> { entry ->
         val visitId = entry.toRoute<EditVisitRoute>().visitId
-        VisitEditEntry(
-            viewModel = viewModel(
-                factory = VisitEditViewModel.factory(VisitEditMode.Edit(visitId), cinemaRepository, visitRepository, visitPhotoStore),
-            ),
-            photoStore = visitPhotoStore,
-            onClose = onClose,
-        )
+        ScreenBackground {
+            VisitEditEntry(
+                viewModel = viewModel(
+                    factory = VisitEditViewModel.factory(VisitEditMode.Edit(visitId), cinemaRepository, visitRepository, visitPhotoStore),
+                ),
+                photoStore = visitPhotoStore,
+                onClose = onClose,
+            )
+        }
     }
 }
 
@@ -77,10 +82,12 @@ fun NavGraphBuilder.allVisitsScreen(
     onOpenVisit: (visitId: Long) -> Unit,
 ) {
     composable<AllVisitsRoute> {
-        AllVisitsEntry(
-            viewModel = viewModel(factory = AllVisitsViewModel.factory(visitRepository)),
-            onBack = dropUnlessResumed(block = onBack),
-            onOpenVisit = dropUnlessResumedWith(onOpenVisit),
-        )
+        ScreenBackground {
+            AllVisitsEntry(
+                viewModel = viewModel(factory = AllVisitsViewModel.factory(visitRepository)),
+                onBack = dropUnlessResumed(block = onBack),
+                onOpenVisit = dropUnlessResumedWith(onOpenVisit),
+            )
+        }
     }
 }

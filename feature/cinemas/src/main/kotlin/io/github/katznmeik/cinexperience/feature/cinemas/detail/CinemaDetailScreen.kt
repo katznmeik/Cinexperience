@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -76,6 +77,7 @@ internal fun CinemaDetailEntry(
         state = state,
         onBack = onBack,
         onEdit = viewModel::editCinema,
+        onToggleFavourite = viewModel::toggleFavourite,
         onAddHall = viewModel::addHall,
         onOpenHall = onOpenHall,
         onRenameHall = viewModel::renameHall,
@@ -107,6 +109,7 @@ internal fun CinemaDetailScreen(
     dialogActions: EditDialogActions,
     onMessageShown: () -> Unit,
     modifier: Modifier = Modifier,
+    onToggleFavourite: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.message) {
@@ -121,6 +124,7 @@ internal fun CinemaDetailScreen(
                 detail = content.detail,
                 onBack = onBack,
                 onEdit = onEdit,
+                onToggleFavourite = onToggleFavourite,
                 onAddHall = onAddHall,
                 onOpenHall = onOpenHall,
                 onRenameHall = onRenameHall,
@@ -153,6 +157,7 @@ private fun LoadedContent(
     detail: CinemaDetail,
     onBack: () -> Unit,
     onEdit: () -> Unit,
+    onToggleFavourite: () -> Unit,
     onAddHall: () -> Unit,
     onOpenHall: (Long) -> Unit,
     onRenameHall: (HallSummary) -> Unit,
@@ -165,6 +170,7 @@ private fun LoadedContent(
     ) {
         item(key = "top") {
             BackTopBar(onBack) {
+                FavouriteToggle(detail.cinema.isFavourite, onToggleFavourite)
                 TopBarIconButton(icon = CinexIcons.Edit, contentDescription = "Edit cinema", onClick = onEdit)
             }
         }
@@ -213,6 +219,23 @@ private fun LoadedContent(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
+    }
+}
+
+/**
+ * The ☆/★ favourite toggle (spec §6.2): a 48 dp toggle button, outline star when
+ * off, filled star when on, both in the text colour (monochrome). TalkBack reads
+ * "Favourite, checked/not checked".
+ */
+@Composable
+private fun FavouriteToggle(favourite: Boolean, onToggle: () -> Unit) {
+    IconToggleButton(checked = favourite, onCheckedChange = { onToggle() }) {
+        Icon(
+            imageVector = if (favourite) CinexIcons.Star else CinexIcons.StarOutline,
+            contentDescription = "Favourite",
+            tint = CinexTheme.colors.text,
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 
