@@ -86,6 +86,30 @@ class LayoutDraftTest {
     }
 
     @Test
+    fun aCopiedRowTakesTheTemplatesNumberingAndDirectionButNotItsLabelOrStarts() {
+        val restarting = stored.updateRow(0) {
+            it.copy(
+                label = "C",
+                numbering = SeatNumbering.RESTART_PER_BLOCK,
+                numberingDirection = NumberingDirection.RIGHT_TO_LEFT,
+                blockStartNumbers = listOf(5),
+            )
+        }
+        val draft = LayoutDraft.start(hall.copy(layout = restarting))
+        listOf(draft.insertRowCopy(0, template = 0) to 0, draft.insertRowCopy(1, template = 0) to 1).forEach { (copied, at) ->
+            val row = copied.layout.rows[at]
+            assertEquals(SeatNumbering.RESTART_PER_BLOCK, row.numbering)
+            assertEquals(NumberingDirection.RIGHT_TO_LEFT, row.numberingDirection)
+            assertNull(row.label)
+            assertTrue(row.blockStartNumbers.isEmpty())
+        }
+        // Growing the row count copies the last row, numbering included.
+        val grown = draft.withRowCount(4)
+        assertEquals(SeatNumbering.CONTINUOUS, grown.layout.rows[3].numbering)
+        assertEquals(SeatNumbering.RESTART_PER_BLOCK, LayoutDraft.start(hall.copy(layout = restarting.removeRow(1))).withRowCount(2).layout.rows[1].numbering)
+    }
+
+    @Test
     fun insertAndRemoveRows() {
         val draft = LayoutDraft.start(hall)
         val inserted = draft.insertRowCopy(1, template = 0)
@@ -176,6 +200,11 @@ class LayoutDraftTest {
         assertEquals("1–8", back.blocks.single().rangeText)
 
         assertEquals("R", BlockSummary(0, null, null, null, fixedLabels = listOf("R")).rangeText)
+        assertEquals("R", BlockSummary(0, null, null, null, fixedLabels = listOf("R"), leadingFixedLabelCount = 1).rangeText)
+        assertEquals(
+            "R + 1–4 + R2, R3",
+            BlockSummary(0, null, 1, 4, fixedLabels = listOf("R", "R2", "R3"), leadingFixedLabelCount = 1).rangeText,
+        )
         assertEquals("–", BlockSummary(0, null, null, null).rangeText)
     }
 
@@ -198,9 +227,14 @@ class LayoutDraftTest {
         assertEquals(listOf("1–4", "10–12"), row.blocksInNumberingOrder.map { it.rangeText })
         assertEquals(listOf(1, 10), row.blocksInNumberingOrder.map { it.firstNumber })
 
+        // Right to left, the "R" at the right end comes first in numbering order.
         val kant = rowSummary(layout, labels, 1)
-        assertEquals("1–6 + R", kant.blocks.single().rangeText)
+        assertEquals("R + 1–6", kant.blocks.single().rangeText)
         assertEquals(listOf("R"), kant.blocks.single().fixedLabels)
+        assertEquals(1, kant.blocks.single().leadingFixedLabelCount)
+        // Left to right, the same "R" comes last.
+        val leftToRight = layout.updateRow(1) { it.copy(numberingDirection = NumberingDirection.LEFT_TO_RIGHT) }
+        assertEquals("1–6 + R", rowSummary(leftToRight, leftToRight.labels(), 1).blocks.single().rangeText)
     }
 
     @Test
@@ -211,6 +245,7 @@ class LayoutDraftTest {
         var draft = LayoutDraft.start(Hall(id = 1, cinemaId = 1, name = "Saal 4", layout = labelled, nextSeatId = 15))
         draft = draft.insertRowCopy(0, template = 0) // a new row copies cells and direction, not the label
         assertEquals(NumberingDirection.RIGHT_TO_LEFT, draft.layout.rows[0].numberingDirection)
+        assertNull(draft.layout.rows[0].label)
         assertEquals(listOf<String?>(null, null, null, null, null, null, null), draft.layout.rows[0].fixedLabels)
         draft = draft.withColumnCount(9).withRowCount(4).updateRow(1) { it.copy(halfSeatOffset = true) }
         assertEquals(NumberingDirection.RIGHT_TO_LEFT, draft.layout.rows[1].numberingDirection)
@@ -218,7 +253,10 @@ class LayoutDraftTest {
         // A new kind keeps the label; painting a gap drops it.
         draft = draft.paint(1, 6, CellType.SEAT, SeatKind.STANDARD)
         assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.STANDARD, "R"), draft.layout.cell(1, 6))
-        assertEquals(null, draft.paint(1, 6, CellType.GAP).paint(1, 6, CellType.SEAT).layout.rows[1].fixedLabels[6])
+        val gap = draft.paint(1, 6, CellType.GAP)
+        assertTrue(gap.layout.rows[1].fixedLabels.all { it == null })
+        // Painted back: the same seat with its label (the editor can't set labels, so it must not lose one).
+        assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.STANDARD, "R"), gap.paint(1, 6, CellType.SEAT).layout.cell(1, 6))
         // Deleting the column or the row drops it as well.
         assertTrue(draft.withColumnCount(6).layout.rows[1].fixedLabels.all { it == null })
         assertTrue(draft.removeRow(1).layout.rows.all { r -> r.fixedLabels.all { it == null } })

@@ -91,10 +91,12 @@ sealed interface LayoutCell {
      * @property fixedLabel the seat's label where Yorck doesn't number it (spec §4.3),
      *   e.g. "R" for a wheelchair space: shown instead of a number, and the seat
      *   doesn't use up a number (see [labels]). It belongs to the seat: it moves
-     *   with it and survives a change of [kind]; a seat painted as a gap or aisle,
-     *   or deleted with its row or column, loses it (a seat drawn there again is
-     *   numbered). 1 to [MAX_FIXED_LABEL_LENGTH] characters, without
-     *   surrounding spaces. `null` (the rule) = the seat is numbered.
+     *   with it and survives a change of [kind]. A seat painted as a gap or aisle
+     *   and back as a seat in the same [LayoutEditSession] gets its id and fixed
+     *   label back; a seat deleted with its row or column loses it (a seat drawn
+     *   there again is a new, numbered seat). 1 to [MAX_FIXED_LABEL_LENGTH]
+     *   characters, without surrounding spaces, control or format characters.
+     *   `null` (the rule) = the seat is numbered.
      */
     data class Seat(
         val id: SeatId,
@@ -103,7 +105,8 @@ sealed interface LayoutCell {
     ) : LayoutCell {
         init {
             require(fixedLabel == null || isValidFixedLabel(fixedLabel)) {
-                "A fixed seat label must have 1–$MAX_FIXED_LABEL_LENGTH characters and no surrounding spaces, was '$fixedLabel'"
+                "A fixed seat label must have 1–$MAX_FIXED_LABEL_LENGTH characters, no surrounding spaces and no " +
+                    "control or format characters, was '$fixedLabel'"
             }
         }
 
@@ -113,8 +116,16 @@ sealed interface LayoutCell {
             /** Longest [fixedLabel]: it has to fit inside the seat on the map. */
             const val MAX_FIXED_LABEL_LENGTH: Int = 4
 
+            /**
+             * 1 to [MAX_FIXED_LABEL_LENGTH] characters, not blank, without surrounding
+             * spaces and without ISO control or format (Unicode `Cf`, e.g. zero-width
+             * or bidi) characters, which would be invisible or garble the map.
+             */
             fun isValidFixedLabel(label: String): Boolean =
-                label.isNotBlank() && label.length <= MAX_FIXED_LABEL_LENGTH && label == label.trim()
+                label.isNotBlank() &&
+                    label.length <= MAX_FIXED_LABEL_LENGTH &&
+                    label == label.trim() &&
+                    label.none { it.isISOControl() || Character.getType(it) == Character.FORMAT.toInt() }
         }
     }
 
@@ -294,12 +305,19 @@ data class SeatLayout(
 
     /**
      * Turns one non-seat cell into a seat with the given, currently unused [id]
-     * (used by [LayoutEditSession] to give a seat its original id back).
+     * and [fixedLabel] (used by [LayoutEditSession] to give a seat its original id
+     * and fixed label back).
      */
-    fun withSeat(row: Int, column: Int, id: SeatId, kind: SeatKind = SeatKind.STANDARD): SeatLayout {
+    fun withSeat(
+        row: Int,
+        column: Int,
+        id: SeatId,
+        kind: SeatKind = SeatKind.STANDARD,
+        fixedLabel: String? = null,
+    ): SeatLayout {
         require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
         require(id !in seatPositions) { "$id is already used in this layout" }
-        return SeatLayout(replaceCell(row, column, LayoutCell.Seat(id, kind)), maxOf(nextSeatId, id.value + 1))
+        return SeatLayout(replaceCell(row, column, LayoutCell.Seat(id, kind, fixedLabel)), maxOf(nextSeatId, id.value + 1))
     }
 
     /** Changes the [SeatKind] of the seat at ([row], [column]); the seat keeps its id and fixed label. */
@@ -341,15 +359,20 @@ data class SeatLayout(
 
     /**
      * This layout with its seat ids renumbered row-major from [FIRST_SEAT_ID] (and
-     * [nextSeatId] right after them), everything else unchanged. Two layouts with
-     * equal canonical [rows] have the same structure (cells, seat kinds, fixed
+     * [nextSeatId] right after them) and each row's [LayoutRow.blockStartNumbers]
+     * normalised (entries beyond the row's blocks and trailing `null`s, which mean
+     * nothing for the labels, are dropped); everything else unchanged. Two layouts
+     * with equal canonical [rows] have the same structure (cells, seat kinds, fixed
      * labels, row settings) and differ at most in their seat ids, e.g. a seed
      * layout and the same layout shifted above a hall's id mark ([withIdsShiftedBy]).
      */
     fun withCanonicalSeatIds(): SeatLayout {
         var next = FIRST_SEAT_ID
         val newRows = rows.map { row ->
-            row.copy(cells = row.cells.map { if (it is LayoutCell.Seat) it.copy(id = SeatId(next++)) else it })
+            row.copy(
+                cells = row.cells.map { if (it is LayoutCell.Seat) it.copy(id = SeatId(next++)) else it },
+                blockStartNumbers = row.blockStartNumbers.take(row.blocks.size).dropLastWhile { it == null },
+            )
         }
         return SeatLayout(newRows, next)
     }

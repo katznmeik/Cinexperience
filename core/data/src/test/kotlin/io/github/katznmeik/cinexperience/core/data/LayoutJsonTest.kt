@@ -180,6 +180,8 @@ class LayoutJsonTest {
         assertInvalid("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null," "]}]}""")
         assertInvalid("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null,"ABCDE"]}]}""")
         assertInvalid("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null," R"]}]}""")
+        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null,"R\n"]}]}""") // control
+        assertInvalid("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null,"R​"]}]}""") // format (Cf)
         // Valid: 4 characters; only nulls (written back without the field, as version 2).
         val fourCharacters = LayoutJson.decode("""{"formatVersion":3,"rows":[{"cells":"SW","seatLabels":[null,"R12a"]}]}""")
         assertEquals("R12a", (fourCharacters.cell(0, 1) as LayoutCell.Seat).fixedLabel)

@@ -97,7 +97,8 @@ data class LayoutDraft(
 
     /**
      * Inserts a new row before [index] with the cell types of row [template] (new
-     * seats are standard, without fixed labels) and its numbering direction.
+     * seats are standard, without fixed labels), its numbering (continuous or per
+     * block) and its numbering direction; not its label or block starts.
      */
     fun insertRowCopy(index: Int, template: Int): LayoutDraft {
         if (rowCount >= MAX_ROWS) return this
@@ -105,7 +106,9 @@ data class LayoutDraft(
         var edited = session.insertRow(index.coerceIn(0, rowCount), fill = CellType.GAP)
         val at = index.coerceIn(0, rowCount)
         templateRow.cells.forEachIndexed { column, cell -> edited = edited.copyCellType(at, column, cell) }
-        edited = edited.updateRow(at) { it.copy(numberingDirection = templateRow.numberingDirection) }
+        edited = edited.updateRow(at) {
+            it.copy(numbering = templateRow.numbering, numberingDirection = templateRow.numberingDirection)
+        }
         return copy(session = edited)
     }
 
@@ -212,8 +215,14 @@ data class BlockSummary(
     val lastNumber: Int?,
     /** Fixed seat labels ("R") of the block, in numbering order; they use up no number. */
     val fixedLabels: List<String> = emptyList(),
+    /** How many of [fixedLabels] come before the block's first number in numbering order. */
+    val leadingFixedLabelCount: Int = 0,
 ) {
-    /** "1–4", "5", "1–6 + R", "R". */
+    /**
+     * "1–4", "5", "R", and fixed labels where they fall in numbering order: "1–6 + R"
+     * when the "R" comes last, "R + 1–6" when it comes first. A fixed label between
+     * numbered seats is listed after the numbers.
+     */
     val rangeText: String
         get() {
             val numbers = when {
@@ -221,8 +230,9 @@ data class BlockSummary(
                 firstNumber == lastNumber -> "$firstNumber"
                 else -> "$firstNumber–$lastNumber"
             }
-            val fixed = fixedLabels.joinToString(", ").ifEmpty { null }
-            return listOfNotNull(numbers, fixed).joinToString(" + ").ifEmpty { "–" }
+            val leading = fixedLabels.take(leadingFixedLabelCount).joinToString(", ").ifEmpty { null }
+            val trailing = fixedLabels.drop(leadingFixedLabelCount).joinToString(", ").ifEmpty { null }
+            return listOfNotNull(leading, numbers, trailing).joinToString(" + ").ifEmpty { "–" }
         }
 }
 
@@ -278,6 +288,7 @@ fun rowSummary(layout: SeatLayout, labels: LayoutLabels, index: Int): RowSummary
                 firstNumber = numbers.firstOrNull(),
                 lastNumber = numbers.lastOrNull(),
                 fixedLabels = inOrder.filter { it.number == null }.map { it.label.seat },
+                leadingFixedLabelCount = inOrder.takeWhile { it.number == null }.size,
             )
         }
     return RowSummary(

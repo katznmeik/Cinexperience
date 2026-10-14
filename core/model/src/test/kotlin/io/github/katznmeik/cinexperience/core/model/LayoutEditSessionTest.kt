@@ -120,16 +120,44 @@ class LayoutEditSessionTest {
         assertEquals(LayoutCell.Seat(SeatId(6), SeatKind.STANDARD, "R"), session.layout!!.cell(1, 3))
         assertSame(session, session.setSeat(1, 3, SeatKind.STANDARD))
 
-        // Painting the seat over drops the label; painting it back restores the id only.
+        // Painted over and back: the original id and the fixed label come back, with the painted kind.
         session = session.setCellType(1, 3, CellType.GAP).setSeat(1, 3, SeatKind.WHEELCHAIR)
         layout = session.layout!!
-        assertEquals(LayoutCell.Seat(SeatId(6), SeatKind.WHEELCHAIR), layout.cell(1, 3))
-        assertTrue(session.hasChanges)
+        assertEquals(LayoutCell.Seat(SeatId(6), SeatKind.WHEELCHAIR, "R"), layout.cell(1, 3))
+        assertTrue(session.hasChanges) // the row was moved around
 
         // Only the direction changed: a change, and no seat is removed.
         val turned = LayoutEditSession.start(labelled, 7).updateRow(0) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
         assertTrue(turned.hasChanges)
         assertTrue(turned.removedSeatsWithData(labelled.seatIds).isEmpty())
+    }
+
+    @Test
+    fun aFixedLabelSurvivesAGapAndBackRoundTrip() {
+        // Kant Kino style: "6 5 4 3 2 1 R", right to left with a fixed "R" at the left end.
+        val kant = layoutOf("WSSSSSS")
+            .updateRow(0) { it.copy(numberingDirection = NumberingDirection.RIGHT_TO_LEFT) }
+            .withFixedLabel(0, 0, "R")
+        fun SeatLayout.texts() = rows[0].seatIds.map { labels().labelOf(it)!!.seat }
+        assertEquals(listOf("R", "6", "5", "4", "3", "2", "1"), kant.texts())
+
+        // Via a gap, via an aisle and via the tap cycle: always the same seat again, unchanged.
+        val start = LayoutEditSession.start(kant, hallNextSeatId = 8)
+        listOf(
+            start.setCellType(0, 0, CellType.GAP).setSeat(0, 0, SeatKind.WHEELCHAIR),
+            start.setCellType(0, 0, CellType.AISLE).setCellType(0, 0, CellType.GAP).setSeat(0, 0, SeatKind.WHEELCHAIR),
+            start.cycleCell(0, 0).cycleCell(0, 0).cycleCell(0, 0).setSeat(0, 0, SeatKind.WHEELCHAIR),
+        ).forEach { session ->
+            assertEquals(LayoutCell.Seat(SeatId(1), SeatKind.WHEELCHAIR, "R"), session.layout!!.cell(0, 0))
+            assertEquals(listOf("R", "6", "5", "4", "3", "2", "1"), session.layout!!.texts())
+            assertFalse(session.hasChanges)
+        }
+        // Painted back as another kind: still the "R", with the new kind.
+        val companion = start.setCellType(0, 0, CellType.GAP).setSeat(0, 0, SeatKind.COMPANION)
+        assertEquals(LayoutCell.Seat(SeatId(1), SeatKind.COMPANION, "R"), companion.layout!!.cell(0, 0))
+        // A new seat elsewhere is numbered and gets a new id.
+        val elsewhere = LayoutEditSession.start(layoutOf("WSSSSSS."), 8).setSeat(0, 7, SeatKind.STANDARD)
+        assertEquals(LayoutCell.Seat(SeatId(8)), elsewhere.layout!!.cell(0, 7))
     }
 
     @Test

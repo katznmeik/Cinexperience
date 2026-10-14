@@ -506,7 +506,8 @@ class LayoutEditorViewModelTest {
             .map { it.label.seatNumberText }
         assertEquals(listOf("6", "5", "4", "3", "2", "1", "R"), texts(0))
         vm.selectRow(0)
-        assertEquals("1–6 + R", vm.state.row!!.blocks.single().rangeText)
+        // Right to left, the "R" at the right end comes first in numbering order.
+        assertEquals("R + 1–6", vm.state.row!!.blocks.single().rangeText)
 
         // Rows and columns added around it, another kind: the label stays on its seat.
         vm.insertRowAbove()
@@ -516,13 +517,18 @@ class LayoutEditorViewModelTest {
         assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.COMPANION, "R"), vm.draft.layout.cell(1, 6))
         assertEquals(listOf("7", "6", "5", "4", "3", "2", "R", "1"), texts(1))
 
-        // Painted over: gone; undo brings it back.
+        // Painted as a gap: gone from the map. Painted back as a seat: the same seat with its "R"
+        // (the editor can't create fixed labels, so it must not lose one).
         vm.selectTool(CellType.GAP)
         vm.tapCell(1, 6)
+        assertTrue(vm.draft.layout.rows[1].fixedLabels.all { it == null })
+        assertEquals(listOf("7", "6", "5", "4", "3", "2", "1"), texts(1))
         vm.selectTool(CellType.SEAT)
         vm.tapCell(1, 6)
-        assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.COMPANION), vm.draft.layout.cell(1, 6))
+        assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.COMPANION, "R"), vm.draft.layout.cell(1, 6))
+        assertEquals(listOf("7", "6", "5", "4", "3", "2", "R", "1"), texts(1))
         vm.undo()
+        assertTrue(vm.draft.layout.rows[1].fixedLabels.all { it == null }) // undo: the gap again
         vm.undo()
         assertEquals(LayoutCell.Seat(SeatId(7), SeatKind.COMPANION, "R"), vm.draft.layout.cell(1, 6))
 

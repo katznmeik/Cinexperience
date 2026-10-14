@@ -29,7 +29,10 @@ import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 /** One seat the [SeatPicker] offers. */
 data class SeatChoice(val seatId: SeatId, val label: SeatLabel, val block: Int) {
-    /** Short chip text: the seat's number, or its fixed label ("R"); a special kind adds its icon. */
+    /**
+     * Short chip text: the seat's number, or its fixed label ("R"), nothing else.
+     * The chip shows a special kind's icon beside it; the kind is not part of this text.
+     */
     val shortText: String get() = label.seat
 }
 
