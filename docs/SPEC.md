@@ -2,7 +2,7 @@
 
 **Status:** Draft v1.0 (agreed in planning, no development started)
 **Owner:** katznmeik
-**Last updated:** 2026-10-14 (rev. 18)
+**Last updated:** 2026-10-14 (rev. 19)
 
 ---
 
@@ -91,7 +91,10 @@ including wheelchair spaces, companion seats and sofa places, as Yorck does.
 A row's first number can be any number (Yorck rows often start at 2, 3 or 4).
 For the rare seat whose Yorck label is not a plain number (e.g. a wheelchair
 space labelled "R"), a seat can carry a fixed label that replaces its number.
-Row labels can be numbers or letters (e.g. "R1" for balcony rows).
+Row labels can be numbers or letters (e.g. "R1" for balcony rows). A row can
+also have no name ("-" in Yorck's data, e.g. Kant Kino Saal 3, where every
+double sofa is its own unnamed row): its seats are then shown by seat alone
+("Seat 12 · sofa"), and the seat picker lists them by seat number.
 
 **Split rows:** a row interrupted by an aisle forms separate *blocks*
 (e.g. left / centre / right). Per row, the user chooses whether seat numbering
@@ -307,7 +310,9 @@ Yorck "Yorck"/"New Yorck"), and can be renamed in the app.
 the seat plans on yorck.de's seat selection pages (October 2026, owner-approved,
 no seat was ever selected): seat positions, seat types (wheelchair, companion,
 sofa, permanently blocked seats count as normal seats), row labels and seat
-numbers exactly as Yorck has them. Halls with a stalls and a balcony area
+numbers exactly as Yorck has them. One documented correction: Kant Kino Saal 3
+is a room of 11 double sofas along a centre aisle (Yorck's data lists them as
+normal seats), so its 22 places are sofa places. Halls with a stalls and a balcony area
 ("Parkett"/"Rang") show the balcony rows behind the stalls with Yorck's labels
 (e.g. "R1"). yorck.de doesn't show the real screen (its data always makes the
 screen exactly as wide as the seating), so a new hall's screen starts as wide as
