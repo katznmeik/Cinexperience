@@ -116,17 +116,32 @@ Don't duplicate config in module build files.
   rejects layouts that reuse ids). Edit layouts only through
   `hall.startLayoutEdit()` (`LayoutEditSession`); derive labels with
   `layout.labels()`.
+- **Seat numbering** (`SeatLabels.kt`, spec §4.3) must match Yorck's booking.
+  Every seat place is numbered, wheelchair spaces, companion seats and sofa
+  places included. Each row has a `numberingDirection`: `LEFT_TO_RIGHT`
+  (default) or `RIGHT_TO_LEFT`, as drawn with the screen at the top. Aisles
+  split a row into blocks. `blockStartNumbers[b]` counts blocks from the left
+  as stored, in both directions; its value is the number of that block's first
+  numbered seat in numbering order (the rightmost seat when the row runs right
+  to left). `CONTINUOUS` counts on across blocks, `RESTART_PER_BLOCK` restarts.
+  A seat can have a `fixedLabel` (1–4 characters, e.g. "R"): it is shown
+  instead of a number and uses up no number. It moves with its seat and
+  survives a change of kind; painting the cell as a gap or aisle, or deleting
+  its row or column, drops it. The editor can't create fixed labels.
+  `SeatLabel.seat` is the text ("10" or "R"); texts read "Row 7 · Seat 10" and
+  "Row 8 · Seat R", and descriptions name the kind ("…, wheelchair space").
 - **Scores and seat colours** come from the `core:model` functions
   (`hallScores`, `cinemaScores`, `seatStates`), never from SQL math.
   On the map, `SeatState.toSeatVisual()` gives the `SeatVisual`; colour is never
   the only cue (× on avoid, ★ and outline on the favourite, great/OK differ in
   lightness), screen readers get the state from `seatDescription()` /
   `seatStatesDescription()`, and a coloured map is shown with a `SeatLegend`.
-  Numbered seats (not wheelchair spaces) show their number from
-  `layout.labels()` (`seatNumberText`, `drawNumberedSeat` in `SeatNumbers.kt`),
-  in the fill's on-colour (`seat.onGreat` … `seat.onNoData`, ≥4.5:1), with the
-  marks in a band above it; below `MIN_SEAT_NUMBER_SIZE` on screen the numbers
-  wait until the user zooms in and the marks are drawn as symbols.
+  Every seat shows its number or fixed label from `layout.labels()`
+  (`seatNumberText`, `NumberedSeat` in `SeatNumbers.kt`), in the fill's
+  on-colour (`seat.onGreat` … `seat.onNoData`, ≥4.5:1), with its marks
+  (wheelchair, companion or sofa symbol, ×, ★) in a band above it; below
+  `MIN_SEAT_NUMBER_SIZE` on screen the numbers wait until the user zooms in and
+  the marks are drawn as symbols.
   Overrides and the favourite are written only through `SeatOverrideRepository`
   (the fake in `core:testing` models them like Room: `FakeStore.overrides`).
 - **Screen geometry** (`Hall`): `screenWidth` in seat widths, `screenDistance`
@@ -170,13 +185,17 @@ Don't duplicate config in module build files.
   (tabs, Back, Settings rows). Once the transaction has committed, nothing
   (progress callbacks, file clean-up, pruning, seeding, even Errors) can turn
   the import into a failure or delete its safety copy (`onCommitted`). Failures
-  are `BackupException`s with user-facing messages. Tests:
+  are `BackupException`s with user-facing messages. The layout JSON inside is
+  versioned on its own (`LayoutJson.FORMAT_VERSION`, now 3): a new layout field
+  bumps that, not `BACKUP_VERSION`, and an older app refuses such a backup as
+  "can't be read by this app version". Tests:
   `core/data/src/test/.../backup/`. Known limitation: if the current data fails
   validation (e.g. a layout from a newer app), import is refused; there is no
   "Replace anyway".
-- **Row and seat labels:** Yorck numbers rows and seats (1…n), which is the
-  default labelling. Keep fixtures, examples and UI texts numeric ("Row 7 ·
-  Seat 10"); custom row labels exist only for other cinemas.
+- **Row and seat labels:** Yorck mostly numbers rows and seats, which is the
+  default labelling; some rows are letters ("C") or balcony rows ("R1"), and a
+  row's first seat is often 2, 3 or 4. Keep fixtures, examples and UI texts
+  numeric ("Row 7 · Seat 10") unless they show one of these cases.
 - **App-private files:** reference screenshots (`ReferenceImageStore`,
   `files/reference/`) and visit photos (`VisitPhotoStore`, `files/photos/`) live
   in `core:data`. Entities store paths relative to `filesDir`; the stores ignore
@@ -191,17 +210,34 @@ Don't duplicate config in module build files.
   for every change; `seedKey`s are permanent. Seeding only inserts missing items
   and fills empty fields, it never overwrites or deletes (a renamed seed hall
   only gets the new name on fresh installs). For `screenOffset`, 0 counts as
-  empty (see `Seeder`).
+  empty (see `Seeder`). One exception (spec §9): when a newer seed ships a
+  different layout, a hall whose layout is still the previous seed's (snapshot
+  `layout`, compared by structure with `hasSameStructureAs`, ids ignored) and
+  that has no visits, seat colours or favourite gets the new layout, with ids
+  above the hall's mark. Its screen width and distance follow only while they
+  still hold the previous seed's values; a value the user changed is kept.
+  Names, notes, the screen offset and the reference screenshot are never
+  touched.
 - **Seed layouts** (`"layout"` of a seed hall, see `LayoutJson`): one object per
   grid row, closest to the screen first, e.g.
   `{ "label": "1", "cells": "W.W|SSSSSSSSS|W.W" }`. Cell characters: `S` seat,
-  `W` wheelchair space (not counted in seat numbers), `C` companion seat
-  (Begleitsitz), `F` sofa place, `.` gap, `|` aisle (splits a row into blocks).
+  `W` wheelchair space, `C` companion seat (Begleitsitz), `F` sofa place (all
+  numbered), `.` gap, `|` aisle (splits a row into blocks).
   All rows have the same width: columns run from the leftmost to the rightmost
-  seat position of the hall. Give every seat row an explicit `label` (Yorck
-  numbers rows 1..n from the screen); a wider gap between two rows is an empty
+  seat position of the hall. Give every seat row an explicit `label` (Yorck's
+  row label); a wider gap between two rows is an empty
   spacer row of gaps without a label. Omit `seatIds`: seed ids are assigned
-  row-major from 1. Use `"formatVersion": 2` when a layout has `W`, `C` or `F`.
+  row-major from 1. Optional row fields: `"direction": "RIGHT_TO_LEFT"`
+  (omitted = left to right); `"blockStarts": [null, 4]` (per block from the
+  left, the number of the block's first seat in numbering order); `"numbering":
+  "RESTART_PER_BLOCK"`; `"seatLabels": [null, …, "R"]`, one entry per seat of
+  any kind, left to right like `seatIds`, `null` = numbered. Numbers rise by 1
+  across gaps and aisles; for a jump (8 → 12) split the row with `|` there and
+  set that block's start. Use the lowest `"formatVersion"` that holds the
+  layout: 3 with `direction` or `seatLabels`, else 2 with `W`, `C` or `F`,
+  else 1. Example row: `{ "label": "8", "cells": "SSSSSSW", "direction":
+  "RIGHT_TO_LEFT", "seatLabels": [null, null, null, null, null, null, "R"] }`
+  reads 6 5 4 3 2 1 R.
   `screenWidth` is in seat widths, `screenDistance` in row depths between the
   screen and row 1 (0.5 steps). An optional `screenOffset` (seat widths, 0.5
   steps) shifts the screen sideways; Yorck's plans don't show it, so omit it
