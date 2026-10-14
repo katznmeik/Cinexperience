@@ -33,7 +33,6 @@ import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.visits.UNTITLED
-import io.github.katznmeik.cinexperience.feature.visits.shortText
 
 @Composable
 internal fun AllVisitsEntry(viewModel: AllVisitsViewModel, onBack: () -> Unit, onOpenVisit: (Long) -> Unit) {

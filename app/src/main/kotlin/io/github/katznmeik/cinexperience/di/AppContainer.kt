@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.di
 
 import android.content.Context
+import io.github.katznmeik.cinexperience.BuildConfig
 import io.github.katznmeik.cinexperience.core.data.DataContainer
 import io.github.katznmeik.cinexperience.core.data.backup.BackupRepository
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
@@ -28,6 +29,9 @@ interface AppContainer {
 
     /** Version name of the installed app, shown in Settings → About. */
     val appVersion: String
+
+    /** Short commit hash the APK was built from (or `unknown`), shown in Settings → About. */
+    val buildId: String
     val cinemaRepository: CinemaRepository
     val hallRepository: HallRepository
     val visitRepository: VisitRepository
@@ -51,6 +55,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val appVersion: String by lazy {
         applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0).versionName.orEmpty()
     }
+
+    override val buildId: String = BuildConfig.BUILD_ID
 
     /** Lives as long as the process; used for app-wide work such as seeding the database. */
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

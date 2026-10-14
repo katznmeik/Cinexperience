@@ -155,7 +155,12 @@ internal fun SettingsScreen(
                         style = CinexTheme.textStyles.cardTitle.copy(fontWeight = FontWeight.ExtraBold),
                         color = CinexTheme.colors.text,
                     )
-                    Text("Version ${state.appVersion}", style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
+                    // Non-breaking spaces keep "Version 1.0.0" and "Build abc1234" together when the line wraps.
+                    Text(
+                        "Version ${state.appVersion} · Build ${state.buildId}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = CinexTheme.colors.textMuted,
+                    )
                     Text(
                         "Unofficial app, not affiliated with Yorck Kinos.",
                         style = MaterialTheme.typography.bodySmall,

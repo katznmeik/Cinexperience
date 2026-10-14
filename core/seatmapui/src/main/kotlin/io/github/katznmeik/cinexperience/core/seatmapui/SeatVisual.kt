@@ -63,3 +63,11 @@ internal fun SeatColors.colorOf(tone: SeatTone): Color = when (tone) {
     SeatTone.OK -> ok
     SeatTone.AVOID -> avoid
 }
+
+/** Colour of the number and the marks drawn on a seat of [tone] (at least 4.5:1 against its fill). */
+internal fun SeatColors.onColorOf(tone: SeatTone): Color = when (tone) {
+    SeatTone.NO_DATA -> onNoData
+    SeatTone.GREAT -> onGreat
+    SeatTone.OK -> onOk
+    SeatTone.AVOID -> onAvoid
+}

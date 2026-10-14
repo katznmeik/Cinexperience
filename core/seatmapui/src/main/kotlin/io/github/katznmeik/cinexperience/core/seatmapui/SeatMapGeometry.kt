@@ -15,10 +15,12 @@ import kotlin.math.min
  * Sizes of a seat map drawing, in content units (pixels at zoom 1). The seat map
  * and the layout editor use different metrics for the same [SeatMapGeometry].
  *
- * @property screenTopSpace room above the screen line (arc bulge, drag handles).
+ * @property screenTopSpace room above the screen line (its stroke).
  * @property minScreenGap minimum room between the screen line and row 0, e.g. for
  *   a "SCREEN" caption; 0 draws the screen distance exactly.
  * @property rightLabels also show row labels on the right of every row.
+ * @property screenCaptionWidth width of a caption centred on the screen (the seat
+ *   map's "SCREEN"): a screen moved to the grid's edge keeps it inside the drawing.
  */
 data class SeatMapMetrics(
     val seatSize: Float,
@@ -30,6 +32,7 @@ data class SeatMapMetrics(
     val minScreenGap: Float,
     val padding: Float,
     val rightLabels: Boolean = true,
+    val screenCaptionWidth: Float = 0f,
 ) {
     /** Horizontal distance between neighbouring cells' left edges. */
     val pitchX: Float get() = seatSize + seatGap
@@ -47,25 +50,30 @@ data class SeatMapMetrics(
  * x grows to the right, y towards the back of the hall. Row `r` spans
  * `[r × pitchY, r × pitchY + seatSize]`; column `c` starts at `c × pitchX`, plus
  * half a pitch in rows with a half-seat offset. Row labels sit left (and right)
- * of the grid; the screen is a horizontal line above row 0 at `screenY < 0`,
- * centred over the cell area like in the viewing-angle model
+ * of the grid; the screen is a straight horizontal line above row 0 at
+ * `screenY < 0`, placed like in the viewing-angle model
  * (`core.model.viewingAngle`): [screenWidth] seat widths wide, [screenDistance]
- * row depths in front of row 0.
+ * row depths in front of row 0, its centre [screenOffset] seat widths right of
+ * the cell area's centre (negative = left, towards column 0, as seen from the
+ * seats facing the screen).
  *
  * @param screenWidth in seat widths; `null` → as wide as the grid.
  * @param screenDistance in row depths; `null` → [DEFAULT_SCREEN_DISTANCE].
+ * @param screenOffset in seat widths (`Hall.screenOffset`); 0 = centred.
  */
 class SeatMapGeometry(
     val layout: SeatLayout,
     val metrics: SeatMapMetrics,
     screenWidth: Float? = null,
     screenDistance: Float? = null,
+    screenOffset: Float = 0f,
 ) {
     val rowCount: Int = layout.rowCount
     val columnCount: Int = layout.columnCount
 
     val screenWidth: Float = screenWidth?.takeIf { it > 0f } ?: columnCount.toFloat()
     val screenDistance: Float = screenDistance?.takeIf { it >= 0f } ?: DEFAULT_SCREEN_DISTANCE
+    val screenOffset: Float = screenOffset.takeIf { it.isFinite() } ?: 0f
 
     private val halfShift: Float = metrics.pitchX / 2f
     private val hasOffsetRows: Boolean = layout.rows.any { it.halfSeatOffset }
@@ -77,8 +85,8 @@ class SeatMapGeometry(
     val gridWidth: Float = cellsWidth + if (hasOffsetRows) halfShift else 0f
     val gridHeight: Float = rowCount * metrics.pitchY - metrics.rowGap
 
-    /** Centre of the screen (and of the unshifted cell area). */
-    val screenCenterX: Float = cellsWidth / 2f
+    /** Centre of the screen: the centre of the unshifted cell area, moved by [screenOffset]. */
+    val screenCenterX: Float = cellsWidth / 2f + this.screenOffset * metrics.pitchX
     val screenLeft: Float = screenCenterX - this.screenWidth * metrics.pitchX / 2f
     val screenRight: Float = screenCenterX + this.screenWidth * metrics.pitchX / 2f
 
@@ -89,11 +97,15 @@ class SeatMapGeometry(
     private val labelsRight: Float =
         if (metrics.rightLabels) gridWidth + metrics.labelGap + metrics.labelWidth else gridWidth
 
-    /** Everything that is drawn, plus padding. */
+    /**
+     * Everything that is drawn in content coordinates, plus padding. What is drawn at
+     * a fixed size on screen (the layout editor's screen label and handles) gets its
+     * room from the view instead.
+     */
     val contentBounds: Rect = Rect(
-        left = min(labelsLeft, screenLeft) - metrics.padding,
+        left = minOf(labelsLeft, screenLeft, screenCenterX - metrics.screenCaptionWidth / 2f) - metrics.padding,
         top = screenY - metrics.screenTopSpace - metrics.padding,
-        right = max(labelsRight, screenRight) + metrics.padding,
+        right = maxOf(labelsRight, screenRight, screenCenterX + metrics.screenCaptionWidth / 2f) + metrics.padding,
         bottom = gridHeight + metrics.padding,
     )
 

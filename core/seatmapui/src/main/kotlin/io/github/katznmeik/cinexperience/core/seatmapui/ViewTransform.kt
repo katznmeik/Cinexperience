@@ -31,6 +31,11 @@ data class ViewTransform(val scale: Float, val offset: Offset) {
  * viewport's width (but never magnified beyond [maxFitScale]), can be zoomed out
  * until all content is visible and in up to [maxScale]; it can never be panned
  * further than the content's edges.
+ *
+ * [topInset] (screen px) stays free above the content at every zoom, like a
+ * padding of the viewport: whatever is drawn at a fixed size on screen above the
+ * content's top (the layout editor's screen label) always has that room, however
+ * small the content is drawn.
  */
 @Immutable
 data class ViewBounds(
@@ -39,12 +44,13 @@ data class ViewBounds(
     val fitScale: Float,
     val minScale: Float,
     val maxScale: Float,
+    val topInset: Float = 0f,
 ) {
-    /** Fitted to the viewport's width, horizontally centred, top aligned. */
+    /** Fitted to the viewport's width, horizontally centred, top aligned (below [topInset]). */
     fun fitted(): ViewTransform = clamp(
         ViewTransform(
             fitScale,
-            Offset((viewport.width - (content.left + content.right) * fitScale) / 2f, -content.top * fitScale),
+            Offset((viewport.width - (content.left + content.right) * fitScale) / 2f, topInset - content.top * fitScale),
         ),
     )
 
@@ -59,8 +65,8 @@ data class ViewBounds(
         return ViewTransform(
             scale,
             Offset(
-                clampAxis(adjusted.offset.x, viewport.width, content.left, content.right, scale),
-                clampAxis(adjusted.offset.y, viewport.height, content.top, content.bottom, scale),
+                clampAxis(adjusted.offset.x, 0f, viewport.width, content.left, content.right, scale),
+                clampAxis(adjusted.offset.y, topInset, viewport.height, content.top, content.bottom, scale),
             ),
         )
     }
@@ -75,9 +81,10 @@ data class ViewBounds(
         return clamp(transform.zoomed(factor, centroid).panned(pan))
     }
 
-    /** Whether content can move with one finger (it's larger than the viewport). */
+    /** Whether content can move with one finger (it's larger than the viewport below [topInset]). */
     fun canPan(transform: ViewTransform): Boolean =
-        content.width * transform.scale > viewport.width + 0.5f || content.height * transform.scale > viewport.height + 0.5f
+        content.width * transform.scale > viewport.width + 0.5f ||
+            content.height * transform.scale > viewport.height - topInset + 0.5f
 
     /** Double tap: zoom in around [focus], or back to the fitted view when already zoomed in. */
     fun toggleZoom(transform: ViewTransform, focus: Offset): ViewTransform? =
@@ -94,24 +101,26 @@ data class ViewBounds(
         /**
          * @param maxFitScale the fitted view never magnifies more than this (tiny halls).
          * @param maxZoomScale lower bound of the maximum zoom, e.g. "a seat is ~48 dp wide".
+         * @param topInset screen px kept free above the content (see [ViewBounds]).
          */
-        fun of(viewport: Size, content: Rect, maxFitScale: Float, maxZoomScale: Float): ViewBounds {
+        fun of(viewport: Size, content: Rect, maxFitScale: Float, maxZoomScale: Float, topInset: Float = 0f): ViewBounds {
             val safeWidth = max(content.width, 1f)
             val safeHeight = max(content.height, 1f)
             val fit = min(viewport.width / safeWidth, maxFitScale).coerceAtLeast(MIN_SCALE)
-            val all = min(fit, viewport.height / safeHeight).coerceAtLeast(MIN_SCALE)
-            return ViewBounds(viewport, content, fit, all, max(fit * 4f, maxZoomScale))
+            val all = min(fit, (viewport.height - topInset) / safeHeight).coerceAtLeast(MIN_SCALE)
+            return ViewBounds(viewport, content, fit, all, max(fit * 4f, maxZoomScale), topInset)
         }
 
         private const val MIN_SCALE = 0.01f
 
         /**
-         * Allowed offset on one axis: content smaller than the viewport stays fully
+         * Allowed offset on one axis whose usable part of the viewport runs from
+         * [viewportStart] to [viewportEnd]: content smaller than that stays fully
          * inside it; larger content may not show empty space beyond its edges.
          */
-        private fun clampAxis(offset: Float, viewport: Float, start: Float, end: Float, scale: Float): Float {
-            val a = -start * scale // content start at the viewport start
-            val b = viewport - end * scale // content end at the viewport end
+        private fun clampAxis(offset: Float, viewportStart: Float, viewportEnd: Float, start: Float, end: Float, scale: Float): Float {
+            val a = viewportStart - start * scale // content start at the viewport start
+            val b = viewportEnd - end * scale // content end at the viewport end
             return offset.coerceIn(min(a, b), max(a, b))
         }
     }

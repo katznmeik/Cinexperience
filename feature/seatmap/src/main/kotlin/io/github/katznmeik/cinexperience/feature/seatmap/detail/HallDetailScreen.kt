@@ -116,18 +116,20 @@ internal fun hallMetaText(state: HallDetailUiState.Loaded): String = listOfNotNu
     if (state.visitCount == 0) "no visits" else countText(state.visitCount, "visit"),
 ).joinToString(" · ")
 
-/** "ROW 7 · SEAT 10": title of the selected-seat card. */
-internal fun SelectedSeat.titleText(): String = label.displayText.replace(", ", " · ").uppercase()
+/** "ROW 7 · SEAT 10", "ROW 8 · SEAT R", "SEAT 12" (a row without a name): title of the selected-seat card. */
+internal fun SelectedSeat.titleText(): String = label.shortText.uppercase()
 
 /**
  * "★ 4.8 seat rating · 3 visits · ≈ 38° viewing angle"; parts without data are
- * left out, companion and sofa places are named first. `null` when nothing is known.
+ * left out, wheelchair spaces, companion and sofa places are named first. `null`
+ * when nothing is known.
  */
 internal fun SelectedSeat.detailText(): String? = listOfNotNull(
     when (label.kind) {
+        SeatKind.WHEELCHAIR -> "Wheelchair space"
         SeatKind.COMPANION -> "Companion seat"
         SeatKind.SOFA -> "Sofa place"
-        else -> null
+        SeatKind.STANDARD -> null
     },
     averageRating?.let { "★ ${formatScore(it)} seat rating" },
     visitCount.takeIf { it > 0 }?.let { countText(it, "visit") },
@@ -283,6 +285,7 @@ private fun Header(title: String, meta: String, overallScore: Double?) {
     }
 }
 
+/** The map's card: narrow side padding, so the seats (and their numbers) get the width. */
 @Composable
 private fun MapCard(content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -291,7 +294,7 @@ private fun MapCard(content: @Composable ColumnScope.() -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(CinexTheme.colors.surface)
-            .padding(start = 10.dp, end = 10.dp, top = 18.dp, bottom = 14.dp),
+            .padding(start = 6.dp, end = 6.dp, top = 16.dp, bottom = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         content = content,
     )
@@ -316,6 +319,7 @@ private fun ColumnScope.MapContent(
         contentDescription = description,
         screenWidth = state.screenWidth,
         screenDistance = state.screenDistance,
+        screenOffset = state.screenOffset,
         seatVisuals = state.seatVisuals,
         selectedSeatId = state.selectedSeat?.seatId,
         onSeatClick = onSeatClick,
@@ -645,7 +649,7 @@ private fun VisitHistory(visits: List<HallVisitRow>, onAddVisit: () -> Unit, onO
 /** Second line of a visit row: "12 Sep 2026 · Row 7 · Seat 10 · OmU"; missing parts are left out. */
 internal fun HallVisitRow.detailText(): String = listOfNotNull(
     dateText(date),
-    seatLabel?.displayText?.replace(", ", " · "),
+    seatLabel?.shortText,
     format?.displayName,
 ).joinToString(" · ")
 

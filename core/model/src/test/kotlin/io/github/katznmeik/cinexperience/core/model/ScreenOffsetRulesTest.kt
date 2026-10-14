@@ -44,6 +44,11 @@ class ScreenOffsetRulesTest {
         assertEquals(8f, ScreenOffsetRules.snap(12f, columns = 16))
         assertEquals(-7.5f, ScreenOffsetRules.snap(-9f, columns = 15))
         assertEquals(3.5f, ScreenOffsetRules.snap(3.6f, columns = 16))
+        // Halfway values round away from the centre on both sides.
+        assertEquals(1f, ScreenOffsetRules.snap(0.75f))
+        assertEquals(-1f, ScreenOffsetRules.snap(-0.75f))
+        assertEquals(0.5f, ScreenOffsetRules.snap(0.25f))
+        assertEquals(-0.5f, ScreenOffsetRules.snap(-0.25f))
     }
 
     @Test

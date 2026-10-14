@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.DrawStyle
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -52,6 +54,9 @@ object SeatGlyphs {
 
     val cross: Path by lazy { parse("M6 6l12 12M18 6L6 18") }
 
+    /** A larger ×, filling its box like the star and the kind symbols: the avoid mark above a seat number. */
+    val markCross: Path by lazy { parse("M4 4l16 16M20 4L4 20") }
+
     fun of(kind: SeatKind): Path? = when (kind) {
         SeatKind.STANDARD -> null
         SeatKind.WHEELCHAIR -> wheelchair
@@ -60,23 +65,24 @@ object SeatGlyphs {
     }
 }
 
-/** Draws a 24×24 [glyph] stroked into the square [box]. */
-fun DrawScope.strokeGlyph(glyph: Path, box: Rect, color: Color, strokeWidth: Float = 2.2f) {
+/** The round stroke of a glyph, [width] in the glyph's 24×24 units. Make it once for repeated drawing. */
+fun glyphStroke(width: Float = 2.2f): Stroke = Stroke(width = width, cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+/** Draws a 24×24 [glyph] into the square [box] in [style] (a [glyphStroke] or [Fill]). */
+fun DrawScope.drawGlyph(glyph: Path, box: Rect, color: Color, style: DrawStyle) {
     translate(box.left, box.top) {
         scale(box.width / GLYPH_VIEWPORT, box.height / GLYPH_VIEWPORT, pivot = Offset.Zero) {
-            drawPath(glyph, color, style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawPath(glyph, color, style = style)
         }
     }
 }
 
+/** Draws a 24×24 [glyph] stroked into the square [box]. */
+fun DrawScope.strokeGlyph(glyph: Path, box: Rect, color: Color, strokeWidth: Float = 2.2f) =
+    drawGlyph(glyph, box, color, glyphStroke(strokeWidth))
+
 /** Draws a 24×24 [glyph] filled into the square [box]. */
-internal fun DrawScope.fillGlyph(glyph: Path, box: Rect, color: Color) {
-    translate(box.left, box.top) {
-        scale(box.width / GLYPH_VIEWPORT, box.height / GLYPH_VIEWPORT, pivot = Offset.Zero) {
-            drawPath(glyph, color)
-        }
-    }
-}
+internal fun DrawScope.fillGlyph(glyph: Path, box: Rect, color: Color) = drawGlyph(glyph, box, color, Fill)
 
 /** The centred square of [fraction] × the rect's width inside [rect]. */
 fun Rect.innerSquare(fraction: Float): Rect {

@@ -247,7 +247,7 @@ internal class SeederTest : DatabaseTest() {
     fun seededDataIsVisibleThroughRepositories() = runTest {
         seeder(File("src/main/assets/${DatabaseConfig.SEED_ASSET_PATH}").readText()).seedIfNeeded()
         val list = cinemas.observeCinemas().first()
-        assertEquals(13, list.size)
+        assertEquals(14, list.size)
         assertEquals("Babylon Kreuzberg", list.first().cinema.name)
         assertTrue(list.all { it.visitCount == 0 && it.overallScore == null })
         val lux = list.single { it.cinema.seedKey == "delphi-lux" }

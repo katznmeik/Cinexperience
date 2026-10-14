@@ -168,6 +168,7 @@ fun CinexApp(
                 cinemaRepository = container.cinemaRepository,
                 backupRepository = container.backupRepository,
                 appVersion = container.appVersion,
+                buildId = container.buildId,
                 onOpenManage = navController::navigateToManageCinemas,
                 onOpenAllVisits = navController::navigateToAllVisits,
             )

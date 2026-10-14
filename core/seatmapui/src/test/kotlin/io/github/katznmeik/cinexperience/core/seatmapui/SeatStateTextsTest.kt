@@ -68,14 +68,12 @@ class SeatStateTextsTest {
     @Test
     fun marksOnSeatsHaveEnoughContrast() {
         val colors = DarkCinexColors
-        // Stars and kind symbols on coloured seats are drawn in onPrimary (WCAG 1.4.11: 3:1).
-        listOf(colors.seat.great, colors.seat.ok, colors.seat.avoid).forEach { seat ->
-            assertTrue("mark on $seat", contrast(colors.onPrimary, seat) >= 3f)
+        // Numbers, ×, ★ and kind symbols use the on-colour of every seat tone: 4.5:1, so
+        // the numbers read as text (and the marks clear the 3:1 of WCAG 1.4.11).
+        SeatTone.entries.forEach { tone ->
+            val ratio = contrast(colors.seat.onColorOf(tone), colors.seat.colorOf(tone))
+            assertTrue("number on $tone: $ratio", ratio >= 4.5f)
         }
-        // The × on an avoid seat is drawn in the surface colour.
-        assertTrue(contrast(colors.surface, colors.seat.avoid) >= 3f)
-        // Marks on grey "no data" seats are drawn in the text colour.
-        assertTrue(contrast(colors.text, colors.seat.noData) >= 4.5f)
     }
 
     @Test

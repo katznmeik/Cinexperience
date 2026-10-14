@@ -1,3 +1,6 @@
+import java.io.ByteArrayOutputStream
+import javax.inject.Inject
+
 plugins {
     alias(libs.plugins.cinex.android.application)
     alias(libs.plugins.cinex.android.compose)
@@ -53,10 +56,41 @@ val appVersionCode: Int = appVersionName.split(".").let { parts ->
     parts[0].toInt() * 10_000 + parts[1].toInt() * 100 + parts[2].toInt()
 }
 
+// Build ID: the first 7 characters of the commit the APK is built from, shown in
+// Settings → About. CI checks out the pushed commit, so it equals ${GITHUB_SHA::7}
+// in the APK file name (cinexperience-<id>.apk). Without git, or outside a git
+// checkout, it is "unknown". As a ValueSource it works with the configuration cache:
+// Gradle runs it again on every build and reconfigures when HEAD has moved.
+abstract class GitBuildIdValueSource : ValueSource<String, ValueSourceParameters.None> {
+    @get:Inject
+    abstract val execOperations: ExecOperations
+
+    override fun obtain(): String = try {
+        val output = ByteArrayOutputStream()
+        val result = execOperations.exec {
+            commandLine("git", "rev-parse", "HEAD")
+            standardOutput = output
+            errorOutput = ByteArrayOutputStream()
+            isIgnoreExitValue = true
+        }
+        val hash = output.toString(Charsets.UTF_8).trim()
+        if (result.exitValue == 0 && hash.matches(Regex("[0-9a-f]{40}"))) hash.take(7) else "unknown"
+    } catch (e: Exception) {
+        "unknown" // git is not installed
+    }
+}
+
+val appBuildId: String = providers.of(GitBuildIdValueSource::class) {}.get()
+
 android {
     defaultConfig {
         versionCode = appVersionCode
         versionName = appVersionName
+        buildConfigField("String", "BUILD_ID", "\"$appBuildId\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     signingConfigs {

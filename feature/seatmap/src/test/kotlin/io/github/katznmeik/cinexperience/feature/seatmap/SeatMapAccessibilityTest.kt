@@ -1,13 +1,17 @@
 package io.github.katznmeik.cinexperience.feature.seatmap
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.testing.ACCESSIBILITY_FONT_SCALES
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.SampleData
+import io.github.katznmeik.cinexperience.core.testing.SampleLayouts
 import io.github.katznmeik.cinexperience.core.testing.ScreenshotSurface
 import io.github.katznmeik.cinexperience.core.testing.assertAccessible
 import io.github.katznmeik.cinexperience.core.testing.fontScaleSuffix
@@ -84,5 +88,66 @@ class SeatMapAccessibilityTest(private val fontScale: Float) {
         vm.selectRow(3)
         val state = vm.uiState.value
         check("layout_editor") { LayoutEditorScreen(state, referenceImage = null, actions = object : LayoutEditorActions {}) }
+    }
+
+    /**
+     * A right-to-left row in three blocks: the "Direction" chips wrap, the "Starts at"
+     * fields follow the numbering direction and name their block for TalkBack.
+     */
+    @Test
+    fun layoutEditorRightToLeftRow() {
+        val repository = FakeCinexRepository(SampleData.storeWithYorckNumbering())
+        val vm = LayoutEditorViewModel(SampleData.DELPHI_LUX_SAAL_1, repository, FakeReferenceImageStore())
+        vm.selectRow(3)
+        val state = vm.uiState.value
+        check("layout_editor_right_to_left") { LayoutEditorScreen(state, referenceImage = null, actions = object : LayoutEditorActions {}) }
+        composeRule.onNodeWithContentDescription("Numbered right to left").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Right block start number, empty for automatic").assertExists()
+    }
+
+    /** The selected "R" wheelchair space: the seat card says "Row 6 · Seat R" and "Wheelchair space". */
+    @Test
+    fun hallDetailWithAFixedLabel() {
+        val state = hallState(FakeCinexRepository(SampleData.storeWithYorckNumbering()), SampleData.DELPHI_LUX_SAAL_1) {
+            it.onSeatClick(SampleLayouts.yorckRowSixR)
+        }
+        check("hall_detail_fixed_label") { HallDetail(state) }
+    }
+
+    /**
+     * Kant Kino Saal 3: rows without a name, sofa places. The selected seat card reads
+     * "SEAT 12", the map has no row labels, the seat is announced as "Seat 12, sofa".
+     */
+    @Test
+    fun hallDetailKantKinoSaal3() {
+        val state = hallState(FakeCinexRepository(SampleData.storeWithKantKinoSaal3()), SampleData.KANT_KINO_SAAL_3) {
+            it.onSeatClick(SampleLayouts.kantKinoSaal3Seat12)
+        }
+        check("hall_detail_kant_kino_saal_3") { HallDetail(state) }
+        // The card title ("SEAT 12" on screen) is announced with the seat's state.
+        composeRule.onNodeWithContentDescription("Seat 12, sofa, no data").assertExists()
+    }
+
+    /** An unnamed row selected in the editor: the label field holds "-", the title reads "Unnamed row". */
+    @Test
+    fun layoutEditorUnnamedRow() {
+        val repository = FakeCinexRepository(SampleData.storeWithKantKinoSaal3())
+        val vm = LayoutEditorViewModel(SampleData.KANT_KINO_SAAL_3, repository, FakeReferenceImageStore())
+        vm.selectRow(1)
+        val state = vm.uiState.value
+        check("layout_editor_unnamed_row") { LayoutEditorScreen(state, referenceImage = null, actions = object : LayoutEditorActions {}) }
+        composeRule.onNodeWithContentDescription("Row label, empty for automatic, a dash for no name").assertExists()
+        composeRule.onNodeWithText("no name").assertExists()
+    }
+
+    /** The selected screen: the screen panel ("Done", width, distance and position steppers) in place of the row panel. */
+    @Test
+    fun layoutEditorWithSelectedScreen() {
+        val repository = FakeCinexRepository(SampleData.storeWithSplitHall())
+        val vm = LayoutEditorViewModel(SampleData.DELPHI_LUX_SAAL_1, repository, FakeReferenceImageStore())
+        vm.selectScreen()
+        vm.changeScreenOffset(-1.5f)
+        val state = vm.uiState.value
+        check("layout_editor_screen") { LayoutEditorScreen(state, referenceImage = null, actions = object : LayoutEditorActions {}) }
     }
 }

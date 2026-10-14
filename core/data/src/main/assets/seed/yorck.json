@@ -1,5 +1,5 @@
 {
-  "seedVersion": 2,
+  "seedVersion": 5,
   "cinemas": [
     {
       "seedKey": "babylon-kreuzberg",
@@ -8,11 +8,91 @@
       "halls": [
         {
           "seedKey": "babylon-kreuzberg/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 17.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": ".SSSSSSSSSSSSSSSS" },
+              { "label": "2", "cells": ".SSSSSSSSSSSSSSSS" },
+              { "label": "3", "cells": ".SSSSSSSSSSSSSSSS" },
+              { "label": "4", "cells": ".SSSSSSSSSSSSSSSS" },
+              { "label": "5", "cells": ".SSSSSSSSSSSSSSSS" },
+              { "label": "6", "cells": ".SSSSSSSSSSSSSCWW" },
+              { "label": "7", "cells": ".SSSSSSSSSSSSSSSS" },
+              { "label": "8", "cells": ".SSSSSSSSSSSSSSSS" },
+              { "cells": "................." },
+              { "label": "9", "cells": ".SSSSSSSSSSSS||SS" },
+              { "label": "10", "cells": ".SSSSSSSSSSSS||SS" },
+              { "label": "11", "cells": "SSSSSSSSSSSSS||FF" }
+            ]
+          }
         },
         {
           "seedKey": "babylon-kreuzberg/saal-2",
-          "name": "Saal 2"
+          "name": "Saal 2",
+          "screenWidth": 9.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "SSSSSSSS.", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "seedKey": "blauer-stern",
+      "name": "Blauer Stern",
+      "address": "Hermann-Hesse-Straße 11, 13156 Berlin",
+      "halls": [
+        {
+          "seedKey": "blauer-stern/saal-1",
+          "name": "Saal 1",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "7", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "8", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "9", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "10", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "11", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "cells": ".............." },
+              { "label": "12", "cells": "..WCWCSSSSSSS.", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
+        },
+        {
+          "seedKey": "blauer-stern/saal-2",
+          "name": "Saal 2",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "..WCSSSSSSSS.." },
+              { "label": "2", "cells": "..SSSSSSSSSS.." },
+              { "label": "3", "cells": "..SSSSSSSSSS.." },
+              { "label": "4", "cells": "..SSSSSSSSSSSS" },
+              { "label": "5", "cells": ".SSSSSSSSSSSS." },
+              { "label": "6", "cells": "SSSSSSSSSSSSSS" }
+            ]
+          }
         }
       ]
     },
@@ -23,7 +103,38 @@
       "halls": [
         {
           "seedKey": "capitol-dahlem/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 9.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "2", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "7", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "8", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "9", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "10", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "11", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "cells": "........." },
+              { "label": "12", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "13", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "14", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "15", "cells": "SSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "16", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "cells": "........." },
+              { "cells": "........." },
+              { "label": "R1", "cells": ".SSSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R2", "cells": ".SSSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R3", "cells": "..SSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R4", "cells": ".SSSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R5", "cells": "..SSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R6", "cells": ".SSSSSSSS", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
         }
       ]
     },
@@ -34,7 +145,33 @@
       "halls": [
         {
           "seedKey": "cinema-paris/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 19.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 1,
+            "rows": [
+              { "label": "1", "cells": "...SSSSSSSSSSSSSS.." },
+              { "label": "2", "cells": "..SSSSSSSSSSSSSSSS." },
+              { "label": "3", "cells": ".SSSSSSSSSSSSSSSSSS" },
+              { "label": "4", "cells": ".SSSSSSSSSSSSSSSSSS" },
+              { "label": "5", "cells": ".SSSSSSSSSSSSSSSSSS" },
+              { "label": "6", "cells": ".SSSSSSSSSSSSSSSSSS" },
+              { "label": "7", "cells": ".SSSSSSSSSSSSSSSSSS" },
+              { "label": "8", "cells": ".SSSSSSSSSSSSSSSSSS" },
+              { "label": "9", "cells": ".SSSSSSSSSSSSSSSSSS" },
+              { "label": "10", "cells": ".SSSSSSSSSSSSSSSSSS" },
+              { "label": "11", "cells": ".SSSSSSSSSSSSSSSSSS" },
+              { "cells": "..................." },
+              { "label": "R1", "cells": "SSSSSSSSSSSSSSSSSSS" },
+              { "label": "R2", "cells": "SSSSSSSSSSSSSSSSSSS" },
+              { "label": "R3", "cells": "SSSSSSSSSSSSSSSSSSS" },
+              { "label": "R4", "cells": "SSSSSSSSSSSSSSSSSSS" },
+              { "label": "R5", "cells": "SSSSSSSSSSSSSSSSSSS" },
+              { "label": "R6", "cells": "SSSSSSSSSSSSSSSSSSS" },
+              { "label": "R7", "cells": "SSSSSSSS|||SSSSSSSS", "blockStarts": [null, 12] }
+            ]
+          }
         }
       ]
     },
@@ -45,7 +182,54 @@
       "halls": [
         {
           "seedKey": "delphi-filmpalast/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 25.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": ".....SSSSSSSSSSSSS.......", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": ".SS|||SSSSSSSSSSSS.......", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSS||SSSSSSSSSSSSS||SSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSS|||SSSSSSSSSSSS||SSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSS||SSSSSSSSSSSSS||SSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "......SSSSSSSSSSSS.......", "direction": "RIGHT_TO_LEFT", "blockStarts": [4] },
+              { "label": "7", "cells": "SSS||SSSSSSSSSSSSS||SSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "8", "cells": "SSS|||SSSSSSSSSSSS||SSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "9", "cells": "SSS||SSSSSSSSSSSSS||SSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "10", "cells": "SSS|||SSSSSSSSSSSS||SSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "11", "cells": "SSS||SSSSSSSSSSSSS||SSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "12", "cells": "SSS|||SSSSSSSSSSSS||SSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "13", "cells": ".SS||SSSSSSSSSSSSS||SS...", "direction": "RIGHT_TO_LEFT" },
+              { "cells": "........................." },
+              { "label": "14", "cells": "..SSSSSSSSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "label": "15", "cells": "...SSSSSSSSSSSSSSSSSSS...", "direction": "RIGHT_TO_LEFT" },
+              { "label": "16", "cells": "...SSSSSSSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "label": "17", "cells": "....SSSSSSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "label": "18", "cells": "...SSSSSSSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "label": "19", "cells": "..SSSSSSSSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "label": "20", "cells": "...SSSSSSSSSSSSSSSSSSS...", "direction": "RIGHT_TO_LEFT" },
+              { "label": "21", "cells": "..SSSSSSSSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "label": "22", "cells": "...SSSSSSSSSSSSSSSSSSS...", "direction": "RIGHT_TO_LEFT" },
+              { "label": "23", "cells": "..SSSSSSSSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "label": "24", "cells": "...SSSSSSSSSSSSSSSSSSS...", "direction": "RIGHT_TO_LEFT" },
+              { "label": "25", "cells": "SSSSSSSSSSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "cells": "........................." },
+              { "cells": "........................." },
+              { "label": "R1", "cells": "..........SSSSSSS........", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R2", "cells": "SSS...SSSSSSSSSSSSSS..SSS", "direction": "RIGHT_TO_LEFT" },
+              { "cells": "........................." },
+              { "label": "R3", "cells": ".SSSSSSSSSSSSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R4", "cells": "..SSSSSSSSSSSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R5", "cells": "..SSSSSSSSSSSSSSSSSSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R6", "cells": "..SSSSSSSSSSSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R7", "cells": ".SSSSSSSSSSSSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R8", "cells": "..SSSSSSSSSSSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "R9", "cells": "..SSSSSSSSSSSSSSSSSSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "RX", "cells": "..SSSSSSSSSSSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "RE", "cells": "SSSSSSSSSSSSSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
         }
       ]
     },
@@ -82,20 +266,20 @@
           "screenWidth": 14.0,
           "screenDistance": 1.5,
           "layout": {
-            "formatVersion": 2,
+            "formatVersion": 3,
             "rows": [
-              { "label": "1", "cells": "WWWCS|..SSSSSS" },
-              { "label": "2", "cells": "SSSSS|.SSSSSSS" },
-              { "label": "3", "cells": "SSSSS|SSSSSSSS" },
-              { "label": "4", "cells": "SSSSS|SSSSSSSS" },
-              { "label": "5", "cells": "SSSSS|SSSSSSSS" },
-              { "label": "6", "cells": "SSSSS|SSSSSSSS" },
-              { "label": "7", "cells": "SSSSS|SSSSSSSS" },
-              { "label": "8", "cells": "..SSS|SSSSSSSS" },
-              { "label": "9", "cells": "..SSS|SSSSSSSS" },
-              { "label": "10", "cells": "..SSS|.SSSSSSS" },
-              { "label": "11", "cells": "..SSS|..SSSSSS" },
-              { "label": "12", "cells": "..SSS|...SSSSS" }
+              { "label": "1", "cells": "WWWCS|..SSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": "SSSSS|.SSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSS|SSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSS|SSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSS|SSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "SSSSS|SSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "7", "cells": "SSSSS|SSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "8", "cells": "..SSS|SSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "9", "cells": "..SSS|SSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "10", "cells": "..SSS|.SSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "11", "cells": "..SSS|..SSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "12", "cells": "..SSS|...SSSSS", "direction": "RIGHT_TO_LEFT" }
             ]
           }
         },
@@ -142,14 +326,14 @@
           "screenWidth": 9.0,
           "screenDistance": 2.0,
           "layout": {
-            "formatVersion": 2,
+            "formatVersion": 3,
             "rows": [
-              { "label": "1", "cells": "SSSSSSCW." },
-              { "label": "2", "cells": "SSSSSSSSS" },
-              { "label": "3", "cells": "SSSSSSSSS" },
-              { "label": "4", "cells": "SSSSSSSSS" },
-              { "label": "5", "cells": "SSSSSSSSS" },
-              { "label": "6", "cells": "...FFFFFF" }
+              { "label": "1", "cells": "SSSSSSCW.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "...FFFFFF", "direction": "RIGHT_TO_LEFT" }
             ]
           }
         },
@@ -178,13 +362,13 @@
           "screenWidth": 9.0,
           "screenDistance": 2.0,
           "layout": {
-            "formatVersion": 2,
+            "formatVersion": 3,
             "rows": [
-              { "label": "1", "cells": "SSSSCWS.." },
-              { "label": "2", "cells": "SSSSS...." },
-              { "label": "3", "cells": "SSSSS||SS" },
-              { "label": "4", "cells": "SSSSS||SS" },
-              { "label": "5", "cells": "SSSSSSSSS" }
+              { "label": "1", "cells": "SSSSCWW..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": "SSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSS||SS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSS||SS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSSSS", "direction": "RIGHT_TO_LEFT" }
             ]
           }
         }
@@ -197,23 +381,113 @@
       "halls": [
         {
           "seedKey": "filmtheater-am-friedrichshain/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 27.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 1,
+            "rows": [
+              { "label": "1", "cells": "............SSSSSSSSSSSSS.." },
+              { "label": "2", "cells": "..SSSSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "3", "cells": "SSSSSSSSSSSSSSSSSSSSSSSSSSS" },
+              { "label": "4", "cells": "SSSSSSSSSSSSSSSSSSSSSSSSSSS" },
+              { "label": "5", "cells": "SSSSSSSSSSSSSSSSSSSSSSSSSSS" },
+              { "label": "6", "cells": "SSSSSSSSSSSSSSSSSSSSSSSSSSS" },
+              { "label": "7", "cells": "SSSSSSSSSSSSSSSSSSSSSSSSSSS" },
+              { "label": "8", "cells": "SSSSSSSSSSSSSSSSSSSSSSSSSSS" },
+              { "label": "9", "cells": "SSSSSSSSSSSSSSSSSSSSSSSSSSS" },
+              { "cells": "..........................." },
+              { "label": "10", "cells": "...SSSSSSSSSSSSSSSSSSSSSS.." },
+              { "label": "11", "cells": "...SSSSSSSSSSSSSSSSSSSSSS.." },
+              { "label": "12", "cells": "...SSSSSSSSSSSSSSSSSSSSSS.." },
+              { "label": "13", "cells": "..SSSSSSSSSSSSSSSSSSSSSSS.." },
+              { "label": "14", "cells": ".................SSSSSSSS.." }
+            ]
+          }
         },
         {
           "seedKey": "filmtheater-am-friedrichshain/saal-2",
-          "name": "Saal 2"
+          "name": "Saal 2",
+          "screenWidth": 23.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 1,
+            "rows": [
+              { "label": "3", "cells": "...SSSSSSSSSSSSSSSSS..." },
+              { "label": "4", "cells": "...SSSSSSSSSSSSSSSSS..." },
+              { "label": "5", "cells": "...SSSSSSSSSSSSSSSSS..." },
+              { "label": "6", "cells": "...SSSSSSSSSSSSSSSSS..." },
+              { "label": "7", "cells": "...SSSSSSSSSSSSSSSSS..." },
+              { "label": "8", "cells": "...SSSSSSSSSSSSSSSSS..." },
+              { "label": "9", "cells": "...SSSSSSSSSSSSSSSSS..." },
+              { "label": "10", "cells": "...SSSSSSSSSSSSSSSSS..." },
+              { "label": "11", "cells": "..SSSSSSSSSSSSSSSSSSS.." },
+              { "label": "12", "cells": "..SSSSSSSSSSSSSSSSSSS.." },
+              { "label": "13", "cells": "SSSSSSSSSSSSSSSSSSSSSSS" }
+            ]
+          }
         },
         {
           "seedKey": "filmtheater-am-friedrichshain/saal-3",
-          "name": "Saal 3"
+          "name": "Saal 3",
+          "screenWidth": 13.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 1,
+            "rows": [
+              { "label": "2", "cells": ".SSSSSSSSSSS." },
+              { "label": "3", "cells": "SSSSSSSSSSSSS" },
+              { "label": "4", "cells": "SSSSSSSSSSSSS" },
+              { "label": "5", "cells": "SSSSSSSSSSSSS" },
+              { "label": "6", "cells": "SSSSSSSSSSSSS" },
+              { "label": "7", "cells": "SSSSSSSSSSSSS" },
+              { "label": "8", "cells": ".SSSSSSSSSSSS" },
+              { "label": "9", "cells": "....SSSSSSSSS" }
+            ]
+          }
         },
         {
           "seedKey": "filmtheater-am-friedrichshain/saal-4",
-          "name": "Saal 4"
+          "name": "Saal 4",
+          "screenWidth": 12.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": "..SSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": ".SSSSSSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "7", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "8", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "9", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "10", "cells": "SSSSSSSSSSS.", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
         },
         {
           "seedKey": "filmtheater-am-friedrichshain/saal-5",
-          "name": "Saal 5"
+          "name": "Saal 5",
+          "screenWidth": 12.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": ".SSSSSSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "7", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "8", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "9", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "10", "cells": "SSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "11", "cells": "SSSSSSSSSSS.", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
         }
       ]
     },
@@ -224,7 +498,33 @@
       "halls": [
         {
           "seedKey": "international/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 34.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "...SSSS||SSSSSSSSSSSSSSSS||SSSS..." },
+              { "label": "2", "cells": "..SSSSS||SSSSSSSSSSSSSSSS||SSSSS.." },
+              { "label": "3", "cells": ".SSSSSS||SSSSSSSSSSSSSSSS||SSSSSS." },
+              { "label": "4", "cells": ".SSSSSS||SSSSSSSSSSSSSSSS||SSSSSS." },
+              { "label": "5", "cells": ".SSSSSS||SSSSSSSSSSSSSSSS||SSSSSS." },
+              { "label": "6", "cells": ".SSSSSS||SSSSSSSSSSSSSSSS||SSSSSS." },
+              { "label": "7", "cells": ".SSSSSS||SSSSSSSSSSSSSSSS||SSSSSS." },
+              { "label": "8", "cells": ".SSSSSS||SSSSSSSSSSSSSSSS||SSSSSS." },
+              { "label": "9", "cells": ".SSSSSS||SSSSSSSSSSSSSSSS||SSSSSS." },
+              { "label": "10", "cells": ".SSSSSS||SSSSSSSSSSSSSSSS||SSSSSS." },
+              { "label": "11", "cells": ".SSSSSS||SSSSSSSSSS.SSSSS||SSSSSS." },
+              { "label": "12", "cells": ".SSSSSS||SSSSSSSSSSSSSSSS||SSSSSS." },
+              { "label": "13", "cells": "SSSSSSS||SSSSSSSSSSS.SSSS||SSSSSSS" },
+              { "label": "14", "cells": "SSSSSSS||SSSSSSSSSSSSSSSS||SSSSSSS" },
+              { "label": "15", "cells": "SSSSSSS||SSSSSSSSSSSS.SSS||SSSSSSS" },
+              { "label": "16", "cells": "SSSSSSS||SSSSSSSSSSSSSSSS||SSSSSSS" },
+              { "label": "17", "cells": "SSSSSSS||SSSSSSSSSSSS.SSS||SSSSSSS" },
+              { "label": "18", "cells": "SSSSSSS||SSSSSSSSSSSSSSSS||SSSSSSS" },
+              { "label": "19", "cells": "....CWW||||||||||||||||||||WWC...." }
+            ]
+          }
         }
       ]
     },
@@ -235,23 +535,118 @@
       "halls": [
         {
           "seedKey": "kant-kino/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 15.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "O", "cells": ".SSSSSSSSSSSSS." },
+              { "label": "N", "cells": "SSSSSSSSSSSSSS." },
+              { "label": "M", "cells": ".SSSFFSSSSSSSSS" },
+              { "label": "L", "cells": "SSSSSSSSSFFSSSS" },
+              { "label": "K", "cells": ".SSSSSSSSSSSSS." },
+              { "label": "J", "cells": "SSSSSSSSSSSSSS." },
+              { "label": "I", "cells": "SSFFSSSSSSSSSSS" },
+              { "label": "H", "cells": "SSSSSSSSSSSFFSS" },
+              { "label": "G", "cells": "SSSSSSFFSSSSSSS" },
+              { "label": "F", "cells": "SSSSSSSSSSSSSS." },
+              { "label": "E", "cells": "SSSSSSSSSFFSSSS" },
+              { "label": "D", "cells": "SSSSFFSSSSSSSSS" },
+              { "label": "C", "cells": "SSSSSSSSSSSFFSS" },
+              { "label": "B", "cells": ".SSSSSSSSSSSSSS" },
+              { "label": "A", "cells": ".SSSSSSSSSSSSSS" },
+              { "cells": "..............." },
+              { "cells": "..............." },
+              { "cells": "..............." },
+              { "cells": "..............." },
+              { "label": "T", "cells": "...S.SS.SS.SS.S" },
+              { "label": "S", "cells": "...SS.SS.SS.SS." },
+              { "label": "R", "cells": "...S.SS.SS.SS.S" },
+              { "label": "Q", "cells": "...SS.SS.SS.SS." },
+              { "label": "P", "cells": "..S.SS.SSS.SS.S" }
+            ]
+          }
         },
         {
           "seedKey": "kant-kino/saal-2",
-          "name": "Saal 2"
+          "name": "Saal 2",
+          "screenWidth": 11.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "H", "cells": ".SSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "G", "cells": "SSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "F", "cells": ".SSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "E", "cells": "SSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "D", "cells": "SSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "C", "cells": ".SSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "B", "cells": "SSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "A", "cells": ".SSSSSSSSS.", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
         },
         {
           "seedKey": "kant-kino/saal-3",
-          "name": "Saal 3"
+          "name": "Saal 3",
+          "screenWidth": 5.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "-", "cells": "...FF", "blockStarts": [11] },
+              { "label": "-", "cells": "FF...", "direction": "RIGHT_TO_LEFT", "blockStarts": [13] },
+              { "label": "-", "cells": "...FF", "blockStarts": [9] },
+              { "label": "-", "cells": "FF...", "direction": "RIGHT_TO_LEFT", "blockStarts": [15] },
+              { "label": "-", "cells": "...FF", "blockStarts": [7] },
+              { "label": "-", "cells": "FF...", "direction": "RIGHT_TO_LEFT", "blockStarts": [17] },
+              { "label": "-", "cells": "...FF", "blockStarts": [5] },
+              { "label": "-", "cells": "FF...", "direction": "RIGHT_TO_LEFT", "blockStarts": [19] },
+              { "label": "-", "cells": "...FF", "blockStarts": [3] },
+              { "label": "-", "cells": "FF...", "direction": "RIGHT_TO_LEFT", "blockStarts": [21] },
+              { "label": "-", "cells": "...FF" }
+            ]
+          }
         },
         {
           "seedKey": "kant-kino/saal-4",
-          "name": "Saal 4"
+          "name": "Saal 4",
+          "screenWidth": 7.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": "SSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": "SSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "SSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "7", "cells": "SSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "8", "cells": "SSSSSCW", "direction": "RIGHT_TO_LEFT", "seatLabels": [null, null, null, null, null, null, "R"] },
+              { "label": "9", "cells": "SSSSSS.", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
         },
         {
           "seedKey": "kant-kino/saal-5",
-          "name": "Saal 5"
+          "name": "Saal 5",
+          "screenWidth": 8.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": ".WCSSSSS", "seatLabels": ["R", null, null, null, null, null, null] },
+              { "label": "2", "cells": "SSSSSSSS" },
+              { "label": "3", "cells": ".SSSSSSS" },
+              { "label": "4", "cells": "SSSSSSSS" },
+              { "label": "5", "cells": ".SSSSSSS" },
+              { "label": "6", "cells": "SSSSSSSS" },
+              { "label": "7", "cells": ".SSSSSSS" },
+              { "label": "8", "cells": "SSSSSSSS" }
+            ]
+          }
         }
       ]
     },
@@ -262,7 +657,27 @@
       "halls": [
         {
           "seedKey": "neues-off/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 17.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 1,
+            "rows": [
+              { "label": "1", "cells": ".....SSSSSSS.....", "blockStarts": [4] },
+              { "label": "2", "cells": "SSSSSSSSSSSSSSSSS" },
+              { "label": "3", "cells": "SSSSSSSSSSSSSSSSS" },
+              { "label": "4", "cells": "SSSSSSSSSSSSSSSSS" },
+              { "label": "5", "cells": "SSSSSSSSSSSSSSSSS" },
+              { "label": "6", "cells": "SSSSSSSSSSSSSSSSS" },
+              { "label": "7", "cells": "SSSSSSSSSSSSSSSS." },
+              { "label": "8", "cells": "SSSSSSSSSSSSSSSS." },
+              { "label": "9", "cells": "SSSSSSSSSSSSSSSS." },
+              { "label": "10", "cells": "SSSSSSSSSSSSSSSS." },
+              { "label": "11", "cells": "..SSSSSSSSSSSSSSS" },
+              { "label": "12", "cells": "..SSSSSSSSSSSSS.." },
+              { "label": "13", "cells": "...SSS..........." }
+            ]
+          }
         }
       ]
     },
@@ -273,7 +688,31 @@
       "halls": [
         {
           "seedKey": "odeon/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 16.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 2,
+            "rows": [
+              { "label": "1", "cells": "..SSSSSSSSSSSS.." },
+              { "label": "2", "cells": ".SSSSSSSSSSSSSS." },
+              { "label": "3", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "4", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "5", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "6", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "7", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "8", "cells": "WCSSSSSSSSSSSSCW" },
+              { "label": "9", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "10", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "11", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "12", "cells": "WCSSSSSSSSSSSSCW" },
+              { "label": "13", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "14", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "15", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "16", "cells": "SSSSSSSSSSSSSSSS" },
+              { "label": "17", "cells": "SSSSSSSSSSSSSSS." }
+            ]
+          }
         }
       ]
     },
@@ -284,19 +723,82 @@
       "halls": [
         {
           "seedKey": "passage/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 23.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 1,
+            "rows": [
+              { "label": "1", "cells": ".....SSSSSSSSSSSS......" },
+              { "label": "2", "cells": "..SSSSSSSSSSSSSSSSSS..." },
+              { "label": "3", "cells": ".SSSSSSSSSSSSSSSSSSSS.." },
+              { "label": "4", "cells": ".SSSSSSSSSSSSSSSSSSSS.." },
+              { "label": "5", "cells": "SSSSSSSSSSSSSSSSSSSSSSS" },
+              { "label": "6", "cells": "SSSSSSSSSSSSSSSSSSSSSSS" },
+              { "label": "7", "cells": "SSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "8", "cells": ".SSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "9", "cells": "SSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "10", "cells": "SSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "11", "cells": "SSSSSSSSSSSSSSSSSSSSS.." }
+            ]
+          }
         },
         {
           "seedKey": "passage/saal-2",
-          "name": "Saal 2"
+          "name": "Saal 2",
+          "screenWidth": 7.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 1,
+            "rows": [
+              { "label": "1", "cells": "SSSSSSS" },
+              { "label": "2", "cells": "SSSSSS." },
+              { "label": "3", "cells": "SSSSSSS" },
+              { "label": "4", "cells": "SSSSSS." },
+              { "label": "5", "cells": "SSSSSSS" },
+              { "label": "6", "cells": "SSSSSS." },
+              { "label": "7", "cells": "SSSSSSS" },
+              { "label": "8", "cells": ".SSSSSS" }
+            ]
+          }
         },
         {
           "seedKey": "passage/saal-3",
-          "name": "Saal 3"
+          "name": "Saal 3",
+          "screenWidth": 7.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 1,
+            "rows": [
+              { "label": "1", "cells": "..SSSSS" },
+              { "label": "2", "cells": ".SSSSSS" },
+              { "label": "3", "cells": "..SSSSS" },
+              { "label": "4", "cells": "SSSSSSS" },
+              { "label": "5", "cells": ".SSSSSS" },
+              { "label": "6", "cells": ".SSSSSS" },
+              { "label": "7", "cells": "SSSSSSS" },
+              { "label": "8", "cells": ".SSSSSS" },
+              { "label": "9", "cells": "SSSSSSS" }
+            ]
+          }
         },
         {
           "seedKey": "passage/saal-4",
-          "name": "Saal 4"
+          "name": "Saal 4",
+          "screenWidth": 7.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": "..SSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": "..SSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "..SSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": ".SSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": ".SSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "..SSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "7", "cells": "SSSSSSS", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
         }
       ]
     },
@@ -307,23 +809,96 @@
       "halls": [
         {
           "seedKey": "rollberg/saal-1",
-          "name": "Saal 1"
+          "name": "Saal 1",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 1,
+            "rows": [
+              { "label": "1", "cells": ".SSSSSSSSSSSSS" },
+              { "label": "2", "cells": ".SSSSSSSSSSSSS" },
+              { "label": "3", "cells": ".SSSSSSSSSSSSS" },
+              { "label": "4", "cells": "SSSSSSSSSSSSSS" },
+              { "label": "5", "cells": "SSSSSSSSSSSSSS" },
+              { "label": "6", "cells": "SSSSSSSSSSSSSS" },
+              { "label": "7", "cells": "SSSSSSSSSSSSSS" },
+              { "label": "8", "cells": ".SSSSSSSSSSSSS" },
+              { "label": "9", "cells": ".SSSSSSSSSSSSS" },
+              { "label": "10", "cells": ".SSSSSSSSSS..." },
+              { "label": "11", "cells": ".SSSSSSSSSS..." }
+            ]
+          }
         },
         {
           "seedKey": "rollberg/saal-2",
-          "name": "Saal 2"
+          "name": "Saal 2",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": "...SSSSSSSS...", "direction": "RIGHT_TO_LEFT", "blockStarts": [3] },
+              { "label": "2", "cells": ".SSSSSSSSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT", "blockStarts": [2] },
+              { "label": "4", "cells": "SSSSSSSSSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "7", "cells": "SSSSSSSSSSSSS.", "direction": "RIGHT_TO_LEFT", "blockStarts": [2] },
+              { "label": "8", "cells": "SSSSSSSSSSSSS.", "direction": "RIGHT_TO_LEFT" },
+              { "label": "9", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
         },
         {
           "seedKey": "rollberg/saal-3",
-          "name": "Saal 3"
+          "name": "Saal 3",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": "..SSSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "7", "cells": ".SSSS...SSSSS.", "direction": "RIGHT_TO_LEFT", "blockStarts": [2] }
+            ]
+          }
         },
         {
           "seedKey": "rollberg/saal-4",
-          "name": "Saal 4"
+          "name": "Saal 4",
+          "screenWidth": 14.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": "..SSSSSSSSSS..", "direction": "RIGHT_TO_LEFT", "blockStarts": [3] },
+              { "label": "2", "cells": "SSSSSSSSSSSSS.", "direction": "RIGHT_TO_LEFT", "blockStarts": [2] },
+              { "label": "3", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": "SSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": "SSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT", "blockStarts": [2] },
+              { "label": "6", "cells": ".........SSSS.", "direction": "RIGHT_TO_LEFT", "blockStarts": [2] }
+            ]
+          }
         },
         {
           "seedKey": "rollberg/saal-5",
-          "name": "Saal 5"
+          "name": "Saal 5",
+          "screenWidth": 12.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": "SSSSSSSSSS..", "direction": "RIGHT_TO_LEFT", "blockStarts": [4] },
+              { "label": "2", "cells": "SSSSSSSSS...", "direction": "RIGHT_TO_LEFT", "blockStarts": [5] },
+              { "label": "3", "cells": "SSSSSSSSSS..", "direction": "RIGHT_TO_LEFT", "blockStarts": [4] },
+              { "label": "4", "cells": "SSSSSSSSSS..", "direction": "RIGHT_TO_LEFT", "blockStarts": [3] },
+              { "label": "5", "cells": ".......SSSSS", "direction": "RIGHT_TO_LEFT", "blockStarts": [2] }
+            ]
+          }
         }
       ]
     },
@@ -334,11 +909,41 @@
       "halls": [
         {
           "seedKey": "yorck/yorck",
-          "name": "Yorck"
+          "name": "Yorck",
+          "screenWidth": 25.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 1,
+            "rows": [
+              { "label": "1", "cells": "...SSSSSSSSSSSSSSSSSS...." },
+              { "label": "2", "cells": "..SSSSSSSSSSSSSSSSSSSS..." },
+              { "label": "3", "cells": "SSSSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "4", "cells": "SSSSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "5", "cells": "SSSSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "6", "cells": "SSSSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "7", "cells": "SSSSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "8", "cells": "SSSSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "9", "cells": "SSSSSSSSSSSSSSSSSSSSSSSS." },
+              { "label": "10", "cells": "...SSSSSSSSSSSSSSSSSSSSSS" }
+            ]
+          }
         },
         {
           "seedKey": "yorck/new-yorck",
-          "name": "New Yorck"
+          "name": "New Yorck",
+          "screenWidth": 20.0,
+          "screenDistance": 1.5,
+          "layout": {
+            "formatVersion": 3,
+            "rows": [
+              { "label": "1", "cells": "....SSSSSSSSSSS.....", "direction": "RIGHT_TO_LEFT" },
+              { "label": "2", "cells": "...SSSSSSSSSSSSS....", "direction": "RIGHT_TO_LEFT" },
+              { "label": "3", "cells": ".SSSSSSSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "4", "cells": ".SSSSSSSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "5", "cells": ".SSSSSSSSSSSSSSSSS..", "direction": "RIGHT_TO_LEFT" },
+              { "label": "6", "cells": "SSSSSSSSSSSSSSSSSSSS", "direction": "RIGHT_TO_LEFT" }
+            ]
+          }
         }
       ]
     }

@@ -103,6 +103,8 @@ data class VisitEditUiState(
     val labels: LayoutLabels? = null,
     val screenWidth: Float? = null,
     val screenDistance: Float? = null,
+    /** The screen's sideways shift in seat widths (spec §4.2), for the seat picker's map. */
+    val screenOffset: Float = 0f,
     val seatLabel: SeatLabel? = null,
     val seatMissing: Boolean = false,
     val layoutUnreadable: Boolean = false,

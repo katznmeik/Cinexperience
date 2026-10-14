@@ -6,24 +6,32 @@ import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.LayoutEditSession
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
 import io.github.katznmeik.cinexperience.core.model.LayoutRow
+import io.github.katznmeik.cinexperience.core.model.NumberingDirection
+import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
  * Everything the layout editor saves (spec §6.5): the layout, edited only
  * through its [LayoutEditSession] so seat ids stay correct, the screen geometry
- * and the reference screenshot. Immutable; every edit returns a new draft, which
- * is what the undo history stores.
+ * (width, distance and the sideways [screenOffset]) and the reference
+ * screenshot. Immutable; every edit returns a new draft, which is what the undo
+ * history stores.
+ *
+ * @property screenOffset seat widths, see `Hall.screenOffset`; always
+ *   [ScreenOffsetRules.isValid].
  */
 data class LayoutDraft(
     val session: LayoutEditSession,
     val screenWidth: Float,
     val screenDistance: Float,
     val referenceImagePath: String?,
+    val screenOffset: Float = ScreenOffsetRules.CENTRED,
 ) {
     /** The editor always edits a grid (a hall without one starts with [start]'s default grid). */
     val layout: SeatLayout = checkNotNull(session.layout) { "The editor always has a layout" }
@@ -36,6 +44,7 @@ data class LayoutDraft(
         layout.rows == other.layout.rows &&
             screenWidth == other.screenWidth &&
             screenDistance == other.screenDistance &&
+            screenOffset == other.screenOffset &&
             referenceImagePath == other.referenceImagePath
 
     /**
@@ -64,7 +73,7 @@ data class LayoutDraft(
     /**
      * Grows (new columns copy the last column's cell types) or shrinks at the
      * right, within [1, MAX_COLUMNS]. A screen exactly as wide as the grid stays
-     * as wide as the grid.
+     * as wide as the grid; the screen's offset stays within the narrower grid.
      */
     fun withColumnCount(count: Int): LayoutDraft {
         val target = count.coerceIn(1, MAX_COLUMNS)
@@ -79,16 +88,27 @@ data class LayoutDraft(
         while (edited.layout!!.columnCount > target) edited = edited.removeColumn(edited.layout!!.columnCount - 1)
         val followsGrid = screenWidth == columnCount.toFloat()
         val width = if (followsGrid) target.toFloat() else screenWidth
-        return copy(session = edited, screenWidth = ScreenRules.width(width, target))
+        return copy(
+            session = edited,
+            screenWidth = ScreenRules.width(width, target),
+            screenOffset = ScreenOffsetRules.snap(screenOffset, target),
+        )
     }
 
-    /** Inserts a new row before [index] with the cell types of row [template] (new seats are standard). */
+    /**
+     * Inserts a new row before [index] with the cell types of row [template] (new
+     * seats are standard, without fixed labels), its numbering (continuous or per
+     * block) and its numbering direction; not its label or block starts.
+     */
     fun insertRowCopy(index: Int, template: Int): LayoutDraft {
         if (rowCount >= MAX_ROWS) return this
-        val cells = layout.rows[template.coerceIn(0, rowCount - 1)].cells
+        val templateRow = layout.rows[template.coerceIn(0, rowCount - 1)]
         var edited = session.insertRow(index.coerceIn(0, rowCount), fill = CellType.GAP)
         val at = index.coerceIn(0, rowCount)
-        cells.forEachIndexed { column, cell -> edited = edited.copyCellType(at, column, cell) }
+        templateRow.cells.forEachIndexed { column, cell -> edited = edited.copyCellType(at, column, cell) }
+        edited = edited.updateRow(at) {
+            it.copy(numbering = templateRow.numbering, numberingDirection = templateRow.numberingDirection)
+        }
         return copy(session = edited)
     }
 
@@ -96,13 +116,16 @@ data class LayoutDraft(
     fun removeRow(index: Int): LayoutDraft =
         if (rowCount <= 1 || index !in 0 until rowCount) this else copy(session = session.removeRow(index))
 
-    /** Changes a row's label, numbering, block starts or offset. */
+    /** Changes a row's label, numbering, numbering direction, block starts or offset. */
     fun updateRow(index: Int, transform: (LayoutRow) -> LayoutRow): LayoutDraft =
         if (index !in 0 until rowCount) this else copy(session = session.updateRow(index, transform))
 
     fun withScreenWidth(value: Float): LayoutDraft = copy(screenWidth = ScreenRules.width(value, columnCount))
 
     fun withScreenDistance(value: Float): LayoutDraft = copy(screenDistance = ScreenRules.distance(value))
+
+    /** Moves the screen sideways: snapped to half seats, its centre within the grid (see [ScreenOffsetRules]). */
+    fun withScreenOffset(value: Float): LayoutDraft = copy(screenOffset = ScreenOffsetRules.snap(value, columnCount))
 
     fun withReferenceImage(path: String?): LayoutDraft = copy(referenceImagePath = path)
 
@@ -117,7 +140,8 @@ data class LayoutDraft(
          * The draft for [hall] as stored. A hall without a (readable) layout starts
          * with a [DEFAULT_ROWS] × [DEFAULT_COLUMNS] grid of new seats (ids from the
          * hall's mark); missing screen geometry starts as wide as the grid and
-         * [DEFAULT_SCREEN_DISTANCE] rows away.
+         * [DEFAULT_SCREEN_DISTANCE] rows away. The stored offset is kept (made
+         * valid if it isn't; the steppers then keep it within the grid).
          */
         fun start(hall: Hall): LayoutDraft {
             val started = hall.startLayoutEdit()
@@ -128,6 +152,7 @@ data class LayoutDraft(
                 screenWidth = hall.screenWidth?.takeIf { it > 0f } ?: columns.toFloat(),
                 screenDistance = hall.screenDistance?.takeIf { it >= 0f } ?: DEFAULT_SCREEN_DISTANCE,
                 referenceImagePath = hall.referenceImagePath,
+                screenOffset = ScreenOffsetRules.snap(hall.screenOffset),
             )
         }
     }
@@ -166,18 +191,38 @@ object ScreenRules {
     /** "2.0 rows", "1.0 row". */
     fun distanceText(distance: Float): String =
         "${String.format(Locale.US, "%.1f", distance)} ${if (distance == 1f) "row" else "rows"}"
+
+    /** "Centred", "1.5 seats left", "2 seats right", "1 seat left" (left = as seen from the seats). */
+    fun offsetText(offset: Float): String {
+        if (offset == 0f) return "Centred"
+        val seats = abs(offset)
+        val number = if (seats % 1f == 0f) seats.toInt().toString() else String.format(Locale.US, "%.1f", seats)
+        return "$number ${if (seats == 1f) "seat" else "seats"} ${if (offset < 0f) "left" else "right"}"
+    }
 }
 
-/** One block (seats between aisles) of a row, for the row panel. */
+/**
+ * One block (seats between aisles) of a row, for the row panel. Numbers follow
+ * the row's numbering direction: [firstNumber] is the block's first number in
+ * numbering order (its rightmost seat in a right-to-left row).
+ */
 data class BlockSummary(
+    /** The block counted from the left, as stored (the index of `LayoutRow.blockStartNumbers`). */
     val index: Int,
     /** Custom start number, `null` = automatic. */
     val startNumber: Int?,
     val firstNumber: Int?,
     val lastNumber: Int?,
-    val wheelchairSpaces: Int,
+    /** Fixed seat labels ("R") of the block, in numbering order; they use up no number. */
+    val fixedLabels: List<String> = emptyList(),
+    /** How many of [fixedLabels] come before the block's first number in numbering order. */
+    val leadingFixedLabelCount: Int = 0,
 ) {
-    /** "1–4", "5", "1–3 + 1 wheelchair", "2 wheelchairs". */
+    /**
+     * "1–4", "5", "R", and fixed labels where they fall in numbering order: "1–6 + R"
+     * when the "R" comes last, "R + 1–6" when it comes first. A fixed label between
+     * numbered seats is listed after the numbers.
+     */
     val rangeText: String
         get() {
             val numbers = when {
@@ -185,28 +230,38 @@ data class BlockSummary(
                 firstNumber == lastNumber -> "$firstNumber"
                 else -> "$firstNumber–$lastNumber"
             }
-            val wheelchairs = when (wheelchairSpaces) {
-                0 -> null
-                1 -> "1 wheelchair"
-                else -> "$wheelchairSpaces wheelchairs"
-            }
-            return listOfNotNull(numbers, wheelchairs).joinToString(" + ").ifEmpty { "–" }
+            val leading = fixedLabels.take(leadingFixedLabelCount).joinToString(", ").ifEmpty { null }
+            val trailing = fixedLabels.drop(leadingFixedLabelCount).joinToString(", ").ifEmpty { null }
+            return listOfNotNull(leading, numbers, trailing).joinToString(" + ").ifEmpty { "–" }
         }
 }
 
 /** The selected row's settings and derived labels (the editor's row panel). */
 data class RowSummary(
     val index: Int,
-    /** The row's label as shown (custom or automatic); `null` for a row without seats or label. */
+    /**
+     * The row's label as shown on the map (custom or automatic); `null` for a row
+     * without seats or label, and for a row without a name ([hasNoName]).
+     */
     val label: String?,
+    /** The stored label; "-" ([LayoutRow.NO_NAME]) for a row without a name. */
     val customLabel: String?,
     /** What the row would be called without a custom label. */
     val autoLabel: String?,
     val numbering: SeatNumbering,
     val halfSeatOffset: Boolean,
+    /** The row's blocks from the left, as stored ([BlockSummary.index] = position). */
     val blocks: List<BlockSummary>,
+    val numberingDirection: NumberingDirection = NumberingDirection.LEFT_TO_RIGHT,
 ) {
-    /** "Row 3 · 3 blocks", "Row 4 · no seats". */
+    /** [blocks] in numbering order: the "Starts at" fields follow the direction. */
+    val blocksInNumberingOrder: List<BlockSummary>
+        get() = if (numberingDirection == NumberingDirection.RIGHT_TO_LEFT) blocks.asReversed() else blocks
+
+    /** The row has no name: its label is "-" (spec §4.3); its seats read "Seat 12". */
+    val hasNoName: Boolean get() = customLabel == LayoutRow.NO_NAME
+
+    /** "Row 3 · 3 blocks", "Row 4 · no seats", "Unnamed row · 1 block". */
     val title: String
         get() {
             val blockText = when (blocks.size) {
@@ -214,7 +269,16 @@ data class RowSummary(
                 1 -> "1 block"
                 else -> "${blocks.size} blocks"
             }
-            return "Row ${label ?: "–"} · $blockText"
+            val rowText = if (hasNoName) "Unnamed row" else "Row ${label ?: "–"}"
+            return "$rowText · $blockText"
+        }
+
+    /** Beside the label field: "automatic", "custom", or "no name" for "-". */
+    val labelKindText: String
+        get() = when {
+            customLabel == null -> "automatic"
+            hasNoName -> "no name"
+            else -> "custom"
         }
 }
 
@@ -226,18 +290,21 @@ fun rowSummary(layout: SeatLayout, labels: LayoutLabels, index: Int): RowSummary
     } else {
         null
     }
+    val rightToLeft = row.numberingDirection == NumberingDirection.RIGHT_TO_LEFT
     val blocks = labels.seats.values
         .filter { it.position.row == index }
         .groupBy { it.block }
         .toSortedMap()
         .map { (block, seats) ->
-            val numbered = seats.filter { it.label.kind.isNumbered }
+            val inOrder = seats.sortedBy { it.position.column }.let { if (rightToLeft) it.asReversed() else it }
+            val numbers = inOrder.mapNotNull { it.number }
             BlockSummary(
                 index = block,
                 startNumber = row.blockStartNumbers.getOrNull(block),
-                firstNumber = numbered.firstOrNull()?.label?.number,
-                lastNumber = numbered.lastOrNull()?.label?.number,
-                wheelchairSpaces = seats.size - numbered.size,
+                firstNumber = numbers.firstOrNull(),
+                lastNumber = numbers.lastOrNull(),
+                fixedLabels = inOrder.filter { it.number == null }.map { it.label.seat },
+                leadingFixedLabelCount = inOrder.takeWhile { it.number == null }.size,
             )
         }
     return RowSummary(
@@ -248,6 +315,7 @@ fun rowSummary(layout: SeatLayout, labels: LayoutLabels, index: Int): RowSummary
         numbering = row.numbering,
         halfSeatOffset = row.halfSeatOffset,
         blocks = blocks,
+        numberingDirection = row.numberingDirection,
     )
 }
 

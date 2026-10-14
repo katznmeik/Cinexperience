@@ -6,6 +6,7 @@ import io.github.katznmeik.cinexperience.core.model.HallCategory
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.Visit
@@ -113,6 +114,17 @@ class VisitEditViewModelTest {
         // Halls of other cinemas or unknown halls are ignored.
         vm.selectHall(999)
         assertEquals(201L, vm.state.form.hallId)
+    }
+
+    @Test
+    fun aSeatInARowWithoutANameIsPickedBySeatAlone() {
+        repository.store.value = SampleData.storeWithKantKinoSaal3()
+        val vm = add(SampleData.KANT_KINO_SAAL_3)
+        vm.pickSeat(SampleLayouts.kantKinoSaal3Seat12)
+        assertEquals(SampleLayouts.kantKinoSaal3Seat12, vm.state.form.seatId)
+        assertEquals(SeatLabel(null, 12, SeatKind.SOFA), vm.state.seatLabel)
+        assertEquals("Seat 12", vm.state.seatLabel!!.shortText)
+        assertEquals("Seat 12, sofa", vm.state.seatLabel!!.description)
     }
 
     @Test

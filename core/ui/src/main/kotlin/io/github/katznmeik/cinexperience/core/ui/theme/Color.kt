@@ -5,7 +5,8 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * The monochrome palette (spec §7). Black and white only — the seat colours are
- * the only hues in the app, so the seat map stands out.
+ * the only hues in the app, so the seat map stands out (the one exception:
+ * [CinexColors.editorSelection], the layout editor's selected screen).
  *
  * Always use these tokens (via [CinexTheme.colors] or `MaterialTheme.colorScheme`)
  * instead of hard-coded colours in feature modules.
@@ -30,6 +31,14 @@ data class CinexColors(
     val textMuted: Color,
     val onPrimary: Color,
     val navigationBar: Color,
+    /**
+     * The layout editor's selected screen (bar and handles, spec §6.5): the one hue
+     * outside the seat map (spec §7). The same green as [SeatColors.great]; at least
+     * 3:1 against [canvas] (non-text contrast). Only for that selection.
+     */
+    val editorSelection: Color,
+    /** Symbols drawn on an [editorSelection] fill (the handles' arrows): at least 3:1 against it. */
+    val onEditorSelection: Color,
     val seat: SeatColors,
 )
 
@@ -49,6 +58,17 @@ data class SeatColors(
      * (`surface`) and the background (WCAG non-text contrast) while it still reads as empty.
      */
     val noDataOutline: Color,
+    /**
+     * Seat numbers and seat marks (×, ★, seat kind symbols) on a [great] seat: at
+     * least 4.5:1 against [great], so the numbers read as text.
+     */
+    val onGreat: Color,
+    /** Seat numbers and marks on an [ok] seat: at least 4.5:1 against [ok]. */
+    val onOk: Color,
+    /** Seat numbers and marks on an [avoid] seat: at least 4.5:1 against [avoid]. */
+    val onAvoid: Color,
+    /** Seat numbers and marks on a [noData] seat: at least 4.5:1 against [noData]. */
+    val onNoData: Color,
 )
 
 internal object CinexPalette {
@@ -69,6 +89,9 @@ internal object CinexPalette {
     val SeatAvoid = Color(0xFFD9454B)
     val SeatNoData = Color(0xFF3A3835)
     val SeatNoDataOutline = OutlineStrong
+
+    /** Numbers on "no data" seats: a soft light grey (6.7:1 on the fill), quieter than the text colour. */
+    val SeatNoDataText = Color(0xFFC8C4BC)
 }
 
 val DarkCinexColors = CinexColors(
@@ -83,11 +106,17 @@ val DarkCinexColors = CinexColors(
     textMuted = CinexPalette.TextMuted,
     onPrimary = CinexPalette.OnPrimary,
     navigationBar = CinexPalette.NavigationBar,
+    editorSelection = CinexPalette.SeatGreat,
+    onEditorSelection = CinexPalette.OnPrimary,
     seat = SeatColors(
         great = CinexPalette.SeatGreat,
         ok = CinexPalette.SeatOk,
         avoid = CinexPalette.SeatAvoid,
         noData = CinexPalette.SeatNoData,
         noDataOutline = CinexPalette.SeatNoDataOutline,
+        onGreat = CinexPalette.OnPrimary,
+        onOk = CinexPalette.OnPrimary,
+        onAvoid = CinexPalette.OnPrimary,
+        onNoData = CinexPalette.SeatNoDataText,
     ),
 )

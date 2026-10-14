@@ -13,7 +13,8 @@ import kotlin.math.roundToInt
  * Screen at the top."
  */
 fun seatMapDescription(hallName: String, labels: LayoutLabels): String {
-    val rows = labels.rowLabels.count { it != null }
+    // Rows with seats, also those without a name (they have no row label).
+    val rows = labels.seats.values.distinctBy { it.position.row }.size
     val kinds = labels.seats.values.groupingBy { it.label.kind }.eachCount()
     val special = listOfNotNull(
         kinds[SeatKind.WHEELCHAIR]?.let { countText(it, "wheelchair space") },
@@ -27,8 +28,9 @@ fun seatMapDescription(hallName: String, labels: LayoutLabels): String {
 
 /**
  * Screen-reader summary of the seat colours, e.g. "Seat colours: 12 great,
- * 8 OK, 3 avoid, 160 no data. Favourite: Row 7, Seat 8." Tones without seats are
- * left out; seats missing from [visuals] count as no data.
+ * 8 OK, 3 avoid, 160 no data. Favourite: Row 7, Seat 8." ("Favourite: Seat 12,
+ * sofa." in a row without a name). Tones without seats are left out; seats
+ * missing from [visuals] count as no data.
  */
 fun seatStatesDescription(visuals: Map<SeatId, SeatVisual>, labels: LayoutLabels): String {
     val counts = labels.seats.keys.groupingBy { (visuals[it] ?: SeatVisual.Neutral).tone }.eachCount()

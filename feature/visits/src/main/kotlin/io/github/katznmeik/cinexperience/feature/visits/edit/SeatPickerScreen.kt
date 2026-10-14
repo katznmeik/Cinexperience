@@ -33,7 +33,6 @@ import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
-import io.github.katznmeik.cinexperience.feature.visits.shortText
 
 /**
  * Full-screen seat picker of the visit form: the hall's seat map (tap a seat to
@@ -103,7 +102,8 @@ internal fun SeatPickerScreen(state: VisitEditUiState, picker: SeatPickerState, 
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(CinexTheme.colors.surface)
-                    .padding(start = 10.dp, end = 10.dp, top = 18.dp, bottom = 14.dp),
+                    // Narrow side padding: the seats (and their numbers) get the width.
+                    .padding(start = 6.dp, end = 6.dp, top = 16.dp, bottom = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 SeatMap(
@@ -112,6 +112,7 @@ internal fun SeatPickerScreen(state: VisitEditUiState, picker: SeatPickerState, 
                     contentDescription = seatMapDescription(state.hallName.orEmpty(), labels),
                     screenWidth = state.screenWidth,
                     screenDistance = state.screenDistance,
+                    screenOffset = state.screenOffset,
                     selectedSeatId = picker.seatId,
                     onSeatClick = actions::onPickerTap,
                     maxHeight = 560.dp,
@@ -127,7 +128,9 @@ internal fun SeatPickerScreen(state: VisitEditUiState, picker: SeatPickerState, 
                 )
             }
             Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SectionHeader("Or choose by row and number")
+                // A hall whose rows have no names (Kant Kino Saal 3) lists its seats by number alone.
+                val byNumberOnly = choices.isNotEmpty() && choices.all { it.isUnnamed }
+                SectionHeader(if (byNumberOnly) "Or choose by number" else "Or choose by row and number")
                 SeatPicker(
                     choices = choices,
                     selectedSeatId = picker.seatId,

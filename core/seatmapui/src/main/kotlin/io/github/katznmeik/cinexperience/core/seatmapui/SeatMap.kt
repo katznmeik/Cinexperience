@@ -12,7 +12,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import io.github.katznmeik.cinexperience.core.model.LayoutCell
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
@@ -63,6 +62,14 @@ class SeatMapViewState {
     /** The user's zoom and pan; `null` = fitted view. */
     var userTransform: ViewTransform? by mutableStateOf(null)
 
+    /**
+     * The view held still during a drag that changes the content's size (e.g. the
+     * layout editor's screen handles), so the dragged thing stays under the finger.
+     * It is not a zoom by the user: [isAdjusted] stays false, and after [release]
+     * the map follows its fitted view again.
+     */
+    private var heldTransform: ViewTransform? by mutableStateOf(null)
+
     val isAdjusted: Boolean get() = userTransform != null
 
     /** Back to the fitted view. */
@@ -70,7 +77,16 @@ class SeatMapViewState {
         userTransform = null
     }
 
-    fun transformFor(bounds: ViewBounds): ViewTransform = userTransform?.let(bounds::clamp) ?: bounds.fitted()
+    /** Holds [transform] (the view as drawn) until [release], unless the user has zoomed anyway. */
+    fun hold(transform: ViewTransform) {
+        if (userTransform == null) heldTransform = transform
+    }
+
+    fun release() {
+        heldTransform = null
+    }
+
+    fun transformFor(bounds: ViewBounds): ViewTransform = (userTransform ?: heldTransform)?.let(bounds::clamp) ?: bounds.fitted()
 }
 
 @Composable
@@ -83,9 +99,12 @@ const val MAX_FIT_SCALE: Float = 2.5f
 val MAX_ZOOM_SEAT_SIZE: Dp = 44.dp
 
 /**
- * The seat map of one hall (spec §6.3, §4.3): screen arc at the top, the seat
- * grid with row labels on both sides, staggered rows shifted by half a seat,
- * aisles and gaps as empty space.
+ * The seat map of one hall (spec §6.3, §4.3): the screen as a straight bar at the
+ * top, the seat grid with row labels on both sides, staggered rows shifted by
+ * half a seat, aisles and gaps as empty space. Every seat shows its seat number
+ * or fixed label (from [labels]) once the seats are big enough on screen for it
+ * (see [MIN_SEAT_NUMBER_SIZE]); wheelchair spaces, companion seats and sofa places
+ * show their symbol above it.
  *
  * Drawn on one canvas (no composable per seat) and hit-tested with
  * [SeatMapGeometry.seatAt], so it stays smooth for big halls. It starts fitted
@@ -94,6 +113,8 @@ val MAX_ZOOM_SEAT_SIZE: Dp = 44.dp
  * it). Its height follows the fitted content, up to [maxHeight].
  *
  * @param contentDescription what the map shows, e.g. from [seatMapDescription].
+ * @param screenWidth, screenDistance, screenOffset the hall's screen geometry (spec §4.2);
+ *   the bar is drawn shifted by [screenOffset] seat widths (negative = left).
  * @param seatVisuals colour, favourite and avoid states (spec §5); missing seats are neutral.
  *   When it is not empty, the selected seat's state is part of its screen-reader
  *   description ("Selected: Row 7, Seat 10, great, favourite"). Pair the map with a
@@ -110,6 +131,7 @@ fun SeatMap(
     labels: LayoutLabels = remember(layout) { layout.labels() },
     screenWidth: Float? = null,
     screenDistance: Float? = null,
+    screenOffset: Float = 0f,
     seatVisuals: Map<SeatId, SeatVisual> = emptyMap(),
     selectedSeatId: SeatId? = null,
     onSeatClick: ((SeatId) -> Unit)? = null,
@@ -120,23 +142,43 @@ fun SeatMap(
     val density = LocalDensity.current
     val colors = CinexTheme.colors
     val textMeasurer = rememberTextMeasurer()
-    val labelStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp, color = colors.textMuted)
-    val captionStyle = MaterialTheme.typography.labelSmall.copy(
-        fontSize = 11.sp,
-        lineHeight = 14.sp,
-        letterSpacing = 2.sp,
+    // Text drawn in the map is sized in dp, not sp: it grows with zoom instead of with
+    // the system font size, and it has to fit the rows.
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(
+        fontSize = with(density) { 10.dp.toSp() },
+        lineHeight = with(density) { 12.dp.toSp() },
         color = colors.textMuted,
     )
+    val captionStyle = MaterialTheme.typography.labelSmall.copy(
+        fontSize = with(density) { 10.dp.toSp() },
+        lineHeight = with(density) { 13.dp.toSp() },
+        letterSpacing = with(density) { 2.dp.toSp() },
+        color = colors.textMuted,
+    )
+    val numberStyle = SeatNumberTexts.style(MaterialTheme.typography.labelSmall)
 
-    val labelWidth = remember(labels.rowLabels, labelStyle, density) {
-        rowLabelWidth(textMeasurer, labels.rowLabels, labelStyle, minWidth = with(density) { 14.dp.toPx() })
+    // Measured once per row labels, not per layout or seat state change.
+    val rowLabelTexts = remember(textMeasurer, labels.rowLabels, labelStyle) {
+        measureRowLabels(textMeasurer, labels.rowLabels, labelStyle)
     }
-    val metrics = remember(density, labelWidth) { seatMapMetrics(density, labelWidth) }
-    val geometry = remember(layout, metrics, screenWidth, screenDistance) {
-        SeatMapGeometry(layout, metrics, screenWidth, screenDistance)
+    val labelWidth = remember(rowLabelTexts, density) { rowLabelWidth(rowLabelTexts, minWidth = with(density) { 12.dp.toPx() }) }
+    val caption = remember(textMeasurer, captionStyle) { textMeasurer.measure(SCREEN_CAPTION, captionStyle) }
+    val metrics = remember(density, labelWidth, caption) { seatMapMetrics(density, labelWidth, caption.size.width.toFloat()) }
+    val numbersMinScale = seatNumbersMinScale(metrics.seatSize, density)
+    val geometry = remember(layout, metrics, screenWidth, screenDistance, screenOffset) {
+        SeatMapGeometry(layout, metrics, screenWidth, screenDistance, screenOffset)
     }
     val maxZoomScale = with(density) { MAX_ZOOM_SEAT_SIZE.toPx() } / metrics.seatSize
     val tapTolerance = with(density) { 10.dp.toPx() }
+    // Measured numbers don't depend on the layout: kept across edits and seat states.
+    val numbers = remember(textMeasurer, numberStyle, metrics.seatSize, density) {
+        SeatNumberTexts(textMeasurer, numberStyle, metrics.seatSize, density)
+    }
+    // Prepared once per layout and seat states; selecting a seat only redraws.
+    val drawing = remember(geometry, labels, seatVisuals, colors, rowLabelTexts, caption, numbers, density) {
+        SeatMapDrawing(geometry, labels, seatVisuals, colors, rowLabelTexts, caption, numbers, density)
+    }
+    val selectedState = rememberUpdatedState(selectedSeatId)
 
     val currentGeometry by rememberUpdatedState(geometry)
     val currentOnSeatClick by rememberUpdatedState(onSeatClick)
@@ -202,59 +244,115 @@ fun SeatMap(
                     },
                 )
             }
-            .drawWithCache {
-                val content = SeatMapDrawing(geometry, labels, seatVisuals, colors, textMeasurer, labelStyle, captionStyle, density)
-                onDrawBehind {
-                    val transform = viewState.transformFor(ViewBounds.of(size, geometry.contentBounds, MAX_FIT_SCALE, maxZoomScale))
-                    withTransform({
-                        translate(transform.offset.x, transform.offset.y)
-                        scale(transform.scale, transform.scale, pivot = Offset.Zero)
-                    }) {
-                        with(content) { draw(selectedSeatId) }
-                    }
+            .drawBehind {
+                val transform = viewState.transformFor(ViewBounds.of(size, geometry.contentBounds, MAX_FIT_SCALE, maxZoomScale))
+                // The part of the content inside the canvas: seats outside it are skipped.
+                val visible = Rect(transform.toContent(Offset.Zero), transform.toContent(Offset(size.width, size.height)))
+                withTransform({
+                    translate(transform.offset.x, transform.offset.y)
+                    scale(transform.scale, transform.scale, pivot = Offset.Zero)
+                }) {
+                    with(drawing) { draw(selectedState.value, showNumbers = transform.scale >= numbersMinScale, visible = visible) }
                 }
             },
     )
 }
 
+/** The caption under the seat map's screen bar. */
+private const val SCREEN_CAPTION = "SCREEN"
+
 /** Label of the screen-reader action that offers choosing a seat by row and number. */
 const val CHOOSE_BY_LABEL_ACTION: String = "Choose a seat by row and number"
 
-private fun seatMapMetrics(density: Density, labelWidth: Float): SeatMapMetrics = with(density) {
+/**
+ * Sizes of the map at zoom 1. The map is fitted to its width, so what counts are
+ * the proportions: big seats with narrow gaps and slim row labels leave the most
+ * room for the seat numbers (a 22-column hall gets about 14 dp seats on a
+ * 412 dp phone).
+ */
+internal fun seatMapMetrics(density: Density, labelWidth: Float, captionWidth: Float = 0f): SeatMapMetrics = with(density) {
     SeatMapMetrics(
-        seatSize = 14.dp.toPx(),
-        seatGap = 2.dp.toPx(),
+        seatSize = 16.dp.toPx(),
+        seatGap = 1.5.dp.toPx(),
         rowGap = 3.dp.toPx(),
         labelWidth = labelWidth,
-        labelGap = 2.dp.toPx(),
-        screenTopSpace = 12.dp.toPx(),
-        minScreenGap = 34.dp.toPx(),
-        padding = 2.dp.toPx(),
+        labelGap = 3.dp.toPx(),
+        screenTopSpace = 3.dp.toPx(),
+        minScreenGap = 30.dp.toPx(),
+        // Room for the selection ring and the favourite outline around the outer seats.
+        padding = 4.dp.toPx(),
+        screenCaptionWidth = captionWidth,
     )
+}
+
+/**
+ * Whether a [SeatMap] [width] px wide shows [layout]'s seat numbers at its fitted
+ * zoom, i.e. without zooming in (spec §6.3). Row labels are taken as [labelWidth]
+ * wide (the map's minimum; enough for labels up to "99"). The "SCREEN" caption is
+ * not counted: it only widens the drawing of a screen moved to the grid's edge.
+ */
+fun seatNumbersShownWhenFitted(
+    layout: SeatLayout,
+    width: Float,
+    density: Density,
+    screenWidth: Float? = null,
+    screenOffset: Float = 0f,
+    labelWidth: Float = with(density) { 12.dp.toPx() },
+): Boolean {
+    val metrics = seatMapMetrics(density, labelWidth)
+    // A screen wider than the grid, or moved past its side, widens the content.
+    val geometry = SeatMapGeometry(layout, metrics, screenWidth, null, screenOffset)
+    val fit = ViewBounds.of(Size(width, 1f), geometry.contentBounds, MAX_FIT_SCALE, 1f).fitScale
+    return fit >= seatNumbersMinScale(metrics.seatSize, density)
 }
 
 /** Width of the row label column: the widest label, at least [minWidth]. */
 fun rowLabelWidth(measurer: TextMeasurer, rowLabels: List<String?>, style: TextStyle, minWidth: Float): Float =
-    max(minWidth, rowLabels.filterNotNull().maxOfOrNull { measurer.measure(it, style).size.width.toFloat() } ?: 0f)
+    rowLabelWidth(measureRowLabels(measurer, rowLabels, style), minWidth)
 
-/** The map's drawing in content coordinates, prepared once per layout and visual change. */
+/** Width of the row label column of the [measured] labels (from [measureRowLabels]): the widest, at least [minWidth]. */
+fun rowLabelWidth(measured: List<TextLayoutResult?>, minWidth: Float): Float =
+    max(minWidth, measured.maxOfOrNull { it?.size?.width?.toFloat() ?: 0f } ?: 0f)
+
+/**
+ * [rowLabels] measured in [style] (a row without a label stays `null`). Remember
+ * the result per labels and style: they change far less often than the layout.
+ */
+fun measureRowLabels(measurer: TextMeasurer, rowLabels: List<String?>, style: TextStyle): List<TextLayoutResult?> =
+    rowLabels.map { it?.let { label -> measurer.measure(label, style) } }
+
+/**
+ * The map's drawing in content coordinates, prepared once per layout and seat
+ * states (not per selection or frame). The number and marks of a seat are laid
+ * out the first time they are drawn ([NumberedSeat]).
+ */
 private class SeatMapDrawing(
     private val geometry: SeatMapGeometry,
     labels: LayoutLabels,
-    private val visuals: Map<SeatId, SeatVisual>,
+    visuals: Map<SeatId, SeatVisual>,
     private val colors: CinexColors,
-    measurer: TextMeasurer,
-    labelStyle: TextStyle,
-    captionStyle: TextStyle,
+    /** The row labels, measured ([measureRowLabels]). */
+    private val rowLabels: List<TextLayoutResult?>,
+    private val caption: TextLayoutResult,
+    private val numbers: SeatNumberTexts,
     density: Density,
 ) {
+    /** One seat with what is drawn on top of its fill. */
+    private class SeatDecoration(val rect: Rect, val kind: SeatKind, val visual: SeatVisual, val number: String?) {
+        private var prepared: NumberedSeat? = null
+
+        /** Its number and marks, laid out on first use (only for a seat with a [number]). */
+        fun numbered(numbers: SeatNumberTexts, number: String): NumberedSeat =
+            prepared ?: NumberedSeat(rect, kind, visual, numbers[number]).also { prepared = it }
+    }
+
     private val dp = density.density
     private val seatPaths: Map<SeatTone, Path>
     private val noDataRims = Path()
-    private val decorated = ArrayList<Triple<Rect, SeatKind, SeatVisual>>()
-    private val rowLabels: List<TextLayoutResult?> = labels.rowLabels.map { it?.let { label -> measurer.measure(label, labelStyle) } }
-    private val caption = measurer.measure("SCREEN", captionStyle)
-    private val screenArc = Path()
+    private val seats = ArrayList<SeatDecoration>()
+
+    /** How far a seat's decoration (favourite outline, corner badges) reaches beyond its cell. */
+    private val decorationReach = geometry.metrics.seatSize * 0.25f
 
     init {
         val paths = HashMap<SeatTone, Path>()
@@ -266,19 +364,26 @@ private class SeatMapDrawing(
                 val rect = geometry.cellRect(row, column)
                 paths.getOrPut(visual.tone) { Path() }.addRoundRect(seatRoundRect(rect))
                 if (visual.tone == SeatTone.NO_DATA) noDataRims.addRoundRect(seatRoundRect(rect.noDataRim(dp)))
-                if (cell.kind != SeatKind.STANDARD || visual.isFavourite || visual.tone == SeatTone.AVOID) {
-                    decorated += Triple(rect, cell.kind, visual)
-                }
+                seats += SeatDecoration(rect, cell.kind, visual, labels.labelOf(cell.id)?.seatNumberText)
             }
         }
         seatPaths = paths
-        val bulge = min((geometry.screenRight - geometry.screenLeft) * 0.045f, 10f * dp)
-        screenArc.moveTo(geometry.screenLeft, geometry.screenY)
-        screenArc.quadraticTo(geometry.screenCenterX, geometry.screenY - 2f * bulge, geometry.screenRight, geometry.screenY)
     }
 
-    fun DrawScope.draw(selected: SeatId?) {
-        drawPath(screenArc, colors.text, style = Stroke(width = 3f * dp, cap = StrokeCap.Round))
+    /**
+     * With [showNumbers], seats show their number with their marks in a band above
+     * it ([NumberedSeat]); otherwise the marks are drawn as symbols ([drawSeatMarks]). Seat decorations outside [visible] (the
+     * content inside the canvas) are skipped.
+     */
+    fun DrawScope.draw(selected: SeatId?, showNumbers: Boolean, visible: Rect) {
+        // The screen: a straight bar (spec §7), centred over its position.
+        drawLine(
+            colors.text,
+            Offset(geometry.screenLeft, geometry.screenY),
+            Offset(geometry.screenRight, geometry.screenY),
+            strokeWidth = 3f * dp,
+            cap = StrokeCap.Round,
+        )
         drawText(caption, topLeft = Offset(geometry.screenCenterX - caption.size.width / 2f, geometry.screenY + 5f * dp))
 
         rowLabels.forEachIndexed { row, text ->
@@ -289,7 +394,18 @@ private class SeatMapDrawing(
 
         seatPaths.forEach { (tone, path) -> drawPath(path, colors.seat.colorOf(tone)) }
         drawPath(noDataRims, colors.seat.noDataOutline, style = Stroke(width = NO_DATA_RIM_WIDTH * dp))
-        decorated.forEach { (rect, kind, visual) -> drawSeatMarks(rect, kind, visual, colors) }
+        val area = visible.inflate(decorationReach)
+        for (seat in seats) {
+            if (!seat.rect.overlaps(area)) continue
+            val number = seat.number
+            when {
+                showNumbers && number != null -> with(seat.numbered(numbers, number)) {
+                    draw(colors, on = colors.seat.onColorOf(seat.visual.tone))
+                }
+                seat.kind != SeatKind.STANDARD || seat.visual.isFavourite || seat.visual.tone == SeatTone.AVOID ->
+                    drawSeatMarks(seat.rect, seat.kind, seat.visual, colors)
+            }
+        }
 
         selected?.let { id ->
             geometry.layout.positionOf(id)?.let { position ->
@@ -304,16 +420,15 @@ private class SeatMapDrawing(
 }
 
 /**
- * The kind symbol, favourite star and avoid × of one seat. On a standard seat the
- * mark sits in the middle; on a wheelchair, companion or sofa seat the symbol
- * stays and the marks become small badges in the corners.
+ * The kind symbol, favourite star and avoid × of a seat shown without a number
+ * (the legend, and every seat while the map is zoomed out too far for numbers).
+ * On a standard seat the mark sits in the middle; on a wheelchair, companion or
+ * sofa seat the symbol stays and the marks become small badges in the corners.
+ * Seats showing their number use [NumberedSeat].
  */
 internal fun DrawScope.drawSeatMarks(rect: Rect, kind: SeatKind, visual: SeatVisual, colors: CinexColors) {
-    val onSeat = if (visual.tone == SeatTone.NO_DATA) colors.text else colors.onPrimary
-    if (visual.isFavourite) {
-        val outline = rect.inflate(rect.width * 0.1f)
-        drawPath(Path().apply { addRoundRect(seatRoundRect(outline)) }, colors.text, style = Stroke(width = rect.width * 0.1f))
-    }
+    val onSeat = colors.seat.onColorOf(visual.tone)
+    if (visual.isFavourite) drawFavouriteOutline(rect, colors)
     // Badges sit in the seat's top corners, barely past its edge (less than the seat gap).
     val badge = rect.width * 0.24f
     val inset = rect.width * 0.2f
@@ -330,7 +445,7 @@ internal fun DrawScope.drawSeatMarks(rect: Rect, kind: SeatKind, visual: SeatVis
                 // A favourite marked "avoid" keeps its × as a badge (colour-blind cue).
                 if (visual.tone == SeatTone.AVOID) avoidBadge()
             }
-            visual.tone == SeatTone.AVOID -> strokeGlyph(SeatGlyphs.cross, rect.innerSquare(0.62f), colors.surface, strokeWidth = 3.2f)
+            visual.tone == SeatTone.AVOID -> strokeGlyph(SeatGlyphs.cross, rect.innerSquare(0.62f), onSeat, strokeWidth = 3.2f)
         }
         return
     }

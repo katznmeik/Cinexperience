@@ -19,6 +19,10 @@ import java.time.Instant
  */
 internal class BackupVersion1Test : BackupTestBase() {
 
+    // The fixture is compared row by row, so the bundled seed must not add to it after an
+    // import (it would as soon as seedVersion moves past the fixture's version 2).
+    override val seedAfterImport: Boolean = false
+
     private val fixture = File("src/test/resources/backup/v1")
     private val manifest = File(fixture, "manifest.json").readText()
     private val data = File(fixture, "data.json").readText()

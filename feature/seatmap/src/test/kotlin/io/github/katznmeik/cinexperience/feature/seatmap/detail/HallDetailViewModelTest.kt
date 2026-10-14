@@ -10,6 +10,7 @@ import io.github.katznmeik.cinexperience.core.seatmapui.SeatVisual
 import io.github.katznmeik.cinexperience.feature.seatmap.RatedHallFixture
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
@@ -54,6 +55,15 @@ class HallDetailViewModelTest {
             assertEquals("delphi LUX · 183 seats · 4 visits", hallMetaText(this))
             assertNull(selectedSeat)
         }
+    }
+
+    @Test
+    fun theScreenOffsetReachesTheMap() = runTest {
+        assertEquals(0f, loaded(SampleData.DELPHI_LUX_SAAL_1).second().screenOffset)
+        repository.store.value = repository.store.value.let { s ->
+            s.copy(halls = s.halls.map { if (it.id == SampleData.DELPHI_LUX_SAAL_1) it.copy(screenOffset = -2.5f) else it })
+        }
+        assertEquals(-2.5f, loaded(SampleData.DELPHI_LUX_SAAL_1).second().screenOffset)
     }
 
     @Test
@@ -129,6 +139,25 @@ class HallDetailViewModelTest {
         }
         assertNull(visits[1].seatLabel) // its seat is no longer in the layout
         assertEquals("2 Oct 2026", visits[1].detailText())
+    }
+
+    /** Kant Kino Saal 3: rows without a name are left out of the seat card and the visit list. */
+    @Test
+    fun seatsInRowsWithoutANameAreShownBySeatAlone() = runTest {
+        repository = FakeCinexRepository(SampleData.storeWithKantKinoSaal3())
+        val seat = SampleLayouts.kantKinoSaal3Seat12
+        val visit = Visit(
+            id = 810, hallId = SampleData.KANT_KINO_SAAL_3, date = LocalDate.of(2026, 10, 3), seatId = seat,
+            screeningFormat = ScreeningFormat.OMU,
+        )
+        repository.store.value = repository.store.value.copy(visits = repository.store.value.visits + visit)
+        val (vm, state) = loaded(SampleData.KANT_KINO_SAAL_3)
+        vm.onSeatClick(seat)
+        with(state().selectedSeat!!) {
+            assertEquals(SeatLabel(null, 12, SeatKind.SOFA), label)
+            assertEquals("SEAT 12", titleText())
+        }
+        assertEquals("3 Oct 2026 · Seat 12 · OmU", state().visits.single().detailText())
     }
 
     @Test

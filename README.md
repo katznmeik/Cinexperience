@@ -14,7 +14,8 @@ The full product specification is in [`docs/SPEC.md`](docs/SPEC.md).
   name or most visited; add, rename or delete your own cinemas and halls.
 - **Seat maps:** draw each hall's layout in a grid editor, tracing a screenshot
   of the Yorck app's seat plan (split and staggered rows, wheelchair, companion
-  and sofa seats, screen size and distance). The delphi LUX halls come drawn.
+  and sofa seats, screen size and distance). All 38 halls come drawn from
+  Yorck's seat plans, with Yorck's row labels and seat numbers.
 - **Visits:** date, film, screening format, your seat (tap it on the map or
   choose row and number), seat rating, six hall ratings, cinema ratings, a note
   and a photo.
@@ -111,6 +112,23 @@ extension" style hints. There is no lint baseline.
 R8 / minification is off in v1 (the APK is small and only sideloaded); turning it
 on later needs keep rules for kotlinx.serialization and Room checked on a device.
 
+### Seed layouts
+
+The preloaded layouts in `core/data/src/main/assets/seed/yorck.json` are
+generated from yorck.de seat plans saved per hall (`<cinema>/hall-<name>.seatplan.json`
+and `.dom.json`; this crawl is not part of the repository):
+
+```sh
+python3 -I scripts/seed/yorck_seatplan_to_layout.py <crawl dir> \
+    core/data/src/main/assets/seed/yorck.json \
+    core/data/src/test/resources/seed/yorck-seat-numbers.json
+```
+
+It rewrites the halls' layouts in the seed and the fixture of Yorck's seat
+numbers that `YorckSeedTest` checks every seat against. Raise `seedVersion` by
+hand afterwards, then compare `feature/seatmap/build/outputs/roborazzi/yorck_seed_*.png`
+(`YorckSeedScreenshotTest`) with the seat plans on yorck.de.
+
 ### CI builds
 
 Every push to a `claude/**` branch and every pull request runs GitHub Actions
@@ -120,6 +138,10 @@ release). The run's
 artifacts contain the APK (`cinexperience-<sha>.apk`), the screenshots and the
 test reports. These APKs are for testing on the PC emulator or the phone (spec
 §14.2, §14.3); releases come from the release workflow below.
+
+Settings → About shows the build ID next to the version, e.g. `Version 1.0.0 ·
+Build 413a117`. It is the short commit hash the APK was built from, the same as
+`<sha>` in the APK file name, so name it in bug reports.
 
 ### Versions and releases
 

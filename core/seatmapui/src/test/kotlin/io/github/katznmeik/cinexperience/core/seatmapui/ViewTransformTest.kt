@@ -112,6 +112,28 @@ class ViewTransformTest {
     }
 
     @Test
+    fun theTopInsetStaysFreeAtEveryZoom() {
+        // The same content with 30 px kept free above it (the editor's screen label).
+        val inset = ViewBounds.of(Size(400f, 300f), content, maxFitScale = 2.5f, maxZoomScale = 3f, topInset = 30f)
+        assertEquals(2f, inset.fitScale) // the width alone decides the fit
+        assertOffset(Offset(0f, 30f), inset.fitted().toScreen(content.topLeft))
+        // Zoomed in and pulled down: the content's top stops at the inset ...
+        val zoomed = inset.clamp(ViewTransform(4f, Offset(500f, 500f)))
+        assertOffset(Offset(0f, 30f), zoomed.toScreen(content.topLeft))
+        assertTrue(inset.canPan(zoomed))
+        // ... and pushed up, its bottom still reaches the viewport's bottom.
+        val up = inset.clamp(ViewTransform(4f, Offset(-5000f, -5000f)))
+        assertEquals(300f, up.toScreen(content.bottomRight).y, 0.001f)
+
+        // Zoomed out as far as it goes, all content fits below the inset: 300 high in 270 px.
+        val tall = ViewBounds.of(Size(400f, 300f), Rect(0f, 0f, 100f, 300f), maxFitScale = 2.5f, maxZoomScale = 3f, topInset = 30f)
+        assertEquals(0.9f, tall.minScale, 0.001f)
+        val all = tall.clamp(ViewTransform(0.9f, Offset.Zero))
+        assertEquals(30f, all.toScreen(Offset.Zero).y, 0.001f)
+        assertFalse(tall.canPan(all))
+    }
+
+    @Test
     fun doubleTapZoomsInThenBackToTheFittedView() {
         val zoomedIn = bounds.toggleZoom(bounds.fitted(), Offset(200f, 100f))!!
         assertEquals(5f, zoomedIn.scale) // 2.5 × fit

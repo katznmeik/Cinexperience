@@ -57,7 +57,8 @@ enum class CellType {
 
 /**
  * What kind of place a `SEAT` cell is. Yorck hall plans mark wheelchair spaces,
- * companion seats and sofa places; they are real, rateable seats. The kind is a
+ * companion seats and sofa places; they are real, rateable seats, and they are
+ * numbered like every other seat (spec §4.3, see [labels]). The kind is a
  * property of the seat, not a cell type: changing it keeps the seat's [SeatId].
  *
  * @property patternChar the seat's character in a [LayoutPattern].
@@ -65,18 +66,15 @@ enum class CellType {
 enum class SeatKind(val patternChar: Char) {
     STANDARD('S'),
 
-    /** A wheelchair space. Not counted in the row's seat numbering (see [labels]). */
+    /** A wheelchair space. */
     WHEELCHAIR('W'),
 
-    /** A companion seat (German "Begleitsitz"), numbered like a standard seat. */
+    /** A companion seat (German "Begleitsitz"). */
     COMPANION('C'),
 
-    /** A sofa place, numbered like a standard seat. */
+    /** A sofa place. */
     SOFA('F'),
     ;
-
-    /** Whether the seat gets a seat number; wheelchair spaces are counted separately. */
-    val isNumbered: Boolean get() = this != WHEELCHAIR
 
     companion object {
         fun fromPatternChar(char: Char): SeatKind? = entries.firstOrNull { it.patternChar == char }
@@ -87,8 +85,48 @@ enum class SeatKind(val patternChar: Char) {
 sealed interface LayoutCell {
     val type: CellType
 
-    data class Seat(val id: SeatId, val kind: SeatKind = SeatKind.STANDARD) : LayoutCell {
+    /**
+     * A seat.
+     *
+     * @property fixedLabel the seat's label where Yorck doesn't number it (spec §4.3),
+     *   e.g. "R" for a wheelchair space: shown instead of a number, and the seat
+     *   doesn't use up a number (see [labels]). It belongs to the seat: it moves
+     *   with it and survives a change of [kind]. A seat painted as a gap or aisle
+     *   and back as a seat in the same [LayoutEditSession] gets its id and fixed
+     *   label back; a seat deleted with its row or column loses it (a seat drawn
+     *   there again is a new, numbered seat). 1 to [MAX_FIXED_LABEL_LENGTH]
+     *   characters, without surrounding spaces, control or format characters.
+     *   `null` (the rule) = the seat is numbered.
+     */
+    data class Seat(
+        val id: SeatId,
+        val kind: SeatKind = SeatKind.STANDARD,
+        val fixedLabel: String? = null,
+    ) : LayoutCell {
+        init {
+            require(fixedLabel == null || isValidFixedLabel(fixedLabel)) {
+                "A fixed seat label must have 1–$MAX_FIXED_LABEL_LENGTH characters, no surrounding spaces and no " +
+                    "control or format characters, was '$fixedLabel'"
+            }
+        }
+
         override val type: CellType get() = CellType.SEAT
+
+        companion object {
+            /** Longest [fixedLabel]: it has to fit inside the seat on the map. */
+            const val MAX_FIXED_LABEL_LENGTH: Int = 4
+
+            /**
+             * 1 to [MAX_FIXED_LABEL_LENGTH] characters, not blank, without surrounding
+             * spaces and without ISO control or format (Unicode `Cf`, e.g. zero-width
+             * or bidi) characters, which would be invisible or garble the map.
+             */
+            fun isValidFixedLabel(label: String): Boolean =
+                label.isNotBlank() &&
+                    label.length <= MAX_FIXED_LABEL_LENGTH &&
+                    label == label.trim() &&
+                    label.none { it.isISOControl() || Character.getType(it) == Character.FORMAT.toInt() }
+        }
     }
 
     /** Empty space, e.g. the missing ends of a short row. Does not split a row into blocks. */
@@ -112,13 +150,30 @@ enum class SeatNumbering {
 }
 
 /**
+ * The direction in which a row's seats are numbered, as drawn with the screen at
+ * the top (spec §4.3). Yorck uses both, even within one cinema.
+ */
+enum class NumberingDirection {
+    /** 1 2 3 4: the leftmost seat comes first. */
+    LEFT_TO_RIGHT,
+
+    /** 4 3 2 1: the rightmost seat comes first. */
+    RIGHT_TO_LEFT,
+}
+
+/**
  * One grid row.
  *
- * @property label custom row label (e.g. "A"); `null` means auto-numbered.
- * @property blockStartNumbers optional start number per block (index = block index,
- *   counted left to right); a `null` or missing entry means "automatic". See [labels].
+ * @property label custom row label (e.g. "C", "R1"); `null` means auto-numbered;
+ *   [NO_NAME] ("-", Yorck's convention) means the row has no name ([hasNoName]).
+ * @property blockStartNumbers optional start number per block; a `null` or missing
+ *   entry means "automatic". The index is the block counted from the left as
+ *   stored, whatever the [numberingDirection]; the value is the number of that
+ *   block's first numbered seat in numbering order, i.e. of its rightmost seat
+ *   when the row runs right to left. See [labels].
  * @property halfSeatOffset the whole row is drawn shifted half a seat to the right
  *   (staggered rows). Alternating rows with and without the offset model staggering.
+ * @property numberingDirection which way the row's seats are numbered.
  */
 data class LayoutRow(
     val cells: List<LayoutCell>,
@@ -126,6 +181,7 @@ data class LayoutRow(
     val numbering: SeatNumbering = SeatNumbering.CONTINUOUS,
     val blockStartNumbers: List<Int?> = emptyList(),
     val halfSeatOffset: Boolean = false,
+    val numberingDirection: NumberingDirection = NumberingDirection.LEFT_TO_RIGHT,
 ) {
     init {
         require(label == null || label.isNotBlank()) { "Row label must be null or non-blank" }
@@ -134,7 +190,48 @@ data class LayoutRow(
         }
     }
 
+    /**
+     * The row has no name (spec §4.3, e.g. each double sofa of Kant Kino Saal 3):
+     * its stored [label] is [NO_NAME]. Its seats are shown by seat alone ("Seat 12"),
+     * the map draws no row label beside it, and it still counts as a seat row for
+     * the automatic numbering of the rows after it.
+     */
+    val hasNoName: Boolean get() = label == NO_NAME
+
     val seatIds: List<SeatId> get() = cells.mapNotNull { (it as? LayoutCell.Seat)?.id }
+
+    /** The fixed label of each seat (`null` = numbered), aligned with [seatIds]: left to right. */
+    val fixedLabels: List<String?> get() = cells.filterIsInstance<LayoutCell.Seat>().map { it.fixedLabel }
+
+    /**
+     * The row's blocks (spec §4.3 "split rows") from the left, each as the columns
+     * of its seats from the left. Only aisles split a row (gaps don't); leading,
+     * trailing and repeated aisles don't create empty blocks.
+     */
+    val blocks: List<List<Int>>
+        get() {
+            val blocks = ArrayList<MutableList<Int>>()
+            var aisleSinceLastSeat = false
+            cells.forEachIndexed { column, cell ->
+                when (cell) {
+                    LayoutCell.Aisle -> if (blocks.isNotEmpty()) aisleSinceLastSeat = true
+                    LayoutCell.Gap -> Unit
+                    is LayoutCell.Seat -> {
+                        if (blocks.isEmpty() || aisleSinceLastSeat) {
+                            blocks += ArrayList<Int>()
+                            aisleSinceLastSeat = false
+                        }
+                        blocks.last() += column
+                    }
+                }
+            }
+            return blocks
+        }
+
+    companion object {
+        /** The stored [label] of a row without a name: "-", as in Yorck's booking data. */
+        const val NO_NAME = "-"
+    }
 }
 
 /** A cell position in the grid; row 0 is the row closest to the screen. */
@@ -222,20 +319,38 @@ data class SeatLayout(
 
     /**
      * Turns one non-seat cell into a seat with the given, currently unused [id]
-     * (used by [LayoutEditSession] to give a seat its original id back).
+     * and [fixedLabel] (used by [LayoutEditSession] to give a seat its original id
+     * and fixed label back).
      */
-    fun withSeat(row: Int, column: Int, id: SeatId, kind: SeatKind = SeatKind.STANDARD): SeatLayout {
+    fun withSeat(
+        row: Int,
+        column: Int,
+        id: SeatId,
+        kind: SeatKind = SeatKind.STANDARD,
+        fixedLabel: String? = null,
+    ): SeatLayout {
         require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
         require(id !in seatPositions) { "$id is already used in this layout" }
-        return SeatLayout(replaceCell(row, column, LayoutCell.Seat(id, kind)), maxOf(nextSeatId, id.value + 1))
+        return SeatLayout(replaceCell(row, column, LayoutCell.Seat(id, kind, fixedLabel)), maxOf(nextSeatId, id.value + 1))
     }
 
-    /** Changes the [SeatKind] of the seat at ([row], [column]); the seat keeps its id. */
+    /** Changes the [SeatKind] of the seat at ([row], [column]); the seat keeps its id and fixed label. */
     fun withSeatKind(row: Int, column: Int, kind: SeatKind): SeatLayout {
         val seat = cell(row, column)
         require(seat is LayoutCell.Seat) { "Cell ($row, $column) is not a seat" }
         if (seat.kind == kind) return this
         return copy(rows = replaceCell(row, column, seat.copy(kind = kind)))
+    }
+
+    /**
+     * Gives the seat at ([row], [column]) a fixed label instead of a number, or its
+     * number back with `null` (see [LayoutCell.Seat.fixedLabel]). The seat keeps its id.
+     */
+    fun withFixedLabel(row: Int, column: Int, label: String?): SeatLayout {
+        val seat = cell(row, column)
+        require(seat is LayoutCell.Seat) { "Cell ($row, $column) is not a seat" }
+        if (seat.fixedLabel == label) return this
+        return copy(rows = replaceCell(row, column, seat.copy(fixedLabel = label)))
     }
 
     private fun replaceCell(row: Int, column: Int, cell: LayoutCell): List<LayoutRow> =
@@ -256,12 +371,37 @@ data class SeatLayout(
         return SeatLayout(newRows, nextSeatId + delta)
     }
 
+    /**
+     * This layout with its seat ids renumbered row-major from [FIRST_SEAT_ID] (and
+     * [nextSeatId] right after them) and each row's [LayoutRow.blockStartNumbers]
+     * normalised (entries beyond the row's blocks and trailing `null`s, which mean
+     * nothing for the labels, are dropped); everything else unchanged. Two layouts
+     * with equal canonical [rows] have the same structure (cells, seat kinds, fixed
+     * labels, row settings) and differ at most in their seat ids, e.g. a seed
+     * layout and the same layout shifted above a hall's id mark ([withIdsShiftedBy]).
+     */
+    fun withCanonicalSeatIds(): SeatLayout {
+        var next = FIRST_SEAT_ID
+        val newRows = rows.map { row ->
+            row.copy(
+                cells = row.cells.map { if (it is LayoutCell.Seat) it.copy(id = SeatId(next++)) else it },
+                blockStartNumbers = row.blockStartNumbers.take(row.blocks.size).dropLastWhile { it == null },
+            )
+        }
+        return SeatLayout(newRows, next)
+    }
+
+    /** Whether [other] has the same structure as this layout, ignoring seat ids (see [withCanonicalSeatIds]). */
+    fun hasSameStructureAs(other: SeatLayout): Boolean =
+        withCanonicalSeatIds().rows == other.withCanonicalSeatIds().rows
+
     /** Cycles one cell SEAT → GAP → AISLE → SEAT (spec §6.5). */
     fun cycleCell(row: Int, column: Int): SeatLayout = withCellType(row, column, cell(row, column).type.next())
 
     /**
-     * Changes a row's label, numbering, block start numbers or offset. The
-     * transform must leave [LayoutRow.cells] untouched; use [withCellType] for cells.
+     * Changes a row's label, numbering, numbering direction, block start numbers or
+     * offset. The transform must leave [LayoutRow.cells] untouched; use
+     * [withCellType] for cells.
      */
     fun updateRow(index: Int, transform: (LayoutRow) -> LayoutRow): SeatLayout {
         val old = rows[index]
@@ -359,7 +499,7 @@ private class IdAllocator(var next: Int) {
  * Compact text form of one row's cells, used by the stored layout JSON and the
  * seed asset: `S` = standard seat, `W` = wheelchair space, `C` = companion seat,
  * `F` = sofa place (see [SeatKind.patternChar]), `.` = gap, `|` = aisle.
- * Example: `".SSS|SSSS|SWC."`.
+ * Example: `".SSS|SSSS|SWC."`. Seat ids and fixed labels are stored beside it.
  */
 object LayoutPattern {
     const val SEAT: Char = 'S'
