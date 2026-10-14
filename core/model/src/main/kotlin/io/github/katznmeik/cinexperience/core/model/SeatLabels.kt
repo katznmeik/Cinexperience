@@ -1,19 +1,19 @@
 package io.github.katznmeik.cinexperience.core.model
 
 /**
- * The printed label of a seat, e.g. row "F", seat 12.
+ * The printed label of a seat, e.g. row "6", seat 12.
  *
  * Wheelchair spaces are not counted in the seat numbering; their [number] counts
  * the wheelchair spaces of the row instead ("Row 1, Wheelchair 2").
  */
 data class SeatLabel(val row: String, val number: Int, val kind: SeatKind = SeatKind.STANDARD) {
-    /** English display form, e.g. "Row F, Seat 12" or "Row 1, Wheelchair 2". */
+    /** English display form, e.g. "Row 6, Seat 12" or "Row 1, Wheelchair 2". */
     val displayText: String
         get() = if (kind == SeatKind.WHEELCHAIR) "Row $row, Wheelchair $number" else "Row $row, Seat $number"
 
     /**
      * [displayText] that also names a companion or sofa seat, e.g.
-     * "Row F, Seat 12, companion seat". For accessibility and seat details.
+     * "Row 6, Seat 12, companion seat". For accessibility and seat details.
      */
     val description: String
         get() = when (kind) {

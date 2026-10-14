@@ -1,4 +1,4 @@
-package io.github.katznmeik.cinexperience.feature.seatmap.map
+package io.github.katznmeik.cinexperience.core.seatmapui
 
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Spacer
@@ -77,10 +77,10 @@ class SeatMapViewState {
 fun rememberSeatMapViewState(): SeatMapViewState = remember { SeatMapViewState() }
 
 /** The fitted view never magnifies small halls beyond this. */
-internal const val MAX_FIT_SCALE: Float = 2.5f
+const val MAX_FIT_SCALE: Float = 2.5f
 
 /** Zooming in goes at least this far: a seat about this wide on screen. */
-internal val MAX_ZOOM_SEAT_SIZE: Dp = 44.dp
+val MAX_ZOOM_SEAT_SIZE: Dp = 44.dp
 
 /**
  * The seat map of one hall (spec §6.3, §4.3): screen arc at the top, the seat
@@ -223,7 +223,7 @@ private fun seatMapMetrics(density: Density, labelWidth: Float): SeatMapMetrics 
 }
 
 /** Width of the row label column: the widest label, at least [minWidth]. */
-internal fun rowLabelWidth(measurer: TextMeasurer, rowLabels: List<String?>, style: TextStyle, minWidth: Float): Float =
+fun rowLabelWidth(measurer: TextMeasurer, rowLabels: List<String?>, style: TextStyle, minWidth: Float): Float =
     max(minWidth, rowLabels.filterNotNull().maxOfOrNull { measurer.measure(it, style).size.width.toFloat() } ?: 0f)
 
 /** The map's drawing in content coordinates, prepared once per layout and visual change. */

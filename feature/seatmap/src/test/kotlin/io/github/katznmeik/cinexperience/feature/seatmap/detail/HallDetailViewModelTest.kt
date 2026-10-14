@@ -1,7 +1,10 @@
 package io.github.katznmeik.cinexperience.feature.seatmap.detail
 
+import io.github.katznmeik.cinexperience.core.model.Rating
+import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
+import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.SampleData
@@ -16,6 +19,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.LocalDate
 
 class HallDetailViewModelTest {
 
@@ -48,10 +52,10 @@ class HallDetailViewModelTest {
     @Test
     fun tappingASeatSelectsItAndTappingAgainClearsIt() = runTest {
         val (vm, state) = loaded(SampleData.DELPHI_LUX_SAAL_1)
-        val seat = SampleLayouts.splitHall.rows[6].seatIds[8] // row G, centre block
+        val seat = SampleLayouts.splitHall.rows[6].seatIds[8] // row 7, centre block
         vm.onSeatClick(seat)
         val selected = assertNotNullSeat(state().selectedSeat)
-        assertEquals(SeatLabel("G", 5), selected.label)
+        assertEquals(SeatLabel("7", 5), selected.label)
         assertNotNull(selected.viewingAngle) // the hall has screen width and distance
         vm.onSeatClick(seat)
         assertNull(state().selectedSeat)
@@ -91,6 +95,33 @@ class HallDetailViewModelTest {
         val (_, state) = loaded(SampleData.DELPHI_LUX_SAAL_6)
         assertTrue(state().layoutUnreadable)
         assertNull(state().layout)
+    }
+
+    @Test
+    fun listsTheVisitsNewestFirstWithSeatLabels() = runTest {
+        val seat = SampleLayouts.splitHall.rows[6].seatIds[13] // row 7, seat 10
+        val newest = Visit(
+            id = 800,
+            hallId = SampleData.DELPHI_LUX_SAAL_1,
+            date = LocalDate.of(2026, 10, 3),
+            filmTitle = "Perfect Days",
+            seatId = seat,
+            screeningFormat = ScreeningFormat.OMU,
+            seatRating = Rating(4),
+        )
+        val removedSeat = Visit(id = 801, hallId = SampleData.DELPHI_LUX_SAAL_1, date = LocalDate.of(2026, 10, 2), seatId = SeatId(9_999))
+        repository.store.value = repository.store.value.copy(visits = repository.store.value.visits + removedSeat + newest)
+        val (_, state) = loaded(SampleData.DELPHI_LUX_SAAL_1)
+        val visits = state().visits
+        assertEquals(6, visits.size)
+        assertEquals(listOf(800L, 801L), visits.take(2).map { it.visitId })
+        assertEquals(visits.sortedByDescending { it.date }.map { it.date }, visits.map { it.date })
+        with(visits[0]) {
+            assertEquals(SeatLabel("7", 10), seatLabel)
+            assertEquals("3 Oct 2026 · Row 7 · Seat 10 · OmU", detailText())
+        }
+        assertNull(visits[1].seatLabel) // its seat is no longer in the layout
+        assertEquals("2 Oct 2026", visits[1].detailText())
     }
 
     @Test

@@ -206,7 +206,7 @@ data class RowSummary(
     val halfSeatOffset: Boolean,
     val blocks: List<BlockSummary>,
 ) {
-    /** "Row C · 3 blocks", "Row 4 · no seats". */
+    /** "Row 3 · 3 blocks", "Row 4 · no seats". */
     val title: String
         get() {
             val blockText = when (blocks.size) {

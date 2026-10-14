@@ -8,4 +8,6 @@ dependencies {
     api(projects.core.model)
     api(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
+    // FileProvider for camera captures of visit photos.
+    implementation(libs.androidx.core.ktx)
 }

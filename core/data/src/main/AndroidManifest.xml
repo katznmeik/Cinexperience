@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+          Shares the temporary camera capture file (cacheDir/camera/) with the camera
+          app, see VisitPhotoStore. The app does not request the CAMERA permission:
+          the camera app takes the picture and writes it to this URI.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/visit_photo_paths" />
+        </provider>
+    </application>
+
+</manifest>

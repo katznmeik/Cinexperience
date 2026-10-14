@@ -1,4 +1,4 @@
-package io.github.katznmeik.cinexperience.feature.seatmap.map
+package io.github.katznmeik.cinexperience.core.seatmapui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +34,31 @@ data class SeatChoice(val seatId: SeatId, val label: SeatLabel, val block: Int) 
 }
 
 /** One grid row with its seats, left to right. */
-data class SeatRowChoice(val rowIndex: Int, val label: String, val seats: List<SeatChoice>)
+data class SeatRowChoice(val rowIndex: Int, val label: String, val seats: List<SeatChoice>) {
+    /** The row's blocks (split by aisles), left to right, each with its seats. */
+    val blocks: List<List<SeatChoice>> get() = seats.groupBy { it.block }.toSortedMap().values.toList()
+
+    /** Caption of the [index]-th of the row's [blocks], `null` if the row is not split. */
+    fun blockCaption(index: Int): String? = blockName(index, blocks.size)
+
+    /**
+     * What a screen reader announces for [seat]: its full label, plus the block in
+     * split rows, where numbers may repeat ("Row 7, Seat 1, left block").
+     */
+    fun descriptionOf(seat: SeatChoice): String {
+        val index = blocks.indexOfFirst { block -> block.any { it.seatId == seat.seatId } }
+        val caption = blockName(index, blocks.size) ?: return seat.label.description
+        return "${seat.label.description}, ${caption.lowercase()} block"
+    }
+}
+
+/** "Left" / "Right" for two blocks, "Left" / "Centre" / "Right" for three, else "Block n"; `null` for one. */
+fun blockName(index: Int, blockCount: Int): String? = when {
+    blockCount <= 1 || index < 0 -> null
+    blockCount == 2 -> if (index == 0) "Left" else "Right"
+    blockCount == 3 -> listOf("Left", "Centre", "Right")[index]
+    else -> "Block ${index + 1}"
+}
 
 /**
  * The seats of a layout grouped by grid row, front to back, for choosing a seat
@@ -66,6 +91,8 @@ fun List<SeatRowChoice>.findSeat(rowLabel: String, number: Int, kind: SeatKind =
 /**
  * Choose a seat by row, then by number: an accessible alternative to tapping the
  * [SeatMap]. Plain chips (no dialog), each announced with the seat's full label.
+ * Split rows show their blocks separately (numbers may restart per block). When
+ * [selectedSeatId] changes (e.g. tapped on the map), the shown row follows it.
  */
 @Composable
 fun SeatPicker(
@@ -79,6 +106,10 @@ fun SeatPicker(
         choices.indexOfFirst { row -> row.seats.any { it.seatId == selectedSeatId } }.coerceAtLeast(0)
     }
     var rowIndex by rememberSaveable(choices.size) { mutableIntStateOf(initialRow) }
+    LaunchedEffect(choices, selectedSeatId) {
+        val selectedRow = choices.indexOfFirst { row -> row.seats.any { it.seatId == selectedSeatId } }
+        if (selectedRow >= 0) rowIndex = selectedRow
+    }
     val row = choices[rowIndex.coerceIn(choices.indices)]
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         PickerHeader("Row")
@@ -93,15 +124,21 @@ fun SeatPicker(
             }
         }
         PickerHeader("Seat in row ${row.label}")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            row.seats.forEach { seat ->
-                ChoiceChip(
-                    text = seat.shortText,
-                    selected = seat.seatId == selectedSeatId,
-                    onClick = { onSeatSelected(seat.seatId) },
-                    icon = seat.label.kind.icon,
-                    modifier = Modifier.semantics { contentDescription = seat.label.description },
-                )
+        row.blocks.forEachIndexed { index, block ->
+            row.blockCaption(index)?.let { caption ->
+                Text(caption, style = MaterialTheme.typography.labelSmall, color = CinexTheme.colors.textMuted)
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                block.forEach { seat ->
+                    val description = row.descriptionOf(seat)
+                    ChoiceChip(
+                        text = seat.shortText,
+                        selected = seat.seatId == selectedSeatId,
+                        onClick = { onSeatSelected(seat.seatId) },
+                        icon = seat.label.kind.icon,
+                        modifier = Modifier.semantics { contentDescription = description },
+                    )
+                }
             }
         }
     }
@@ -118,7 +155,7 @@ private fun PickerHeader(text: String) {
 }
 
 /** Icon of a non-standard seat kind, `null` for standard seats. */
-internal val SeatKind.icon
+val SeatKind.icon
     get() = when (this) {
         SeatKind.STANDARD -> null
         SeatKind.WHEELCHAIR -> CinexIcons.Wheelchair

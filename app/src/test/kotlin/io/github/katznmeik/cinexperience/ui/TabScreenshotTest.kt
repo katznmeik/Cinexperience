@@ -8,11 +8,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
+import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
@@ -36,6 +38,7 @@ private class FakeAppContainer(repository: FakeCinexRepository) : AppContainer {
     override val visitRepository = repository
     override val seatOverrideRepository = repository
     override val referenceImageStore = FakeReferenceImageStore()
+    override val visitPhotoStore = FakeVisitPhotoStore()
 }
 
 /**
@@ -107,6 +110,34 @@ class TabScreenshotTest {
         composeRule.onNodeWithText("16 seats").assertExists() // default screen width = 16 columns
         composeRule.onNodeWithText("Discard").performClick()
         composeRule.onNodeWithText("NO LAYOUT YET").assertExists()
+    }
+
+    /** "Add visit" on a hall opens the form with that hall; closing without changes goes straight back. */
+    @Test
+    fun hallToAddVisitAndBack() {
+        showApp()
+        composeRule.onNodeWithText("KANT KINO").performClick()
+        composeRule.onNodeWithText("Saal 3").performClick()
+        composeRule.onNodeWithText("Add visit").performScrollTo().performClick()
+        composeRule.onNodeWithText("ADD VISIT").assertExists()
+        composeRule.onNodeWithText("Kant Kino").assertExists()
+        composeRule.onNodeWithText("Saal 3").assertExists()
+        composeRule.onNodeWithContentDescription("Close").performClick()
+        composeRule.onNodeWithText("NO LAYOUT YET").assertExists()
+    }
+
+    /** The Cinemas FAB opens the form without a hall; Settings → All visits shows the empty list. */
+    @Test
+    fun visitEntryPoints() {
+        showApp()
+        composeRule.onNodeWithText("Add visit", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithText("ADD VISIT").assertExists()
+        composeRule.onNodeWithText("Choose cinema first").assertExists()
+        composeRule.onNodeWithContentDescription("Close").performClick()
+
+        composeRule.onNodeWithTag(TopLevelDestination.Settings.testTag).performClick()
+        composeRule.onNodeWithText("All visits").performClick()
+        composeRule.onNodeWithText("ALL VISITS").assertExists()
     }
 
     /**

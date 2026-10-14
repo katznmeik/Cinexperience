@@ -32,6 +32,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
+/** Newest first: by date, then by insertion order (id), like the Room repositories. */
+private val NEWEST_FIRST = compareByDescending<Visit> { it.date }.thenByDescending { it.id }
+
 /**
  * Everything the fake repositories hold. Favourite seats are given by label here,
  * because the fake has no seat overrides table.
@@ -154,7 +157,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
     override fun observeHallDetail(hallId: Long): Flow<HallDetail?> = data.map { s ->
         val hall = s.halls.firstOrNull { it.id == hallId } ?: return@map null
         val cinema = s.cinemas.first { it.id == hall.cinemaId }
-        val visits = s.visits.filter { it.hallId == hallId }.sortedByDescending { it.date }
+        val visits = s.visits.filter { it.hallId == hallId }.sortedWith(NEWEST_FIRST)
         val labels = hall.layout?.labels()
         // The fake keeps favourites by label; as overrides they point at the first seat with that label.
         val favouriteSeat = s.favourites[hallId]?.let { label -> labels?.seats?.values?.firstOrNull { it.label == label }?.id }
@@ -230,7 +233,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
     // VisitRepository
 
     override fun observeAllVisits(): Flow<List<VisitListItem>> = data.map { s ->
-        s.visits.sortedByDescending { it.date }.map { visit ->
+        s.visits.sortedWith(NEWEST_FIRST).map { visit ->
             val hall = s.halls.first { it.id == visit.hallId }
             val cinema = s.cinemas.first { it.id == hall.cinemaId }
             VisitListItem(visit, cinema.id, cinema.name, hall.name, visit.seatId?.let { hall.layout?.labels()?.labelOf(it) })
@@ -242,11 +245,27 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
 
     override suspend fun getVisit(visitId: Long): Visit? = store.value.visits.firstOrNull { it.id == visitId }
 
+    /**
+     * Like the Room repository: texts are trimmed (blank → null), and a seat that
+     * is not in the hall's current layout is cleared unless it is the visit's
+     * unchanged seat in its unchanged hall.
+     */
     override suspend fun saveVisit(visit: Visit): SaveVisitResult {
         write()
-        val saved = if (visit.id == 0L) visit.copy(id = nextId++) else visit
-        store.update { s -> s.copy(visits = s.visits.filter { it.id != saved.id } + saved) }
-        return SaveVisitResult(saved.id, seatCleared = false)
+        val s = store.value
+        val stored = if (visit.id == 0L) null else requireNotNull(s.visits.firstOrNull { it.id == visit.id }) { "No visit ${visit.id}" }
+        val hall = requireNotNull(s.halls.firstOrNull { it.id == visit.hallId }) { "No hall ${visit.hallId}" }
+        val unchangedSeat = stored != null && stored.hallId == visit.hallId && stored.seatId == visit.seatId
+        val seatValid = visit.seatId == null || unchangedSeat || hall.layout?.seatIds?.contains(visit.seatId) == true
+        val saved = visit.copy(
+            id = if (visit.id == 0L) nextId++ else visit.id,
+            filmTitle = visit.filmTitle.clean(),
+            note = visit.note.clean(),
+            photoPath = visit.photoPath.clean(),
+            seatId = if (seatValid) visit.seatId else null,
+        )
+        store.update { st -> st.copy(visits = st.visits.filter { it.id != saved.id } + saved) }
+        return SaveVisitResult(saved.id, seatCleared = !seatValid)
     }
 
     override suspend fun deleteVisit(visitId: Long): Boolean {

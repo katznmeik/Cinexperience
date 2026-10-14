@@ -1,4 +1,4 @@
-package io.github.katznmeik.cinexperience.feature.seatmap.map
+package io.github.katznmeik.cinexperience.core.seatmapui
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -33,7 +33,7 @@ internal suspend fun PointerInputScope.detectZoomPan(
  * Follows the current gesture until all pointers are up, reporting zoom and pan
  * once the movement exceeds [touchSlop]. Consumes the movements it reports.
  */
-internal suspend fun AwaitPointerEventScope.trackZoomPan(
+suspend fun AwaitPointerEventScope.trackZoomPan(
     touchSlop: Float,
     canPanWithOneFinger: () -> Boolean,
     onGesture: (centroid: Offset, pan: Offset, zoom: Float) -> Unit,

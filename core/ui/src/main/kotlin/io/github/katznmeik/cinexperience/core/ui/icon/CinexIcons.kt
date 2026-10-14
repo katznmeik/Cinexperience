@@ -71,6 +71,25 @@ object CinexIcons {
         )
     }
 
+    /** "×": close a form. */
+    val Close: ImageVector by lazy { strokeIcon("Close", "M6 6l12 12M18 6L6 18") }
+
+    /** Small "▾" of dropdown-like fields. */
+    val ChevronDown: ImageVector by lazy { strokeIcon("ChevronDown", "M6 9l6 6 6-6") }
+
+    val Camera: ImageVector by lazy {
+        strokeIcon(
+            "Camera",
+            "M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z",
+            "M8.5 13a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0",
+        )
+    }
+
+    /** Outline of [Star]: an empty rating star. */
+    val StarOutline: ImageVector by lazy {
+        strokeIcon("StarOutline", "M12 2l3 6.9 7.5.7-5.7 5 1.7 7.4L12 18l-6.5 4 1.7-7.4-5.7-5 7.5-.7z", strokeWidth = 1.6f)
+    }
+
     val Undo: ImageVector by lazy { strokeIcon("Undo", "M9 14L4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 0 11H11") }
 
     val Redo: ImageVector by lazy { strokeIcon("Redo", "M15 14l5-5-5-5", "M20 9H9.5a5.5 5.5 0 0 0 0 11H13") }

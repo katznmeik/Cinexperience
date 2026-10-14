@@ -2,7 +2,7 @@
 <!--
   Auto Backup rules for Android 11 and lower (unused while minSdk is 34, kept in
   step with data_extraction_rules.xml): only the database and shared preferences,
-  so files/reference/ is not backed up.
+  so files/reference/ and files/photos/ are not backed up.
 -->
 <full-backup-content>
     <include domain="database" path="." />

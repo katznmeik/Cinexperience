@@ -39,12 +39,13 @@ Look at the screenshot PNGs after every UI change.
 |---|---|---|
 | `app` | application | `MainActivity`, `CinexApp` (NavHost + bottom bar), manual DI `AppContainer`, screenshot tests |
 | `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic (no Android) |
-| `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data |
-| `core:testing` | Android lib (tests only) | in-memory fake repositories, illustrative screenshot fixtures, `MainDispatcherRule` |
-| `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components |
+| `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos) |
+| `core:testing` | Android lib (tests only) | in-memory fake repositories and file stores, illustrative screenshot fixtures, `MainDispatcherRule` |
+| `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips) |
+| `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, accessible `SeatPicker` |
 | `feature:cinemas` | feature | cinema list (start tab), cinema detail, manage cinemas & halls |
 | `feature:seatmap` | feature | hall detail with seat map, layout editor |
-| `feature:visits` | feature | add/edit visit, all visits |
+| `feature:visits` | feature | add/edit visit (seat picker, photos), all visits |
 | `feature:rankings` | feature | rankings tab |
 | `feature:backup` | feature | settings tab, export/import |
 
@@ -80,6 +81,19 @@ Don't duplicate config in module build files.
 - **Schema changes:** bump the `CinexDatabase` version, add a migration to
   `ALL_MIGRATIONS`, commit the exported `core/data/schemas/.../<n>.json` and add
   a case to `MigrationTest`. No destructive fallback.
+- **Row and seat labels:** Yorck numbers rows and seats (1…n), which is the
+  default labelling. Keep fixtures, examples and UI texts numeric ("Row 7 ·
+  Seat 10"); custom row labels exist only for other cinemas.
+- **App-private files:** reference screenshots (`ReferenceImageStore`,
+  `files/reference/`) and visit photos (`VisitPhotoStore`, `files/photos/`) live
+  in `core:data`. Entities store paths relative to `filesDir`; the stores ignore
+  paths outside their folder. Files are copied in when picked; a replaced or
+  removed file is deleted only after a successful save, discarding deletes the
+  files added in that session, deleting a visit deletes its photo. The startup
+  sweep (`DataContainer.sweepOrphanFiles`) deletes unreferenced files older than
+  1 h. Auto Backup excludes them (database and preferences only); the M6 export
+  will include them. Tests use the fakes in `core:testing`
+  (`FakeReferenceImageStore`, `FakeVisitPhotoStore`).
 - **Seed data:** `core/data/src/main/assets/seed/yorck.json`. Bump `seedVersion`
   for every change; `seedKey`s are permanent. Seeding only inserts missing items
   and fills empty fields, it never overwrites or deletes (a renamed seed hall

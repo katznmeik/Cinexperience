@@ -4,9 +4,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import io.github.katznmeik.cinexperience.core.model.CellPosition
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
-import io.github.katznmeik.cinexperience.feature.seatmap.map.SeatMapGeometry
-import io.github.katznmeik.cinexperience.feature.seatmap.map.SeatMapMetrics
-import io.github.katznmeik.cinexperience.feature.seatmap.map.ViewBounds
+import io.github.katznmeik.cinexperience.core.seatmapui.SeatMapGeometry
+import io.github.katznmeik.cinexperience.core.seatmapui.SeatMapMetrics
+import io.github.katznmeik.cinexperience.core.seatmapui.ViewBounds
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

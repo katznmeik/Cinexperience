@@ -1,4 +1,4 @@
-package io.github.katznmeik.cinexperience.feature.seatmap.map
+package io.github.katznmeik.cinexperience.core.seatmapui
 
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatColourSource
@@ -28,6 +28,25 @@ class SeatChoicesTest {
         assertEquals(listOf(0, 0, 1, 1), choices[0].seats.map { it.block })
         assertEquals(listOf("W1", "1", "2", "3"), choices[1].seats.map { it.shortText })
         assertEquals("Row 2, Seat 1, companion seat", choices[1].seats[1].label.description)
+    }
+
+    @Test
+    fun splitRowsNameTheirBlocks() {
+        val choices = seatChoices(layout)
+        val rowA = choices[0]
+        assertEquals(2, rowA.blocks.size)
+        assertEquals(listOf("Left", "Right"), rowA.blocks.indices.map { rowA.blockCaption(it) })
+        assertEquals("Row A, Seat 1, left block", rowA.descriptionOf(rowA.seats[0]))
+        assertEquals("Row A, Seat 1, right block", rowA.descriptionOf(rowA.seats[2]))
+
+        val three = seatChoices(SeatLayout.fromPatterns("S|S|S", firstSeatId = 1))[0]
+        assertEquals(listOf("Left", "Centre", "Right"), three.blocks.indices.map { three.blockCaption(it) })
+        val four = seatChoices(SeatLayout.fromPatterns("S|S|S|S", firstSeatId = 1))[0]
+        assertEquals("Block 4", four.blockCaption(3))
+
+        val single = seatChoices(SeatLayout.fromPatterns("SSS", firstSeatId = 1))[0]
+        assertNull(single.blockCaption(0))
+        assertEquals("Row 1, Seat 2", single.descriptionOf(single.seats[1]))
     }
 
     @Test

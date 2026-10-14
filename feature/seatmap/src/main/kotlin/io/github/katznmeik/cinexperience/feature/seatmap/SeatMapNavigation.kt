@@ -31,7 +31,8 @@ fun NavGraphBuilder.hallDetailScreen(
     hallRepository: HallRepository,
     onBack: () -> Unit,
     onEditLayout: (hallId: Long) -> Unit,
-    onAddVisit: () -> Unit,
+    onAddVisit: (hallId: Long) -> Unit,
+    onOpenVisit: (visitId: Long) -> Unit,
 ) {
     composable<HallDetailRoute> { entry ->
         val hallId = entry.toRoute<HallDetailRoute>().hallId
@@ -39,7 +40,8 @@ fun NavGraphBuilder.hallDetailScreen(
             viewModel = viewModel(factory = HallDetailViewModel.factory(hallId, hallRepository)),
             onBack = dropUnlessResumed(block = onBack),
             onEditLayout = dropUnlessResumedWith(onEditLayout),
-            onAddVisit = dropUnlessResumed(block = onAddVisit),
+            onAddVisit = dropUnlessResumedWith(onAddVisit),
+            onOpenVisit = dropUnlessResumedWith(onOpenVisit),
         )
     }
 }

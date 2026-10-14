@@ -97,9 +97,9 @@ class SeatKindTest {
     fun displayTextsNameTheKind() {
         assertEquals("Row 1, Wheelchair 2", SeatLabel("1", 2, SeatKind.WHEELCHAIR).displayText)
         assertEquals("Row 1, Wheelchair 2", SeatLabel("1", 2, SeatKind.WHEELCHAIR).description)
-        assertEquals("Row F, Seat 12", SeatLabel("F", 12, SeatKind.COMPANION).displayText)
-        assertEquals("Row F, Seat 12, companion seat", SeatLabel("F", 12, SeatKind.COMPANION).description)
-        assertEquals("Row F, Seat 3, sofa", SeatLabel("F", 3, SeatKind.SOFA).description)
-        assertEquals("Row F, Seat 3", SeatLabel("F", 3).description)
+        assertEquals("Row 6, Seat 12", SeatLabel("6", 12, SeatKind.COMPANION).displayText)
+        assertEquals("Row 6, Seat 12, companion seat", SeatLabel("6", 12, SeatKind.COMPANION).description)
+        assertEquals("Row 6, Seat 3, sofa", SeatLabel("6", 3, SeatKind.SOFA).description)
+        assertEquals("Row 6, Seat 3", SeatLabel("6", 3).description)
     }
 }
