@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.core.program
 
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -17,10 +18,13 @@ enum class ProgramParseFailure {
     /** The page has no (or more than one) `__NEXT_DATA__` script block. */
     NO_DATA_BLOCK,
 
-    /** The block is not valid JSON (e.g. truncated). */
+    /**
+     * The block is not valid JSON (e.g. truncated), or the structure that leads to
+     * the entries has the wrong type (e.g. a film entry that isn't an object).
+     */
     INVALID_JSON,
 
-    /** The JSON doesn't have the expected structure (`props.pageProps.films`). */
+    /** The JSON has no `props.pageProps.films` list. */
     UNEXPECTED_STRUCTURE,
 
     /** The block has far more JSON values or deeper nesting than a program needs (checked before parsing). */
@@ -37,7 +41,10 @@ enum class ProgramParseFailure {
 }
 
 sealed interface ProgramParseResult {
-    /** [skippedFilms] and [skippedShowings] count the entries that failed a check or were duplicates. */
+    /**
+     * [skippedFilms] and [skippedShowings] count the entries that failed a check or
+     * were duplicates; a showing that a special lists too is linked, not skipped.
+     */
     data class Success(val program: Program, val skippedFilms: Int, val skippedShowings: Int) : ProgramParseResult
 
     data class Failure(val reason: ProgramParseFailure) : ProgramParseResult
@@ -47,11 +54,13 @@ sealed interface ProgramParseResult {
  * Turns the text of Yorck's program page (`https://www.yorck.de/en/films`) into a
  * [Program] (spec §11.1, Network & security rule 7). A pure function of the page
  * text and [clock] (the download time and the allowed date range); it never
- * throws.
+ * throws an exception.
  *
  * The page is untrusted. The data block is cut out by a plain text search for the
- * `<script id="__NEXT_DATA__"` element (no HTML parsing, no regex over the page),
- * parsed as JSON into a tree and mapped field by field:
+ * `<script id="__NEXT_DATA__"` element (no HTML parsing, no regex over the page).
+ * A linear pre-scan bounds its size ([withinJsonLimits]); then it is decoded
+ * into the parser's own small types with unknown keys skipped, so the page's
+ * many other parts (images, banners, "coming soon") are never built in memory:
  *
  * - `props.pageProps.films[]` and `props.pageProps.specials[]`, each with `fields`:
  *   `title`, `slug`, `tagline` (specials: `specialSubline`), `mainLabel` (genre),
@@ -60,18 +69,24 @@ sealed interface ProgramParseResult {
  * - Each session: `sys.id` (the showing ID), `fields.startTime`, `fields.formats`
  *   (labels) and `fields.cinema.fields.name`.
  *
- * Extra fields are ignored; every used value is checked ([ProgramRules]). An
- * invalid optional value (e.g. a runtime of 0) is dropped, an entry with an
- * invalid required value (title, slug, ID, start, cinema) is skipped, as are
- * duplicate showing IDs (the first one wins; films come before specials) and
- * duplicate slugs. Films without a valid showing are left out (and don't take
- * their slug). If no showing remains, the page is rejected. Before the JSON tree
- * is built, the block's size is bounded ([withinJsonLimits]).
+ * Every used value is checked ([ProgramRules]). An invalid optional value (e.g. a
+ * runtime of 0) is dropped; a film or showing with an invalid required value
+ * (title, slug, ID, start, cinema) or of the wrong type is skipped. Only where the
+ * structure itself breaks (an entry or its `fields` that isn't an object) is the
+ * whole page rejected.
+ *
+ * Films and specials are keyed by [FilmKey] (kind + slug). Films come first: a
+ * showing that Yorck lists under a film and under specials belongs to the film
+ * and records the specials ([Showing.specialKeys]); a showing listed only under
+ * specials belongs to the first one. Other repeated IDs and keys are skipped.
+ * A film or special without any showing is left out. If no showing remains, the
+ * page is rejected.
  *
  * Start times: Yorck labels every time `+01:00`, also in summer time, but means
  * the Berlin wall-clock time (a `15:00+01:00` showing in October is shown by
- * Yorck as 15:00). So the date-time part is taken as Berlin time and the offset
- * is ignored.
+ * Yorck as 15:00). So the date-time part is taken as Berlin wall-clock time, and
+ * only `+01:00`, `+02:00` or no offset is accepted; any other offset (`Z`,
+ * `-05:00`, …) makes the showing invalid. See [ProgramTime] for clock changes.
  */
 class ProgramPageParser(private val clock: Clock) {
 
@@ -84,96 +99,96 @@ class ProgramPageParser(private val clock: Clock) {
 
     private fun parseOrFail(page: String): ProgramParseResult {
         val block = dataBlock(page) ?: return fail(ProgramParseFailure.NO_DATA_BLOCK)
-        // Bounds the JSON tree's memory before building it (a 10 MB page of tiny values would not fit).
         if (!withinJsonLimits(block)) return fail(ProgramParseFailure.TOO_COMPLEX)
-        val root = parseJson(block) ?: return fail(ProgramParseFailure.INVALID_JSON)
-        val pageProps = root.obj()?.get("props").obj()?.get("pageProps").obj()
-            ?: return fail(ProgramParseFailure.UNEXPECTED_STRUCTURE)
-        val films = pageProps["films"] as? JsonArray ?: return fail(ProgramParseFailure.UNEXPECTED_STRUCTURE)
-        val specials = pageProps["specials"] as? JsonArray ?: JsonArray(emptyList())
+        val data = decode(block) ?: return fail(ProgramParseFailure.INVALID_JSON)
+        val pageProps = data.props?.pageProps ?: return fail(ProgramParseFailure.UNEXPECTED_STRUCTURE)
+        val films = pageProps.films ?: return fail(ProgramParseFailure.UNEXPECTED_STRUCTURE)
+        val specials = pageProps.specials.orEmpty()
 
         val entries = films.map { it to FilmKind.FILM } + specials.map { it to FilmKind.SPECIAL }
         if (entries.size > ProgramRules.MAX_FILMS) return fail(ProgramParseFailure.TOO_MANY_FILMS)
-        val sessionCount = entries.sumOf { (entry, _) -> (sessionsOf(entry) as? JsonArray)?.size ?: 0 }
+        val sessionCount = entries.sumOf { (entry, _) -> (entry?.fields?.sessions as? JsonArray)?.size ?: 0 }
         if (sessionCount > ProgramRules.MAX_SHOWINGS) return fail(ProgramParseFailure.TOO_MANY_SHOWINGS)
 
-        val fetchedAt = clock.instant()
         val now = ProgramTime.now(clock)
         val startRange = now.minusDays(PAST_DAYS)..now.plusDays(FUTURE_DAYS)
         val releaseRange = EARLIEST_RELEASE..now.toLocalDate().plusYears(RELEASE_YEARS_AHEAD)
 
-        val resultFilms = ArrayList<Film>()
-        val resultShowings = ArrayList<Showing>()
-        val slugs = HashSet<String>()
-        val showingIds = HashSet<String>()
+        val acceptedFilms = LinkedHashMap<FilmKey, Film>()
+        val owned = LinkedHashMap<String, Showing>()
+        val links = HashMap<String, LinkedHashSet<FilmKey>>()
         var skippedFilms = 0
         var skippedShowings = 0
 
         for ((entry, kind) in entries) {
-            val sessions = (sessionsOf(entry) as? JsonArray).orEmpty()
-            val film = parseFilm(entry, kind, releaseRange)
-            if (film == null || film.slug in slugs) {
+            val sessions = (entry?.fields?.sessions as? JsonArray).orEmpty()
+            val film = entry?.fields?.let { parseFilm(it, kind, releaseRange) }
+            if (film == null || film.key in acceptedFilms) {
                 skippedFilms++
                 skippedShowings += sessions.size
                 continue
             }
-            val accepted = LinkedHashMap<String, Showing>()
+            val ownNew = LinkedHashMap<String, Showing>()
+            val linkNew = LinkedHashSet<String>()
             for (session in sessions) {
-                val showing = parseShowing(session, film.slug, startRange)
-                if (showing == null || showing.id in showingIds || accepted.putIfAbsent(showing.id, showing) != null) {
-                    skippedShowings++
+                val showing = parseShowing(session, film.key, startRange)
+                val ownerKey = showing?.let { owned[it.id]?.filmKey }
+                when {
+                    showing == null -> skippedShowings++
+                    ownerKey == null && ownNew.putIfAbsent(showing.id, showing) == null -> Unit
+                    // Listed again by a special: linked to the showing its film owns.
+                    ownerKey != null && kind == FilmKind.SPECIAL && linkNew.add(showing.id) -> Unit
+                    else -> skippedShowings++
                 }
             }
-            // Only a film with a valid showing takes its slug and IDs.
-            if (accepted.isNotEmpty()) {
-                slugs += film.slug
-                showingIds += accepted.keys
-                resultFilms += film
-                resultShowings += accepted.values
+            // Only an entry with a showing (own or linked) takes its key.
+            if (ownNew.isNotEmpty() || linkNew.isNotEmpty()) {
+                acceptedFilms[film.key] = film
+                owned.putAll(ownNew)
+                linkNew.forEach { id -> links.getOrPut(id) { LinkedHashSet() } += film.key }
             }
         }
-        if (resultShowings.isEmpty()) return fail(ProgramParseFailure.NOTHING_VALID)
+        if (owned.isEmpty()) return fail(ProgramParseFailure.NOTHING_VALID)
 
-        resultShowings.sortWith(compareBy<Showing>({ it.start }, { it.cinema.name }, { it.id }))
-        val program = Program(fetchedAt, resultFilms, resultShowings)
+        val showings = owned.values
+            .map { showing -> links[showing.id]?.let { showing.copy(specialKeys = it.toList()) } ?: showing }
+            .sortedWith(SHOWING_ORDER)
+        val program = Program(clock.instant(), acceptedFilms.values.toList(), showings)
         return ProgramParseResult.Success(program, skippedFilms, skippedShowings)
     }
 
     private fun fail(reason: ProgramParseFailure) = ProgramParseResult.Failure(reason)
 
-    private fun parseJson(block: String): JsonElement? = try {
-        Json.parseToJsonElement(block)
+    private fun decode(block: String): PageDto? = try {
+        json.decodeFromString(PageDto.serializer(), block)
     } catch (e: SerializationException) {
         null
     } catch (e: IllegalArgumentException) {
         null
     } catch (e: StackOverflowError) {
-        null // absurdly deep nesting; the stack has unwound by now
+        null // can't happen within MAX_JSON_DEPTH; the stack has unwound by now
     }
 
-    private fun sessionsOf(entry: JsonElement): JsonElement? = entry.obj()?.get("fields").obj()?.get("sessions")
-
-    private fun parseFilm(entry: JsonElement, kind: FilmKind, releaseRange: ClosedRange<LocalDate>): Film? {
-        val fields = entry.obj()?.get("fields").obj() ?: return null
-        val slug = fields["slug"].string()?.takeIf(ProgramRules::isValidSlug) ?: return null
-        val title = ProgramText.cleanOrNull(fields["title"].string(), ProgramRules.MAX_TITLE_LENGTH) ?: return null
-        val tagline = optionalText(fields["tagline"], ProgramRules.MAX_TAGLINE_LENGTH)
-            ?: if (kind == FilmKind.SPECIAL) optionalText(fields["specialSubline"], ProgramRules.MAX_TAGLINE_LENGTH) else null
+    private fun parseFilm(fields: FieldsDto, kind: FilmKind, releaseRange: ClosedRange<LocalDate>): Film? {
+        val slug = fields.slug.string()?.takeIf(ProgramRules::isValidSlug) ?: return null
+        val title = ProgramText.cleanOrNull(fields.title.string(), ProgramRules.MAX_TITLE_LENGTH) ?: return null
+        val tagline = optionalText(fields.tagline, ProgramRules.MAX_TAGLINE_LENGTH)
+            ?: if (kind == FilmKind.SPECIAL) optionalText(fields.specialSubline, ProgramRules.MAX_TAGLINE_LENGTH) else null
         return guarded {
             Film(
                 slug = slug,
                 title = title,
                 kind = kind,
                 tagline = tagline,
-                genre = optionalText(fields["mainLabel"], ProgramRules.MAX_GENRE_LENGTH),
-                runtimeMinutes = fields["runtime"].smallNumber()?.takeIf { it in ProgramRules.RUNTIME_MINUTES },
-                fsk = fields["fsk"].smallNumber()?.takeIf { it in ProgramRules.FSK_RATINGS },
-                releaseDate = parseDate(fields["releaseDate"].string())?.takeIf { it in releaseRange },
+                genre = optionalText(fields.mainLabel, ProgramRules.MAX_GENRE_LENGTH),
+                runtimeMinutes = fields.runtime.smallNumber()?.takeIf { it in ProgramRules.RUNTIME_MINUTES },
+                fsk = fields.fsk.smallNumber()?.takeIf { it in ProgramRules.FSK_RATINGS },
+                releaseDate = parseDate(fields.releaseDate.string())?.takeIf { it in releaseRange },
             )
         }
     }
 
-    private fun parseShowing(session: JsonElement, filmSlug: String, startRange: ClosedRange<LocalDateTime>): Showing? {
+    private fun parseShowing(session: JsonElement, filmKey: FilmKey, startRange: ClosedRange<LocalDateTime>): Showing? {
         val obj = session.obj() ?: return null
         val id = obj["sys"].obj()?.get("id").string()?.takeIf(ProgramRules::isValidShowingId) ?: return null
         val fields = obj["fields"].obj() ?: return null
@@ -191,7 +206,7 @@ class ProgramPageParser(private val clock: Clock) {
         return guarded {
             Showing(
                 id = id,
-                filmSlug = filmSlug,
+                filmKey = filmKey,
                 start = start,
                 cinema = ProgramCinema.fromYorckName(cinemaName),
                 versions = classified.versions,
@@ -210,6 +225,34 @@ class ProgramPageParser(private val clock: Clock) {
     private fun optionalText(element: JsonElement?, maxLength: Int): String? =
         ProgramText.cleanOrNull(element.string(), maxLength)
 
+    // The parts of the page that are used; everything else is skipped while decoding.
+    // Values are JsonElement, so a value of the wrong type drops that value or entry only.
+
+    @Serializable
+    private class PageDto(val props: PropsDto? = null)
+
+    @Serializable
+    private class PropsDto(val pageProps: PagePropsDto? = null)
+
+    @Serializable
+    private class PagePropsDto(val films: List<EntryDto?>? = null, val specials: List<EntryDto?>? = null)
+
+    @Serializable
+    private class EntryDto(val fields: FieldsDto? = null)
+
+    @Serializable
+    private class FieldsDto(
+        val title: JsonElement? = null,
+        val slug: JsonElement? = null,
+        val tagline: JsonElement? = null,
+        val specialSubline: JsonElement? = null,
+        val mainLabel: JsonElement? = null,
+        val runtime: JsonElement? = null,
+        val fsk: JsonElement? = null,
+        val releaseDate: JsonElement? = null,
+        val sessions: JsonElement? = null,
+    )
+
     internal companion object {
         private const val MARKER = "<script id=\"__NEXT_DATA__\""
         private const val SCRIPT_END = "</script>"
@@ -226,13 +269,21 @@ class ProgramPageParser(private val clock: Clock) {
         private val EARLIEST_RELEASE: LocalDate = LocalDate.of(1888, 1, 1)
         private const val RELEASE_YEARS_AHEAD = 10L
 
-        /** Today's block has about 140,000 JSON values, nested up to 24 deep. */
-        const val MAX_JSON_VALUES: Int = 750_000
+        /**
+         * Today's block has about 140,000 JSON values, nested up to 24 deep; a page
+         * at the showing limit would need about 350,000.
+         */
+        const val MAX_JSON_VALUES: Int = 500_000
         const val MAX_JSON_DEPTH: Int = 64
 
-        // Date and time, optional seconds and fraction, an optional offset that is ignored.
+        /** The order of [Program.showings]: start, then cinema, then ID. */
+        val SHOWING_ORDER: Comparator<Showing> = compareBy<Showing>({ it.start }, { it.cinema.name }, { it.id })
+
+        private val json = Json { ignoreUnknownKeys = true }
+
+        // Date and time, optional seconds and fraction, and Berlin's offset or none.
         private val START_TIME = Regex(
-            "([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\\.[0-9]{1,9})?)?)(?:Z|[+-][0-9]{2}:[0-9]{2})?",
+            "([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\\.[0-9]{1,9})?)?)(?:\\+01:00|\\+02:00)?",
         )
         private val DATE = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
         private val SMALL_NUMBER = Regex("[0-9]{1,4}")
@@ -257,7 +308,7 @@ class ProgramPageParser(private val clock: Clock) {
         /**
          * True if [block] has at most [MAX_JSON_VALUES] values (counted as commas and
          * opening brackets outside strings) nested at most [MAX_JSON_DEPTH] deep. One
-         * linear pass, no allocation; malformed JSON is left to the parser.
+         * linear pass, no allocation; malformed JSON is left to the decoder.
          */
         fun withinJsonLimits(block: String): Boolean {
             var inString = false
@@ -287,7 +338,10 @@ class ProgramPageParser(private val clock: Clock) {
             return true
         }
 
-        /** Yorck's start time as Berlin wall-clock time; the offset is ignored (see the class comment). */
+        /**
+         * Yorck's start time as Berlin wall-clock time: `+01:00`, `+02:00` or no offset
+         * (the offset itself is ignored, see the class comment); anything else is `null`.
+         */
         fun parseStart(text: String?): LocalDateTime? {
             if (text == null || text.length > 40) return null
             val match = START_TIME.matchEntire(text) ?: return null

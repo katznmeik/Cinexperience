@@ -122,6 +122,75 @@ android {
     }
 }
 
+// Release runtime dependencies (spec §11.1 rule 4: no third-party network, HTML or
+// image libraries, Android's own HTTPS client only): every module group in the
+// resolved release runtime classpath must be on this allowlist. A new library
+// from another group fails every build (preBuild depends on this task) until it
+// has been reviewed and added here. NetworkConfinementTest checks the build files
+// by name as well.
+abstract class CheckDependencyGroupsTask : DefaultTask() {
+    @get:Input
+    abstract val groups: SetProperty<String>
+
+    @get:Input
+    abstract val allowedGroups: SetProperty<String>
+
+    @get:Input
+    abstract val allowedGroupPrefixes: ListProperty<String>
+
+    @get:Input
+    abstract val forbiddenGroups: SetProperty<String>
+
+    @get:OutputFile
+    abstract val report: RegularFileProperty
+
+    @TaskAction
+    fun check() {
+        val forbidden = forbiddenGroups.get()
+        val unexpected = groups.get().filter { group ->
+            group in forbidden || (group !in allowedGroups.get() && allowedGroupPrefixes.get().none { group.startsWith(it) })
+        }
+        if (unexpected.isNotEmpty()) {
+            throw GradleException(
+                "Release dependencies from groups that are not allowed: ${unexpected.sorted().joinToString()}. " +
+                    "Review them (spec §11.1: no third-party network, HTML or image libraries) and update " +
+                    "checkReleaseDependencyGroups in app/build.gradle.kts.",
+            )
+        }
+        report.get().asFile.writeText(groups.get().sorted().joinToString("\n", postfix = "\n"))
+    }
+}
+
+val checkReleaseDependencyGroups = tasks.register<CheckDependencyGroupsTask>("checkReleaseDependencyGroups") {
+    group = "verification"
+    description = "Fails if the release runtime classpath has a module group that is not on the allowlist."
+    groups.set(
+        provider { configurations.getByName("releaseRuntimeClasspath") }
+            .flatMap { it.incoming.resolutionResult.rootComponent }
+            .map { root ->
+                val seen = HashSet<org.gradle.api.artifacts.result.ResolvedComponentResult>()
+                val queue = ArrayDeque(listOf(root))
+                val found = sortedSetOf<String>()
+                while (queue.isNotEmpty()) {
+                    val component = queue.removeFirst()
+                    if (!seen.add(component)) continue
+                    (component.id as? org.gradle.api.artifacts.component.ModuleComponentIdentifier)?.let { found += it.group }
+                    component.dependencies
+                        .filterIsInstance<org.gradle.api.artifacts.result.ResolvedDependencyResult>()
+                        .forEach { queue += it.selected }
+                }
+                found
+            },
+    )
+    allowedGroupPrefixes.set(listOf("androidx."))
+    allowedGroups.set(setOf("org.jetbrains", "org.jetbrains.kotlin", "org.jetbrains.kotlinx", "org.jspecify", "com.google.guava"))
+    // Inside androidx: WebView and media players can load remote content. (The marker
+    // lets NetworkConfinementTest accept this one denylist line.)
+    forbiddenGroups.set(setOf("androidx.webkit", "androidx.media3", "androidx.browser")) // network-scan: denylist
+    report.set(layout.buildDirectory.file("reports/release-dependency-groups.txt"))
+}
+tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(checkReleaseDependencyGroups) }
+
 dependencies {
     implementation(projects.core.model)
     implementation(projects.core.data)

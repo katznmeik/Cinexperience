@@ -34,8 +34,11 @@ class ProgramPageParserTest {
         is ProgramParseResult.Success -> throw AssertionError("Expected a failure, got $result")
     }
 
-    /** The program of a page with one film holding [sessions], or of [films]. */
+    /** The program of a page with [films]. */
     private fun programOf(vararg films: Any): Program = program(page(films.map { TestPages.toJson(it) }))
+
+    /** The film (not special) with [slug]. */
+    private fun Program.film(slug: String): Film? = film(FilmKey(FilmKind.FILM, slug))
 
     // --- The fixture ---------------------------------------------------------------------------
 
@@ -45,9 +48,13 @@ class ProgramPageParserTest {
         val program = result.program
 
         assertEquals(TestPages.NOW, program.fetchedAt)
+        val quiet = FilmKey(FilmKind.FILM, "the-quiet-projectionist")
+        val neonFilm = FilmKey(FilmKind.FILM, "neon-harbour")
+        val neonSeries = FilmKey(FilmKind.SPECIAL, "neon-harbour")
+        val reels = FilmKey(FilmKind.SPECIAL, "night-of-the-long-reels")
         assertEquals(
-            listOf("the-quiet-projectionist", "neon-harbour", "paper-kites", "night-of-the-long-reels"),
-            program.films.map { it.slug },
+            listOf(quiet, neonFilm, FilmKey(FilmKind.FILM, "paper-kites"), reels, neonSeries),
+            program.films.map { it.key },
         )
         assertEquals(
             Film(
@@ -60,50 +67,59 @@ class ProgramPageParserTest {
                 fsk = 12,
                 releaseDate = LocalDate.of(2026, 10, 1),
             ),
-            program.film("the-quiet-projectionist"),
+            program.film(quiet),
         )
         // Runtime and FSK as strings.
-        val neon = program.film("neon-harbour")!!
+        val neon = program.film(neonFilm)!!
         assertEquals(97, neon.runtimeMinutes)
         assertEquals(16, neon.fsk)
-        assertEquals(FilmKind.FILM, neon.kind) // the special with the same slug is skipped
-        assertEquals(0, program.film("paper-kites")!!.fsk)
+        assertEquals(0, program.film(FilmKey(FilmKind.FILM, "paper-kites"))!!.fsk)
         // A special: no runtime, FSK, genre or release date; its subline is the tagline.
         assertEquals(
             Film(slug = "night-of-the-long-reels", title = "Night of the Long Reels", kind = FilmKind.SPECIAL, tagline = "Twelve hours of cinema."),
-            program.film("night-of-the-long-reels"),
+            program.film(reels),
         )
+        // A special with the same page name as a film keeps its own showing (and an empty subline is none).
+        assertEquals(Film(slug = "neon-harbour", title = "Neon Harbour", kind = FilmKind.SPECIAL), program.film(neonSeries))
+        assertEquals(listOf("1007-5001"), program.showingsOf(neonSeries).map { it.id })
+        assertEquals(listOf("1003-2001", "1004-2002"), program.showingsOf(neonFilm).map { it.id })
 
-        // Sorted by start; the special's copy of 1001-1001 and the duplicate-slug special are skipped.
+        // Sorted by start. 1001-1001 is listed by the film and by the festival: the film owns it.
         assertEquals(
-            listOf("1001-1001", "1003-2001", "1002-1002", "1005-3001", "1004-2002", "1006-4001"),
+            listOf("1001-1001", "1003-2001", "1002-1002", "1005-3001", "1004-2002", "1007-5001", "1006-4001"),
             program.showings.map { it.id },
         )
-        assertEquals(1, result.skippedFilms)
-        assertEquals(2, result.skippedShowings)
+        assertEquals(0, result.skippedFilms)
+        assertEquals(0, result.skippedShowings)
 
         val first = program.showings.first()
         assertEquals(
             Showing(
                 id = "1001-1001",
-                filmSlug = "the-quiet-projectionist",
+                filmKey = quiet,
                 start = LocalDateTime.of(2026, 10, 15, 17, 0),
                 cinema = ProgramCinema("delphi LUX", "delphi-lux"),
                 versions = listOf(ShowingVersion.OMU),
                 eventLabels = emptyList(),
+                specialKeys = listOf(reels),
             ),
             first,
         )
+        assertEquals(quiet, program.filmOf(first).key)
+        assertEquals(listOf("1001-1001", "1006-4001"), program.showingsOf(reels).map { it.id })
+        assertEquals(listOf("1001-1001", "1002-1002"), program.showingsOf(quiet).map { it.id })
+
         val byId = program.showings.associateBy { it.id }
         assertEquals(ProgramCinema("Kino International", "international"), byId.getValue("1002-1002").cinema)
         assertEquals(ProgramCinema("Blauer Stern", "blauer-stern"), byId.getValue("1003-2001").cinema)
         assertEquals(listOf(ShowingVersion.OMEU), byId.getValue("1003-2001").versions)
-        assertEquals(listOf("Special"), byId.getValue("1003-2001").eventLabels)
+        assertEquals(listOf("SV"), byId.getValue("1003-2001").eventLabels) // meaning not confirmed yet
         assertEquals(listOf("Premiere"), byId.getValue("1004-2002").eventLabels)
         assertEquals(listOf(ShowingVersion.DF), byId.getValue("1005-3001").versions)
         assertEquals(listOf("Kids"), byId.getValue("1005-3001").eventLabels)
         assertEquals(listOf("Festival", "In the Mood"), byId.getValue("1006-4001").eventLabels)
-        assertEquals("night-of-the-long-reels", byId.getValue("1006-4001").filmSlug)
+        assertEquals(reels, byId.getValue("1006-4001").filmKey)
+        assertEquals(emptyList<FilmKey>(), byId.getValue("1006-4001").specialKeys)
     }
 
     // --- Times ---------------------------------------------------------------------------------
@@ -119,11 +135,19 @@ class ProgramPageParserTest {
         assertEquals(LocalDateTime.of(2026, 11, 20, 15, 0), winter.start)
         assertEquals(Instant.parse("2026-11-20T14:00:00Z"), winter.startInstant) // CET, UTC+1
 
-        // Whatever the offset says, the wall-clock part counts.
-        for (time in listOf("2026-10-15T15:00:00Z", "2026-10-15T15:00:00+02:00", "2026-10-15T15:00:00-05:00", "2026-10-15T15:00", "2026-10-15T15:00:00.000+01:00")) {
+        // Berlin's offsets or none: the wall-clock part counts.
+        for (time in listOf("2026-10-15T15:00:00+02:00", "2026-10-15T15:00", "2026-10-15T15:00:00", "2026-10-15T15:00:00.000+01:00")) {
             val showing = programOf(film(sessions = listOf(session(startTime = time)))).showings.single()
             assertEquals(time, LocalDateTime.of(2026, 10, 15, 15, 0), showing.start)
         }
+    }
+
+    @Test
+    fun otherOffsetsMakeTheShowingInvalid() {
+        val bad = listOf("Z", "-05:00", "+00:00", "+03:00", "+0100", "+01", "-01:00", "+01:30", "UTC")
+        val sessions = bad.map { session(startTime = "2026-10-15T15:00:00$it") } +
+            session(id = "1001-777777", startTime = "2026-10-15T15:00:00+01:00")
+        assertEquals(listOf("1001-777777"), programOf(film(sessions = sessions)).showings.map { it.id })
     }
 
     @Test
@@ -183,8 +207,12 @@ class ProgramPageParserTest {
 
     @Test
     fun anUnexpectedStructureIsRejected() {
-        for (data in listOf("[]", "42", "null", "\"text\"", "{}", "{\"props\":[]}", "{\"props\":{\"pageProps\":{}}}", "{\"props\":{\"pageProps\":{\"films\":{}}}}", "{\"props\":{\"pageProps\":{\"films\":\"x\"}}}")) {
+        for (data in listOf("{}", "{\"props\":{}}", "{\"props\":null}", "{\"props\":{\"pageProps\":{}}}", "{\"props\":{\"pageProps\":{\"films\":null}}}")) {
             assertEquals(data, ProgramParseFailure.UNEXPECTED_STRUCTURE, failure(page(data)))
+        }
+        // The wrong type where the structure needs an object or a list.
+        for (data in listOf("[]", "42", "null", "\"text\"", "{\"props\":[]}", "{\"props\":{\"pageProps\":{\"films\":{}}}}", "{\"props\":{\"pageProps\":{\"films\":\"x\"}}}")) {
+            assertEquals(data, ProgramParseFailure.INVALID_JSON, failure(page(data)))
         }
     }
 
@@ -247,7 +275,7 @@ class ProgramPageParserTest {
     fun invalidShowingIdsAreSkipped() {
         val bad = listOf(
             "", "1001", "1001-", "-89886", "1001_89886", "abc-123", "1001-89886-1", "1234567-1",
-            "1-1234567890123", " 1001-1", "1001-1 ", "1001-1\n", "١٢-٣", "1001-1;x", "1001-1&a=b",
+            "1-1234567890123", " 1001-1", "1001-1 ", "1001-1\n", "\u0661\u0662-\u0663", "1001-1;x", "1001-1&a=b",
             "../1001-1", "1001-1#x",
         )
         val sessions = bad.map { session(id = it) } + session(id = 1001) + session(id = JsonNull) + session(id = null) +
@@ -268,34 +296,73 @@ class ProgramPageParserTest {
     }
 
     @Test
-    fun duplicateShowingIdsAndSlugsAreSkipped() {
+    fun duplicateShowingIdsAndKeysAreSkipped() {
         val result = success(
             page(
                 listOf(
                     film(slug = "first", sessions = listOf(session(id = "1-1"), session(id = "1-2"), session(id = "1-1"))),
+                    // A film listing another film's showing: the first film keeps it.
                     film(slug = "second", sessions = listOf(session(id = "1-2"), session(id = "1-3"))),
                     film(slug = "first", title = "Another Film", sessions = listOf(session(id = "1-4"))),
                 ),
-                listOf(special(slug = "first", sessions = listOf(session(id = "1-5")))),
+                // A special may share a film's page name: it is a different entry.
+                listOf(special(slug = "first", title = "A Series", sessions = listOf(session(id = "1-5")))),
             ),
         )
-        assertEquals(listOf("first", "second"), result.program.films.map { it.slug })
-        assertEquals("An Invented Film", result.program.film("first")!!.title)
-        assertEquals(setOf("1-1", "1-2", "1-3"), result.program.showings.map { it.id }.toSet())
-        assertEquals("first", result.program.showings.single { it.id == "1-2" }.filmSlug)
-        assertEquals(2, result.skippedFilms)
-        assertEquals(4, result.skippedShowings)
+        val program = result.program
+        val first = FilmKey(FilmKind.FILM, "first")
+        assertEquals(listOf(first, FilmKey(FilmKind.FILM, "second"), FilmKey(FilmKind.SPECIAL, "first")), program.films.map { it.key })
+        assertEquals("An Invented Film", program.film(first)!!.title)
+        assertEquals("A Series", program.film(FilmKey(FilmKind.SPECIAL, "first"))!!.title)
+        assertEquals(setOf("1-1", "1-2", "1-3", "1-5"), program.showings.map { it.id }.toSet())
+        assertEquals(first, program.showings.single { it.id == "1-2" }.filmKey)
+        assertEquals(1, result.skippedFilms)
+        assertEquals(3, result.skippedShowings)
     }
 
     @Test
-    fun aFilmWithoutValidShowingsDoesNotTakeItsSlug() {
-        val program = program(
+    fun showingsListedBySpecialsTooAreLinkedNotLost() {
+        val festival = FilmKey(FilmKind.SPECIAL, "festival")
+        val series = FilmKey(FilmKind.SPECIAL, "series")
+        val result = success(
             page(
-                listOf(film(slug = "shared", title = "Film", sessions = listOf(session(id = "bad")))),
-                listOf(special(slug = "shared", title = "Special", sessions = listOf(session(id = "5-1")))),
+                listOf(film(slug = "film", sessions = listOf(session(id = "7-1"), session(id = "7-2")))),
+                listOf(
+                    // Only showings the film owns: the special still exists, with them.
+                    special(slug = "festival", sessions = listOf(session(id = "7-1"), session(id = "7-2"), session(id = "7-1"))),
+                    special(slug = "series", sessions = listOf(session(id = "7-1"), session(id = "7-3"))),
+                    // Lists only the series' own showing: linked to the series' showing.
+                    special(slug = "late", sessions = listOf(session(id = "7-3"))),
+                ),
             ),
         )
-        assertEquals(Film(slug = "shared", title = "Special", kind = FilmKind.SPECIAL, tagline = "A subline."), program.films.single())
+        val program = result.program
+        assertEquals(4, program.films.size)
+        assertEquals(listOf("7-1", "7-2", "7-3"), program.showings.map { it.id })
+        val byId = program.showings.associateBy { it.id }
+        assertEquals(FilmKey(FilmKind.FILM, "film"), byId.getValue("7-1").filmKey)
+        assertEquals(listOf(festival, series), byId.getValue("7-1").specialKeys)
+        assertEquals(listOf(festival), byId.getValue("7-2").specialKeys)
+        assertEquals(series, byId.getValue("7-3").filmKey)
+        assertEquals(listOf(FilmKey(FilmKind.SPECIAL, "late")), byId.getValue("7-3").specialKeys)
+        assertEquals(listOf("7-1", "7-2"), program.showingsOf(festival).map { it.id })
+        assertEquals(listOf("7-1", "7-3"), program.showingsOf(series).map { it.id })
+        assertEquals(listOf("7-1", "7-2"), program.showingsOf(FilmKey(FilmKind.FILM, "film")).map { it.id })
+        assertEquals(1, result.skippedShowings) // the festival's second 7-1
+        assertEquals(0, result.skippedFilms)
+    }
+
+    @Test
+    fun anEntryWithoutValidShowingsDoesNotTakeItsKey() {
+        val program = program(
+            page(
+                listOf(
+                    film(slug = "shared", title = "Broken", sessions = listOf(session(id = "bad"))),
+                    film(slug = "shared", title = "Working", sessions = listOf(session(id = "5-1"))),
+                ),
+            ),
+        )
+        assertEquals("Working", program.films.single().title)
     }
 
     // --- Texts ----------------------------------------------------------------------------------
@@ -305,24 +372,24 @@ class ProgramPageParserTest {
         val film = programOf(
             film(
                 slug = "clean",
-                title = "\u0000The\u0007 Quiet​ Hour‮﻿ ",
-                tagline = "Line one\nline two\t\ttabbed end\u0085",
-                mainLabel = "‪Drama‬",
-                sessions = listOf(session(cinema = "delphi LUX\u0000")),
+                title = "\u0000The\u0007 Quiet\u200B Hour\u202E\uFEFF ",
+                tagline = "Line one\nline two\t\ttabbed\u2028end\u0085",
+                mainLabel = "\u202ADrama\u202C",
+                sessions = listOf(session(cinema = "delphi\u00A0LUX\u0000")),
             ),
         ).films.single()
         assertEquals("The Quiet Hour", film.title)
         assertEquals("Line one line two tabbed end", film.tagline)
         assertEquals("Drama", film.genre)
         // Non-breaking space is a space; the cinema still matches.
-        val program = programOf(film(sessions = listOf(session(cinema = "delphi LUX\u0000"))))
+        val program = programOf(film(sessions = listOf(session(cinema = "delphi\u00A0LUX\u0000"))))
         assertEquals(ProgramCinema("delphi LUX", "delphi-lux"), program.showings.single().cinema)
     }
 
     @Test
     fun aTitleOfOnlyInvisibleCharactersIsSkipped() {
         val program = program(
-            page(listOf(film(slug = "invisible", title = "​\u0000 ‮"), film(slug = "visible", title = "Visible"))),
+            page(listOf(film(slug = "invisible", title = "\u200B\u0000 \u202E"), film(slug = "visible", title = "Visible"))),
         )
         assertEquals(listOf("visible"), program.films.map { it.slug })
     }
@@ -422,9 +489,10 @@ class ProgramPageParserTest {
                     film(slug = "null-title", title = JsonNull),
                     film(slug = "object-title", title = mapOf("text" to "x")),
                     film(slug = "sessions-object", sessions = mapOf("a" to session())),
-                    JsonPrimitive("not a film"),
+                    film(slug = "sessions-string", sessions = "1001-1"),
                     JsonNull,
-                    buildJsonObject { put("fields", JsonPrimitive("x")) },
+                    buildJsonObject { put("fields", JsonNull) },
+                    buildJsonObject { put("sys", JsonPrimitive("no fields")) },
                     film(
                         slug = "typed",
                         tagline = 7,
@@ -450,6 +518,37 @@ class ProgramPageParserTest {
         assertEquals(listOf(ShowingVersion.OV), showing.versions)
     }
 
+    @Test
+    fun aBrokenStructureRejectsThePage() {
+        // Where the structure itself breaks (an entry or its fields that isn't an object,
+        // a list that isn't one), the page is unreadable; the last good program stays.
+        val broken = listOf(
+            page(listOf(JsonPrimitive("not a film"), film())),
+            page(listOf(buildJsonObject { put("fields", JsonPrimitive("x")) }, film())),
+            page(listOf(film()), listOf(JsonPrimitive(1))),
+            page("{\"props\":{\"pageProps\":{\"films\":[],\"specials\":\"x\"}}}"),
+        )
+        for (page in broken) assertEquals(ProgramParseFailure.INVALID_JSON, failure(page))
+    }
+
+    @Test
+    fun unknownPartsOfThePageAreSkipped() {
+        // Big unknown subtrees (images, galleries, "coming soon") are skipped while decoding.
+        val gallery = List(1000) { mapOf("fields" to mapOf("file" to mapOf("url" to "//images.example.invalid/$it.jpg"))) }
+        val data = buildJsonObject {
+            put("props", buildJsonObject {
+                put("pageProps", buildJsonObject {
+                    put("films", TestPages.toJson(listOf(film(slug = "with-gallery", extra = mapOf("gallery" to gallery)))))
+                    put("comingSoon", TestPages.toJson(gallery))
+                    put("banners", TestPages.toJson(mapOf("nested" to mapOf("deeper" to listOf(gallery)))))
+                })
+                put("__N_SSG", JsonPrimitive(true))
+            })
+            put("page", JsonPrimitive("/films"))
+        }.toString()
+        assertEquals(listOf("with-gallery"), program(page(data)).films.map { it.slug })
+    }
+
     // --- Cinemas and labels ---------------------------------------------------------------------
 
     @Test
@@ -465,13 +564,13 @@ class ProgramPageParserTest {
     fun labelsBecomeVersionsAndEventTexts() {
         val labels = listOf(
             "OmU", "omu", "DF", " OV ", "OmeU", "KF", "SV", "InTheMood", "Festival", "Premiere", "Sneak", "Mongay",
-            "Creepy C", "Lesung", "L".repeat(25), "Q\u0000&​A", "",
+            "Creepy C", "Lesung", "L".repeat(25), "Q\u0000&\u200BA", "",
         )
         val showing = programOf(film(sessions = listOf(session(formats = labels)))).showings.single()
         assertEquals(listOf(ShowingVersion.OMU, ShowingVersion.DF, ShowingVersion.OV, ShowingVersion.OMEU), showing.versions)
         // At most 16 labels are looked at: the empty 17th doesn't matter, the 25-character one is dropped.
         assertEquals(
-            listOf("Kids", "Special", "In the Mood", "Festival", "Premiere", "Sneak", "Mongay", "Creepy C", "Lesung", "Q&A"),
+            listOf("Kids", "SV", "In the Mood", "Festival", "Premiere", "Sneak", "Mongay", "Creepy C", "Lesung", "Q&A"),
             showing.eventLabels,
         )
         val many = programOf(film(sessions = listOf(session(formats = List(40) { "Label $it" })))).showings.single()

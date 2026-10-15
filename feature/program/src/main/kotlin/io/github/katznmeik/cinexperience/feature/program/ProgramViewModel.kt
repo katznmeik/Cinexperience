@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.program.DownloadPermission
+import io.github.katznmeik.cinexperience.core.program.ProgramActionResult
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramState
 import io.github.katznmeik.cinexperience.core.program.ProgramStatus
@@ -225,7 +226,7 @@ class ProgramViewModel(
     /** "Download program" on the consent screen. */
     fun allowDownloads() {
         viewModelScope.launch {
-            programRepository.allowDownloads()
+            report(programRepository.allowDownloads())
             programRepository.refresh()
         }
     }
@@ -238,10 +239,18 @@ class ProgramViewModel(
     /** "Turn on" while downloading is switched off. */
     fun turnOn() {
         viewModelScope.launch {
-            programRepository.setDownloadsEnabled(true)
+            report(programRepository.setDownloadsEnabled(true))
             programRepository.refreshIfStale()
         }
     }
+
+    /** Shows why a command failed (e.g. the setting couldn't be stored; it still applies until the app closes). */
+    private fun report(result: ProgramActionResult) {
+        if (result is ProgramActionResult.Failure) local.update { it.copy(message = result.message) }
+    }
+
+    /** Hides the last download error (the error card's "Dismiss"). */
+    fun dismissError() = programRepository.dismissError()
 
     /** Pull to refresh (or the refresh button): a new download. */
     fun refresh() {

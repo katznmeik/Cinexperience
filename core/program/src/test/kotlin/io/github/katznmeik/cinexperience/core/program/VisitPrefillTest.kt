@@ -11,7 +11,7 @@ class VisitPrefillTest {
 
     private fun showing(vararg versions: ShowingVersion, cinema: String = "delphi LUX") = Showing(
         id = "1001-1",
-        filmSlug = "the-quiet-hour",
+        filmKey = FilmKey(FilmKind.FILM, "the-quiet-hour"),
         start = LocalDateTime.of(2026, 10, 16, 23, 30),
         cinema = ProgramCinema.fromYorckName(cinema),
         versions = versions.toList(),
@@ -45,6 +45,17 @@ class VisitPrefillTest {
         assertEquals(
             VisitPrefill(null, LocalDate.of(2026, 10, 16), null, null),
             showing(cinema = "Kino Unbekannt").visitPrefill(null),
+        )
+    }
+
+    @Test
+    fun aShowingOnlyASpecialListsTakesTheSpecialsTitle() {
+        val special = Film(slug = "midnight-surprise", title = "Midnight Surprise", kind = FilmKind.SPECIAL)
+        val showing = Showing("1001-9", special.key, LocalDateTime.of(2026, 10, 19, 22, 0), ProgramCinema.fromYorckName("Odeon"), listOf(ShowingVersion.OV))
+        val program = Program(java.time.Instant.EPOCH, listOf(special), listOf(showing))
+        assertEquals(
+            VisitPrefill("odeon", LocalDate.of(2026, 10, 19), "Midnight Surprise", ScreeningFormat.OV),
+            showing.visitPrefill(program.filmOf(showing)),
         )
     }
 }

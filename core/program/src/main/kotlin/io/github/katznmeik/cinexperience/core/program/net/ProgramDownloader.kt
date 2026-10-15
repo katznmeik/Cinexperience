@@ -2,8 +2,12 @@ package io.github.katznmeik.cinexperience.core.program.net
 
 import io.github.katznmeik.cinexperience.core.program.ProgramError
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import java.net.ConnectException
 import java.net.NoRouteToHostException
@@ -12,6 +16,7 @@ import java.net.URI
 import java.net.URISyntaxException
 import java.net.UnknownHostException
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** The outcome of [ProgramDownloader.download]. */
 internal sealed interface DownloadResult {
@@ -29,47 +34,70 @@ internal sealed interface DownloadResult {
  * a [ProgramTransport]:
  *
  * - The one request: `GET https://www.yorck.de/en/films`, no query, no body, no
- *   cookies; only the headers `User-Agent` ([userAgent]) and `Accept`. Nothing
- *   from the owner's data.
+ *   cookies; the headers `User-Agent` ([userAgent]) and `Accept` (the HTTP client
+ *   adds `Host`, `Connection` and `Accept-Encoding`). Nothing from the owner's data.
  * - Before every request (also each redirect) [download]'s `isAllowed` is asked;
  *   when it says no, nothing is sent.
  * - Redirects: at most [MAX_REDIRECTS], each only to `https://www.yorck.de/…`
  *   ([resolveRedirect]); anything else is refused.
  * - Only HTTP 200 is accepted. At most [MAX_BYTES] (10 MB) are read, counted while
- *   streaming (a larger declared length is refused before reading); the whole
- *   download has [TOTAL_TIMEOUT_MS], each connect and read its own timeout in the
- *   transport.
+ *   streaming (a larger declared length is refused before reading).
+ * - Time: a watchdog aborts the transport ([TransportAbort]) when the download's
+ *   coroutine is cancelled (switched off, deleted) and after [TOTAL_TIMEOUT_MS]
+ *   for the whole download, redirects included. A blocked connect or read ends at
+ *   once, so the real worst case is [TOTAL_TIMEOUT_MS] (plus a DNS lookup that
+ *   is already running, which no client can interrupt). Each connect and read
+ *   also has its own timeout in the transport.
  * - It never throws to its caller (only coroutine cancellation is passed on):
  *   every failure is a [DownloadResult.Failure].
  *
- * Blocking; the caller runs it on an IO dispatcher.
+ * Blocking; the caller runs it on an IO dispatcher, whose other threads run the
+ * watchdog.
  */
 internal class ProgramDownloader(
     private val transport: ProgramTransport,
     appVersion: String,
-    private val nanoTime: () -> Long = System::nanoTime,
     private val maxBytes: Long = MAX_BYTES,
+    private val totalTimeoutMs: Long = TOTAL_TIMEOUT_MS,
 ) {
     val userAgent: String = userAgent(appVersion)
 
-    suspend fun download(isAllowed: () -> Boolean): DownloadResult {
-        val deadline = nanoTime() + TOTAL_TIMEOUT_MS * NANOS_PER_MILLI
+    suspend fun download(isAllowed: () -> Boolean): DownloadResult = coroutineScope {
+        val abort = TransportAbort()
+        val finished = AtomicBoolean(false)
+        val watchdog = launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                delay(totalTimeoutMs)
+            } finally {
+                // Timed out, or the download was cancelled: end a blocked connect or read.
+                if (!finished.get()) abort.abort()
+            }
+        }
+        try {
+            fetch(isAllowed, abort)
+        } finally {
+            finished.set(true)
+            watchdog.cancel()
+        }
+    }
+
+    private suspend fun fetch(isAllowed: () -> Boolean, abort: TransportAbort): DownloadResult {
         var uri = PROGRAM_URI
         var redirects = 0
         while (true) {
             currentCoroutineContext().ensureActive()
             if (!isAllowed()) return DownloadResult.NotAllowed
-            if (nanoTime() - deadline > 0) return DownloadResult.Failure(ProgramError.NETWORK)
+            if (abort.isAborted) return DownloadResult.Failure(ProgramError.NETWORK) // timed out
             val response = try {
-                transport.get(uri, requestHeaders())
+                transport.get(uri, requestHeaders(), abort)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                return DownloadResult.Failure(classify(e))
+                return failure(e, abort)
             }
             val next: URI = response.useSafely {
                 when (it.status) {
-                    HTTP_OK -> return readBody(it, deadline)
+                    HTTP_OK -> return readBody(it, abort)
                     in REDIRECT_CODES -> {
                         if (redirects >= MAX_REDIRECTS) return DownloadResult.Failure(ProgramError.REDIRECT_REFUSED)
                         resolveRedirect(uri, it.location) ?: return DownloadResult.Failure(ProgramError.REDIRECT_REFUSED)
@@ -87,7 +115,7 @@ internal class ProgramDownloader(
         "Accept" to "text/html",
     )
 
-    private suspend fun readBody(response: TransportResponse, deadline: Long): DownloadResult {
+    private suspend fun readBody(response: TransportResponse, abort: TransportAbort): DownloadResult {
         if (response.contentLength > maxBytes) return DownloadResult.Failure(ProgramError.TOO_LARGE)
         return try {
             val known = response.contentLength.takeIf { it in 1..maxBytes }
@@ -97,7 +125,7 @@ internal class ProgramDownloader(
             var total = 0L
             while (true) {
                 currentCoroutineContext().ensureActive()
-                if (nanoTime() - deadline > 0) return DownloadResult.Failure(ProgramError.NETWORK)
+                if (abort.isAborted) return DownloadResult.Failure(ProgramError.NETWORK)
                 // Never read more than one byte past the limit.
                 val wanted = minOf(buffer.size.toLong(), maxBytes + 1 - total).toInt()
                 val read = response.body.read(buffer, 0, wanted)
@@ -110,8 +138,17 @@ internal class ProgramDownloader(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            DownloadResult.Failure(classify(e))
+            failure(e, abort)
         }
+    }
+
+    /** A failed call: cancellation if the watchdog aborted it for that reason, else the error. */
+    private suspend fun failure(e: Exception, abort: TransportAbort): DownloadResult {
+        if (abort.isAborted) {
+            currentCoroutineContext().ensureActive() // cancelled: pass it on
+            return DownloadResult.Failure(ProgramError.NETWORK) // timed out
+        }
+        return DownloadResult.Failure(classify(e))
     }
 
     /** Closes the response whatever happens; a failing close doesn't matter after the body was read. */
@@ -142,7 +179,6 @@ internal class ProgramDownloader(
         private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
         private const val CHUNK_SIZE = 64 * 1024
         private const val INITIAL_BUFFER = 4 * 1024 * 1024
-        private const val NANOS_PER_MILLI = 1_000_000L
         private const val MAX_LOCATION_LENGTH = 2_048
         private val VERSION_NAME = Regex("[0-9A-Za-z.+-]{1,32}")
 

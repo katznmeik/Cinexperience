@@ -30,9 +30,10 @@ object ProgramFiles {
  * - [write] is atomic: a temporary file in the same folder, flushed to disk and
  *   then renamed over the old file, so a crash leaves either the old or the new
  *   program, never a mix. The repository calls it only with a program that was
- *   parsed and checked.
- * - [read] never throws: a missing, corrupt, oversized or unknown-version file
- *   counts as no cache. Every value is checked again like data from the page.
+ *   parsed and checked. A program larger than [MAX_FILE_BYTES] isn't written.
+ * - [read] never throws an exception: a missing, corrupt, oversized or
+ *   other-version file counts as no cache. Every value is checked again like
+ *   data from the page.
  * - [delete] removes the file ("Delete downloaded program").
  *
  * Everything stays inside [folder]. Blocking; call it on an IO dispatcher.
@@ -56,11 +57,13 @@ internal class ProgramCache(private val folder: File) {
     fun write(program: Program): Boolean {
         var temp: File? = null
         return try {
+            val bytes = json.encodeToString(CachedProgram.serializer(), toDto(program)).toByteArray(Charsets.UTF_8)
+            if (bytes.size > MAX_FILE_BYTES) return false
             if (!folder.isDirectory && !folder.mkdirs()) return false
             deleteTempFiles()
             val tempFile = File.createTempFile(TEMP_PREFIX, TEMP_SUFFIX, folder).also { temp = it }
             FileOutputStream(tempFile).use { out ->
-                out.write(json.encodeToString(CachedProgram.serializer(), toDto(program)).toByteArray(Charsets.UTF_8))
+                out.write(bytes)
                 out.flush()
                 out.fd.sync()
             }
@@ -98,13 +101,17 @@ internal class ProgramCache(private val folder: File) {
         }
     }
 
+    private fun FilmKey.toDto() = CachedKey(kind.name, slug)
+
+    private fun CachedKey.toKey() = FilmKey(FilmKind.valueOf(kind), slug)
+
     private fun toDto(program: Program) = CachedProgram(
         formatVersion = FORMAT_VERSION,
         fetchedAt = program.fetchedAt.toString(),
         films = program.films.map { film ->
             CachedFilm(
-                slug = film.slug,
                 kind = film.kind.name,
+                slug = film.slug,
                 title = film.title,
                 tagline = film.tagline,
                 genre = film.genre,
@@ -116,11 +123,12 @@ internal class ProgramCache(private val folder: File) {
         showings = program.showings.map { showing ->
             CachedShowing(
                 id = showing.id,
-                filmSlug = showing.filmSlug,
+                film = showing.filmKey.toDto(),
                 start = showing.start.toString(),
                 cinema = showing.cinema.name,
                 versions = showing.versions.map { it.label },
                 eventLabels = showing.eventLabels,
+                specials = showing.specialKeys.map { it.toDto() },
             )
         },
     )
@@ -135,7 +143,7 @@ internal class ProgramCache(private val folder: File) {
         if (dto.formatVersion != FORMAT_VERSION) return null
         if (dto.films.size > ProgramRules.MAX_FILMS || dto.showings.size > ProgramRules.MAX_SHOWINGS) return null
         val fetchedAt = Instant.parse(dto.fetchedAt)
-        val films = LinkedHashMap<String, Film>()
+        val films = LinkedHashMap<FilmKey, Film>()
         for (cached in dto.films) {
             val film = orNull {
                 Film(
@@ -149,24 +157,25 @@ internal class ProgramCache(private val folder: File) {
                     releaseDate = cached.releaseDate?.let(LocalDate::parse),
                 )
             } ?: continue
-            films.putIfAbsent(film.slug, film)
+            films.putIfAbsent(film.key, film)
         }
         val ids = HashSet<String>()
         val showings = dto.showings.mapNotNull { cached ->
             orNull {
                 Showing(
                     id = cached.id,
-                    filmSlug = cached.filmSlug,
+                    filmKey = cached.film.toKey(),
                     start = LocalDateTime.parse(cached.start),
                     cinema = ProgramCinema.fromYorckName(cached.cinema),
                     versions = cached.versions.mapNotNull(ShowingVersion::fromLabel).distinct(),
                     eventLabels = cached.eventLabels.distinct(),
+                    specialKeys = cached.specials.mapNotNull { orNull { it.toKey() } }.filter { it in films }.distinct(),
                 )
-            }?.takeIf { it.filmSlug in films && ids.add(it.id) }
-        }.sortedWith(compareBy<Showing>({ it.start }, { it.cinema.name }, { it.id }))
+            }?.takeIf { it.filmKey in films && ids.add(it.id) }
+        }.sortedWith(ProgramPageParser.SHOWING_ORDER)
         if (showings.isEmpty()) return null
-        val usedSlugs = showings.mapTo(HashSet()) { it.filmSlug }
-        return Program(fetchedAt, films.values.filter { it.slug in usedSlugs }, showings)
+        val used = showings.flatMapTo(HashSet()) { listOf(it.filmKey) + it.specialKeys }
+        return Program(fetchedAt, films.values.filter { it.key in used }, showings)
     }
 
     private inline fun <T> orNull(build: () -> T): T? = try {
@@ -184,9 +193,12 @@ internal class ProgramCache(private val folder: File) {
     )
 
     @Serializable
+    private data class CachedKey(val kind: String, val slug: String)
+
+    @Serializable
     private data class CachedFilm(
-        val slug: String,
         val kind: String,
+        val slug: String,
         val title: String,
         val tagline: String?,
         val genre: String?,
@@ -198,21 +210,28 @@ internal class ProgramCache(private val folder: File) {
     @Serializable
     private data class CachedShowing(
         val id: String,
-        val filmSlug: String,
+        /** The owning film or special. */
+        val film: CachedKey,
         /** Berlin wall-clock time, ISO local date-time. */
         val start: String,
         /** Yorck's cinema name; the seed key is matched again on reading. */
         val cinema: String,
         val versions: List<String>,
         val eventLabels: List<String>,
+        /** The specials that list this showing too. */
+        val specials: List<CachedKey>,
     )
 
     companion object {
-        /** Version of the cache file format; a file with another version is ignored (and replaced on the next download). */
-        const val FORMAT_VERSION: Int = 1
+        /**
+         * Version of the cache file format; a file with another version is ignored
+         * (and replaced on the next download). 1 (first M9 draft) keyed films by slug
+         * only; 2 keys them by kind and slug and links specials to showings.
+         */
+        const val FORMAT_VERSION: Int = 2
 
         /** Today's program is about 0.3 MB in this format. */
-        const val MAX_FILE_BYTES: Long = 16L * 1024 * 1024
+        const val MAX_FILE_BYTES: Long = 4L * 1024 * 1024
 
         private const val TEMP_PREFIX = "program-"
         private const val TEMP_SUFFIX = ".tmp"

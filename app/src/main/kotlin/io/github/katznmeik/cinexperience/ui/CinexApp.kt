@@ -42,7 +42,7 @@ import io.github.katznmeik.cinexperience.feature.cinemas.closeDeletedCinema
 import io.github.katznmeik.cinexperience.feature.cinemas.manageCinemasScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.navigateToCinemaDetail
 import io.github.katznmeik.cinexperience.feature.cinemas.navigateToManageCinemas
-import io.github.katznmeik.cinexperience.feature.program.FilmId
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.feature.program.LogVisitRequest
 import io.github.katznmeik.cinexperience.feature.program.filmScreen
 import io.github.katznmeik.cinexperience.feature.program.navigateToFilm
@@ -142,7 +142,7 @@ fun CinexApp(
                 onBack = navController::navigateUp,
                 onOpenHall = navController::navigateToHallDetail,
                 onCinemaDeleted = navController::closeDeletedCinema,
-                onOpenFilm = { kind, slug -> navController.navigateToFilm(FilmId(kind, slug)) },
+                onOpenFilm = { kind, slug -> navController.navigateToFilm(FilmKey(kind, slug)) },
                 // "Show all in Program" switches to the Program tab, filtered to the cinema.
                 onShowAllInProgram = { seedKey ->
                     if (!importing) {

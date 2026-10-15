@@ -87,6 +87,9 @@ internal fun timeRangeText(from: LocalTime?, to: LocalTime?): String = when {
     else -> "${timeText(from)}–${timeText(to)}"
 }
 
+/** "Part of: Autumn Classics" (the specials' titles isolated, spec §11.1). */
+internal fun partOfText(titles: List<String>): String = "Part of: " + titles.joinToString(", ") { isolate(it) }
+
 /** "1 showing", "12 showings". */
 internal fun showingsText(count: Int): String = if (count == 1) "1 showing" else "$count showings"
 

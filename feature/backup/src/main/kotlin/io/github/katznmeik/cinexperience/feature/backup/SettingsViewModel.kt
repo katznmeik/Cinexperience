@@ -14,7 +14,7 @@ import io.github.katznmeik.cinexperience.core.data.backup.SafetyCopy
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.program.DownloadPermission
-import io.github.katznmeik.cinexperience.core.program.ProgramError
+import io.github.katznmeik.cinexperience.core.program.ProgramActionResult
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramStatus
 import kotlinx.coroutines.CancellationException
@@ -87,7 +87,7 @@ data class BackupUiState(
  * @property isLoaded the stored permission and the cached program have been read.
  * @property downloadsOn the switch "Download program from yorck.de" (on = allowed).
  * @property lastDownload when the downloaded program was fetched, `null` without one.
- * @property errorMessage why the last switch or delete failed.
+ * @property errorMessage why the last switch or delete failed ([ProgramActionResult.Failure]).
  * @property confirmingDelete "Delete downloaded program" waits for confirmation.
  */
 data class ProgramSettingsState(
@@ -99,15 +99,6 @@ data class ProgramSettingsState(
     val confirmingDelete: Boolean = false,
 ) {
     val hasProgram: Boolean get() = lastDownload != null
-}
-
-/**
- * The message of a failed Settings action (the switch or deleting the program),
- * `null` otherwise; download failures are shown in the Program tab.
- */
-internal fun programSettingsError(status: ProgramStatus): String? {
-    val failed = status as? ProgramStatus.Failed ?: return null
-    return failed.message.takeIf { failed.error == ProgramError.SETTING_NOT_SAVED || failed.error == ProgramError.DELETE_FAILED }
 }
 
 data class SettingsUiState(
@@ -133,14 +124,17 @@ class SettingsViewModel(
 
     private val confirmingProgramDelete = MutableStateFlow(false)
 
+    /** The message of the last failed Program command, cleared by the next one. */
+    private val programError = MutableStateFlow<String?>(null)
+
     private val programSettings: Flow<ProgramSettingsState> =
-        combine(programRepository.state, confirmingProgramDelete) { state, confirming ->
+        combine(programRepository.state, confirmingProgramDelete, programError) { state, confirming, error ->
             ProgramSettingsState(
                 isLoaded = state.isLoaded,
                 downloadsOn = state.permission == DownloadPermission.ALLOWED,
                 lastDownload = state.fetchedAt,
                 isDownloading = state.status == ProgramStatus.Loading,
-                errorMessage = programSettingsError(state.status),
+                errorMessage = error,
                 confirmingDelete = confirming && state.program != null,
             )
         }
@@ -296,8 +290,9 @@ class SettingsViewModel(
      */
     fun onProgramDownloadsChanged(enabled: Boolean) {
         if (transient.value.task is BackupTask.Importing) return
+        programError.value = null
         viewModelScope.launch {
-            if (enabled) programRepository.allowDownloads() else programRepository.setDownloadsEnabled(false)
+            report(if (enabled) programRepository.allowDownloads() else programRepository.setDownloadsEnabled(false))
         }
     }
 
@@ -310,7 +305,12 @@ class SettingsViewModel(
     fun onConfirmDeleteProgram() {
         if (!confirmingProgramDelete.value) return
         confirmingProgramDelete.value = false
-        viewModelScope.launch { programRepository.deleteProgram() }
+        programError.value = null
+        viewModelScope.launch { report(programRepository.deleteProgram()) }
+    }
+
+    private fun report(result: ProgramActionResult) {
+        programError.value = (result as? ProgramActionResult.Failure)?.message
     }
 
     fun onCancelDeleteProgram() {

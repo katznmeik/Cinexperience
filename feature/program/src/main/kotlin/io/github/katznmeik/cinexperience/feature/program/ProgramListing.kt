@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.program
 
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.program.Program
 import io.github.katznmeik.cinexperience.core.program.Showing
@@ -57,7 +58,7 @@ class CinemaJoin(cinemas: List<CinemaDetail>) {
  */
 data class ShowingItem(
     val showingId: String,
-    val film: FilmId,
+    val film: FilmKey,
     val filmTitle: String,
     val start: LocalDateTime,
     val cinemaName: String,
@@ -66,6 +67,8 @@ data class ShowingItem(
     val events: List<String>,
     val runtimeMinutes: Int?,
     val endsAbout: LocalDateTime?,
+    /** Titles of the specials (series, festivals) that also list this showing. */
+    val partOf: List<String> = emptyList(),
 ) {
     val hallName: String? get() = cinema?.singleHall
 }
@@ -79,7 +82,7 @@ fun showingItem(program: Program, showing: Showing, join: CinemaJoin): ShowingIt
     val cinema = join[showing.cinema.seedKey]
     return ShowingItem(
         showingId = showing.id,
-        film = ProgramLookup.idOf(film),
+        film = film.key,
         filmTitle = film.title,
         start = showing.start,
         cinemaName = cinema?.name ?: showing.cinema.name,
@@ -88,6 +91,7 @@ fun showingItem(program: Program, showing: Showing, join: CinemaJoin): ShowingIt
         events = showing.eventLabels,
         runtimeMinutes = film.runtimeMinutes,
         endsAbout = ProgramLookup.endsAbout(showing, film),
+        partOf = ProgramLookup.specialsOf(program, showing).map { it.title },
     )
 }
 

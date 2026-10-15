@@ -32,7 +32,12 @@ data class VisitPrefill(
     val screeningFormat: ScreeningFormat?,
 )
 
-/** The pre-fill for a visit to this showing of [film]. */
+/**
+ * The pre-fill for a visit to this showing of [film]; pass `program.filmOf(showing)`.
+ * A showing that only a special lists (e.g. a festival screening with no film
+ * entry) belongs to the special, so its title is the special's, e.g. "Midnight
+ * Surprise Screening"; the owner can edit it in the form.
+ */
 fun Showing.visitPrefill(film: Film?): VisitPrefill = VisitPrefill(
     cinemaSeedKey = cinema.seedKey,
     date = start.toLocalDate(),

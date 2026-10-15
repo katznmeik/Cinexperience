@@ -11,7 +11,8 @@ import java.time.ZoneOffset
 
 /**
  * Optional local check against a saved copy of Yorck's real page, which is never
- * committed (Yorck's content is copyrighted). Skipped unless `CINEX_PROGRAM_PAGE`
+ * committed (Yorck's content is copyrighted; `.gitignore` ignores `yorck-pages/`
+ * and `*.yorck.html`, so keep copies there). Skipped unless `CINEX_PROGRAM_PAGE`
  * names the file:
  *
  * ```
@@ -42,6 +43,12 @@ class RealProgramPageTest {
             appendLine("Page: ${file.length()} bytes, now = ${clock.instant()}")
             appendLine("Films: ${program.films.size} (${program.films.count { it.kind == FilmKind.FILM }} films, ${program.films.count { it.kind == FilmKind.SPECIAL }} specials)")
             appendLine("Showings: ${program.showings.size}")
+            val linked = program.showings.filter { it.specialKeys.isNotEmpty() }
+            appendLine("Showings a special lists too (linked): ${linked.size}, links ${linked.sumOf { it.specialKeys.size }}")
+            val specials = program.films.filter { it.kind == FilmKind.SPECIAL }
+            appendLine("Specials owning showings: ${specials.count { key -> program.showings.any { it.filmKey == key.key } }}, only linked: ${specials.count { key -> program.showings.none { it.filmKey == key.key } }}")
+            appendLine("Specials sharing a page name with a film: ${specials.count { program.film(FilmKey(FilmKind.FILM, it.slug)) != null }}")
+            appendLine("Every film and special has showings: ${program.films.all { program.showingsOf(it.key).isNotEmpty() }}")
             appendLine("Skipped: ${success.skippedFilms} films, ${success.skippedShowings} showings (invalid or duplicate)")
             appendLine("Dates: ${program.showings.first().start} … ${program.showings.last().start}")
             appendLine("Cinemas: ${cinemas.size}, matched ${cinemas.keys.count { it.seedKey != null }}")

@@ -13,6 +13,13 @@ captures/
 # Local configuration
 local.properties
 
+# Locally saved yorck.de pages for RealProgramPageTest (CINEX_PROGRAM_PAGE):
+# Yorck's content is copyrighted and never committed. Keep them in yorck-pages/
+# or name them *.yorck.html.
+yorck-pages/
+*.yorck.html
+*yorck.de*.html
+
 # Signing material — never commit (spec §14.4)
 *.jks
 *.keystore

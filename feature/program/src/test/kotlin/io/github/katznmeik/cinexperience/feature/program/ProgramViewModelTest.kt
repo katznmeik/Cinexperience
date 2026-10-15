@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.program
 
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import androidx.lifecycle.SavedStateHandle
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.program.DownloadPermission
@@ -142,9 +143,18 @@ class ProgramViewModelTest {
         assertEquals(SampleProgram.FETCHED_AT, vm.state.asOf)
         assertEquals(4, vm.state.showingCount)
 
-        // A failure of a Settings action isn't a download error.
-        program.state.update { it.copy(status = ProgramStatus.Failed(ProgramError.SETTING_NOT_SAVED)) }
+        vm.dismissError()
         assertNull(vm.state.errorMessage)
+        assertTrue(vm.state.hasProgram)
+    }
+
+    @Test
+    fun aFailedConsentCommandIsReported() = runTest {
+        val program = FakeProgramRepository()
+        program.nextActionFailure = ProgramError.SETTING_NOT_SAVED
+        val vm = viewModel(program)
+        vm.allowDownloads()
+        assertEquals(ProgramError.SETTING_NOT_SAVED.message, vm.state.message)
     }
 
     // ---- Results and the cinema join ----
@@ -159,7 +169,7 @@ class ProgramViewModelTest {
         )
         val first = vm.state.days.single().showings.first()
         assertEquals("The Quiet Projectionist", first.filmTitle)
-        assertEquals(FilmId(FilmKind.FILM, "the-quiet-projectionist"), first.film)
+        assertEquals(FilmKey(FilmKind.FILM, "the-quiet-projectionist"), first.film)
         assertTrue(first.cinema!!.isFavourite)
         assertNotNull(first.cinema.overallScore) // delphi LUX has rated visits in the sample data
         assertNull(first.hallName) // delphi LUX has 7 halls

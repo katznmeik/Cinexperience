@@ -157,6 +157,9 @@ private fun ShowingDetails(item: ShowingItem, showFilmTitle: Boolean, showCinema
                 item.events.forEach { LabelChip(it) }
             }
         }
+        if (item.partOf.isNotEmpty()) {
+            Text(partOfText(item.partOf), style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
+        }
         val meta = listOfNotNull(runtimeText(item), item.hallName).joinToString(" · ")
         if (meta.isNotEmpty()) {
             Text(meta, style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)

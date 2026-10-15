@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.program
 
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -22,14 +23,14 @@ data class ProgramRoute(val cinemaSeedKey: String? = null)
 
 /**
  * The film page (spec §6.9) of the film or special [slug]; [kind] is a
- * [io.github.katznmeik.cinexperience.core.program.FilmKind] name. See [FilmId].
+ * [io.github.katznmeik.cinexperience.core.program.FilmKind] name (see [FilmKey]).
  */
 @Serializable
 data class FilmRoute(val kind: String, val slug: String) {
-    constructor(film: FilmId) : this(film.kind.name, film.slug)
+    constructor(film: FilmKey) : this(film.kind.name, film.slug)
 }
 
-fun NavController.navigateToFilm(film: FilmId) = navigate(FilmRoute(film))
+fun NavController.navigateToFilm(film: FilmKey) = navigate(FilmRoute(film))
 
 /**
  * Opens the Program tab filtered to the cinema [cinemaSeedKey] from another tab.
@@ -52,7 +53,7 @@ fun NavGraphBuilder.programScreen(
     programRepository: ProgramRepository,
     cinemaRepository: CinemaRepository,
     filterStore: ProgramFilterStore,
-    onOpenFilm: (FilmId) -> Unit,
+    onOpenFilm: (FilmKey) -> Unit,
     onLogVisit: (LogVisitRequest) -> Unit,
 ) {
     composable<ProgramRoute> { entry ->
@@ -77,7 +78,7 @@ fun NavGraphBuilder.filmScreen(
     composable<FilmRoute> { entry ->
         val route = entry.toRoute<FilmRoute>()
         ScreenBackground {
-            val film = FilmId.of(route.kind, route.slug)
+            val film = ProgramLookup.keyOf(route.kind, route.slug)
             if (film == null) {
                 FilmScreen(FilmUiState(content = FilmContent.NotFound), object : FilmActions {
                     override fun onBack() = onBack()

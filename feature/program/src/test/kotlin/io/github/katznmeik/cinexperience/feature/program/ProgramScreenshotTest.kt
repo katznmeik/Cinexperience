@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.program
 
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -13,6 +14,7 @@ import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.program.ProgramError
 import io.github.katznmeik.cinexperience.core.testing.ACCESSIBILITY_FONT_SCALES
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
+import io.github.katznmeik.cinexperience.core.testing.SampleProgram
 import io.github.katznmeik.cinexperience.core.testing.ScreenshotSurface
 import io.github.katznmeik.cinexperience.core.testing.assertAccessible
 import io.github.katznmeik.cinexperience.core.testing.fontScaleSuffix
@@ -97,7 +99,7 @@ class ProgramScreenshotTest {
     @Test
     fun actionsReachTheViewModel() {
         val booked = mutableListOf<String>()
-        val films = mutableListOf<FilmId>()
+        val films = mutableListOf<FilmKey>()
         val state = F.state()
         capture(
             "program_today",
@@ -107,7 +109,7 @@ class ProgramScreenshotTest {
                     booked += showingId
                 }
 
-                override fun onOpenFilm(film: FilmId) {
+                override fun onOpenFilm(film: FilmKey) {
                     films += film
                 }
             },
@@ -116,7 +118,7 @@ class ProgramScreenshotTest {
         composeRule.onAllNodesWithContentDescription("Book on yorck.de: ", substring = true)[0].performClick()
         composeRule.onAllNodesWithText("Neon Harbour")[0].performClick()
         assertEquals(listOf(first.showingId), booked)
-        assertEquals(listOf(FilmId(FilmKind.FILM, "neon-harbour")), films)
+        assertEquals(listOf(FilmKey(FilmKind.FILM, "neon-harbour")), films)
     }
 
     @OptIn(ExperimentalRoborazziApi::class)
@@ -140,9 +142,18 @@ class ProgramScreenshotTest {
 
     @Test
     fun specialPage() {
-        composeRule.setContent { ScreenshotSurface { FilmScreen(F.film(FilmId(FilmKind.SPECIAL, "midnight-surprise-screening")), FilmActions.None) } }
+        composeRule.setContent { ScreenshotSurface { FilmScreen(F.film(FilmKey(FilmKind.SPECIAL, "midnight-surprise-screening")), FilmActions.None) } }
         composeRule.waitForIdle()
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/film_page_special.png")
+    }
+
+    /** A series that only links showings owned by films. */
+    @Test
+    fun seriesPage() {
+        composeRule.setContent { ScreenshotSurface { FilmScreen(F.film(SampleProgram.AUTUMN_CLASSICS), FilmActions.None) } }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("The Quiet Projectionist").assertExists()
+        composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/film_page_series.png")
     }
 
     @Test

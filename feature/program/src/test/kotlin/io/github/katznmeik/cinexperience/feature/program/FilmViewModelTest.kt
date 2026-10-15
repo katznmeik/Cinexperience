@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.program
 
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.program.DownloadPermission
 import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.program.ProgramState
@@ -28,9 +29,9 @@ class FilmViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val program = FakeProgramRepository.withProgram()
-    private val quietProjectionist = FilmId(FilmKind.FILM, "the-quiet-projectionist")
+    private val quietProjectionist = FilmKey(FilmKind.FILM, "the-quiet-projectionist")
 
-    private fun TestScope.viewModel(film: FilmId = quietProjectionist, now: Instant = SampleProgram.FETCHED_AT): FilmViewModel {
+    private fun TestScope.viewModel(film: FilmKey = quietProjectionist, now: Instant = SampleProgram.FETCHED_AT): FilmViewModel {
         val vm = FilmViewModel(film, program, FakeCinexRepository(SampleData.store()), Clock.fixed(now, ZoneOffset.UTC))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         return vm
@@ -59,7 +60,7 @@ class FilmViewModelTest {
         assertEquals("https://www.yorck.de/en/films/the-quiet-projectionist", vm.uiState.value.pendingLink)
         vm.onLinkHandled(true)
 
-        val special = viewModel(FilmId(FilmKind.SPECIAL, "midnight-surprise-screening"))
+        val special = viewModel(SampleProgram.MIDNIGHT_SURPRISE)
         special.openPage()
         assertEquals("https://www.yorck.de/en/specials/midnight-surprise-screening", special.uiState.value.pendingLink)
     }
@@ -74,8 +75,21 @@ class FilmViewModelTest {
     }
 
     @Test
+    fun aSeriesListsTheShowingsItLinksAndFilmsNameTheirSeries() = runTest {
+        val series = viewModel(SampleProgram.AUTUMN_CLASSICS)
+        val rows = series.loaded.cinemas.flatMap { group -> group.days.flatMap { it.showings } }
+        assertEquals(listOf("Kant Kino", "Blauer Stern"), rows.map { it.cinemaName })
+        assertEquals(listOf("The Quiet Projectionist", "Neon Harbour"), rows.map { it.filmTitle })
+
+        val film = viewModel()
+        val kantKino = film.loaded.cinemas.first { it.cinemaName == "Kant Kino" }.days.single().showings.single()
+        assertEquals(listOf("Autumn Classics"), kantKino.partOf)
+        assertEquals(emptyList<String>(), film.loaded.cinemas.first().days.first().showings.first().partOf)
+    }
+
+    @Test
     fun aFilmOfAnotherKindOrWithoutProgramIsNotFound() = runTest {
-        assertEquals(FilmContent.NotFound, viewModel(FilmId(FilmKind.SPECIAL, "the-quiet-projectionist")).uiState.value.content)
+        assertEquals(FilmContent.NotFound, viewModel(FilmKey(FilmKind.SPECIAL, "the-quiet-projectionist")).uiState.value.content)
         program.state.value = ProgramState(permission = DownloadPermission.ALLOWED, isLoaded = true)
         val vm = viewModel()
         assertEquals(FilmContent.NotFound, vm.uiState.value.content)

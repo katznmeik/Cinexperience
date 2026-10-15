@@ -112,12 +112,26 @@ class SettingsProgramViewModelTest {
     }
 
     @Test
-    fun onlySettingsFailuresAreShownHere() = runTest {
+    fun commandFailuresAreShownHereButNotDownloadErrors() = runTest {
         val vm = viewModel()
         program.state.update { it.copy(status = ProgramStatus.Failed(ProgramError.OFFLINE)) }
         assertNull(vm.programState.errorMessage)
-        program.state.update { it.copy(status = ProgramStatus.Failed(ProgramError.DELETE_FAILED)) }
+
+        program.nextActionFailure = ProgramError.SETTING_NOT_SAVED
+        vm.onProgramDownloadsChanged(false)
+        assertEquals(ProgramError.SETTING_NOT_SAVED.message, vm.programState.errorMessage)
+
+        program.nextActionFailure = ProgramError.DELETE_FAILED
+        vm.onDeleteProgram()
+        vm.onConfirmDeleteProgram()
         assertEquals(ProgramError.DELETE_FAILED.message, vm.programState.errorMessage)
+        assertTrue(vm.programState.hasProgram)
+
+        // The next command that works clears it.
+        vm.onDeleteProgram()
+        vm.onConfirmDeleteProgram()
+        assertNull(vm.programState.errorMessage)
+        assertFalse(vm.programState.hasProgram)
     }
 }
 
@@ -168,6 +182,20 @@ class SettingsProgramScreenshotTest {
         composeRule.onNode(androidx.compose.ui.test.isToggleable()).assertIsOff()
         composeRule.onNodeWithText("Delete downloaded program").assertHasNoClickAction()
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/settings-program-off.png")
+    }
+
+    @Test
+    fun commandFailure() {
+        show(
+            ProgramSettingsState(
+                isLoaded = true,
+                downloadsOn = true,
+                lastDownload = SampleProgram.FETCHED_AT,
+                errorMessage = ProgramError.DELETE_FAILED.message,
+            ),
+        )
+        composeRule.onNodeWithText(ProgramError.DELETE_FAILED.message).performScrollTo().assertExists()
+        composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/settings-program-error.png")
     }
 
     @Test

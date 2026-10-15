@@ -127,6 +127,14 @@ class ProgramFiltersTest {
     }
 
     @Test
+    fun searchAlsoFindsTheShowingsOfASeries() {
+        assertEquals(
+            listOf("20:45 Kant Kino", "19:00 Blauer Stern"),
+            titles(ProgramFilter(day = DayChoice.THIS_WEEK, search = "autumn")),
+        )
+    }
+
+    @Test
     fun searchIgnoresCaseAndAccents() {
         val program = buildProgram {
             film("Amélie à Paris") { showing("2026-10-15T20:00", "Kant Kino") }

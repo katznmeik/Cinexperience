@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.program
 
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -70,6 +71,7 @@ internal interface ProgramActions {
     fun onNotNow() {}
     fun onTurnOn() {}
     fun onRefresh() {}
+    fun onDismissError() {}
     fun onSearch(text: String) {}
     fun onSelectDay(day: DayChoice) {}
     fun onToggleDate(date: LocalDate) {}
@@ -88,7 +90,7 @@ internal interface ProgramActions {
     fun onSaveFilter(name: String): String? = null
     fun onApplySavedFilter(name: String) {}
     fun onDeleteSavedFilter(name: String) {}
-    fun onOpenFilm(film: FilmId) {}
+    fun onOpenFilm(film: FilmKey) {}
     fun onBook(showingId: String) {}
     fun onLogVisit(showingId: String) {}
     fun onMessageShown() {}
@@ -101,7 +103,7 @@ internal interface ProgramActions {
 @Composable
 internal fun ProgramEntry(
     viewModel: ProgramViewModel,
-    onOpenFilm: (FilmId) -> Unit,
+    onOpenFilm: (FilmKey) -> Unit,
     onLogVisit: (LogVisitRequest) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -113,6 +115,7 @@ internal fun ProgramEntry(
             override fun onNotNow() = viewModel.notNow()
             override fun onTurnOn() = viewModel.turnOn()
             override fun onRefresh() = viewModel.refresh()
+            override fun onDismissError() = viewModel.dismissError()
             override fun onSearch(text: String) = viewModel.setSearch(text)
             override fun onSelectDay(day: DayChoice) = viewModel.selectDay(day)
             override fun onToggleDate(date: LocalDate) = viewModel.toggleDate(date)
@@ -131,7 +134,7 @@ internal fun ProgramEntry(
             override fun onSaveFilter(name: String) = viewModel.saveFilter(name)
             override fun onApplySavedFilter(name: String) = viewModel.applySavedFilter(name)
             override fun onDeleteSavedFilter(name: String) = viewModel.deleteSavedFilter(name)
-            override fun onOpenFilm(film: FilmId) = onOpenFilm(film)
+            override fun onOpenFilm(film: FilmKey) = onOpenFilm(film)
             override fun onBook(showingId: String) = viewModel.book(showingId)
             override fun onLogVisit(showingId: String) {
                 viewModel.logVisit(showingId)?.let(onLogVisit)
@@ -305,7 +308,10 @@ private fun ErrorCard(message: String, actions: ProgramActions) {
             .padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 4.dp),
     ) {
         Text(message, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text, modifier = Modifier.padding(end = 6.dp))
-        ActionPillButton(text = "Try again", description = "Try again", onClick = actions::onRefresh, icon = CinexIcons.Refresh)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            ActionPillButton(text = "Try again", description = "Try again", onClick = actions::onRefresh, icon = CinexIcons.Refresh)
+            ActionPillButton(text = "Dismiss", description = "Dismiss the error", onClick = actions::onDismissError, icon = CinexIcons.Close)
+        }
     }
 }
 

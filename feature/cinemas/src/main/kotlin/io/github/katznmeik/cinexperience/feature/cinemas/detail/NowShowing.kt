@@ -37,11 +37,12 @@ sealed interface NowShowing {
 
     companion object {
         /** Today and the 6 days after it. */
-        const val NOW_SHOWING_DAYS = 7L
+        const val NOW_SHOWING_DAYS = 7
 
         /**
          * The section for the cinema [seedKey] from the already downloaded program in
-         * [state] (it never downloads), at [now] on Berlin date [today].
+         * [state] (it never downloads), at [now] on Berlin date [today]
+         * ([io.github.katznmeik.cinexperience.core.program.Program.nowShowing]).
          */
         fun of(state: ProgramState, seedKey: String?, now: Instant, today: LocalDate): NowShowing {
             if (!state.isLoaded || seedKey == null || seedKey !in YorckCinemas.seedKeys) return Hidden
@@ -55,14 +56,11 @@ sealed interface NowShowing {
                     },
                 )
             }
-            val last = today.plusDays(NOW_SHOWING_DAYS - 1)
-            val days = program.showings
-                .filter { it.cinema.seedKey == seedKey && it.isUpcoming(now) && !it.start.toLocalDate().isAfter(last) }
-                .groupBy { it.start.toLocalDate() }
+            val days = program.nowShowing(seedKey, now, NOW_SHOWING_DAYS)
                 .map { (date, showings) ->
                     NowShowingDay(
                         date,
-                        showings.sortedBy { it.start }.map { showing ->
+                        showings.map { showing ->
                             val film = program.filmOf(showing)
                             NowShowingItem(showing.id, film.kind, film.slug, film.title, showing.start, showing.versions, showing.eventLabels)
                         },

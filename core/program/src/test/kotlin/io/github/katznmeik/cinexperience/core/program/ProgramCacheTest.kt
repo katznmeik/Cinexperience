@@ -28,15 +28,23 @@ class ProgramCacheTest {
         films = listOf(
             Film("the-quiet-hour", title, FilmKind.FILM, "A tagline.", "Drama", 104, 12, LocalDate.of(2026, 10, 1)),
             Film("night-of-reels", "Night of Reels", FilmKind.SPECIAL),
+            // A special with the same page name as the film.
+            Film("the-quiet-hour", "The Quiet Hour Series", FilmKind.SPECIAL),
         ),
         showings = listOf(
             Showing(
-                "1001-1", "the-quiet-hour", LocalDateTime.of(2026, 10, 15, 17, 0), ProgramCinema.fromYorckName("Kino International"),
-                listOf(ShowingVersion.OMU, ShowingVersion.OMEU), listOf("Premiere", "Kids"),
+                "1001-1", QUIET, LocalDateTime.of(2026, 10, 15, 17, 0), ProgramCinema.fromYorckName("Kino International"),
+                listOf(ShowingVersion.OMU, ShowingVersion.OMEU), listOf("Premiere", "Kids"), listOf(REELS, QUIET_SERIES),
             ),
-            Showing("1001-2", "night-of-reels", LocalDateTime.of(2026, 10, 16, 22, 0), ProgramCinema.fromYorckName("Kino Unbekannt")),
+            Showing("1001-2", REELS, LocalDateTime.of(2026, 10, 16, 22, 0), ProgramCinema.fromYorckName("Kino Unbekannt")),
         ),
     )
+
+    private companion object {
+        val QUIET = FilmKey(FilmKind.FILM, "the-quiet-hour")
+        val QUIET_SERIES = FilmKey(FilmKind.SPECIAL, "the-quiet-hour")
+        val REELS = FilmKey(FilmKind.SPECIAL, "night-of-reels")
+    }
 
     @Test
     fun writesAndReadsTheProgram() {
@@ -116,9 +124,37 @@ class ProgramCacheTest {
 
     @Test
     fun anOversizedCacheIsNotRead() {
+        assertEquals(4L * 1024 * 1024, ProgramCache.MAX_FILE_BYTES)
         assertTrue(cache.write(program()))
         RandomAccessFile(file, "rw").use { it.setLength(ProgramCache.MAX_FILE_BYTES + 1) } // sparse
         assertNull(cache.read())
+    }
+
+    @Test
+    fun aProgramAboveTheLimitIsNotWrittenAndTheOldOneStays() {
+        assertTrue(cache.write(program(title = "Old")))
+        val cinema = ProgramCinema.fromYorckName("C".repeat(ProgramRules.MAX_CINEMA_NAME_LENGTH))
+        val huge = Program(
+            Instant.parse("2026-10-15T08:00:00Z"),
+            listOf(Film("the-quiet-hour", "New")),
+            List(ProgramRules.MAX_SHOWINGS) { Showing("1001-$it", QUIET, LocalDateTime.of(2026, 10, 15, 17, 0), cinema) },
+        )
+        assertFalse(cache.write(huge))
+        assertEquals("Old", cache.read()!!.films.first().title)
+        assertEquals(listOf(ProgramFiles.CACHE_FILE), folder.list()!!.toList())
+    }
+
+    @Test
+    fun aCacheOfTheFirstFormatCountsAsNone() {
+        folder.mkdirs()
+        // Format 1 keyed films by slug only.
+        file.writeText(
+            "{\"formatVersion\":1,\"fetchedAt\":\"2026-10-15T08:00:00Z\"," +
+                "\"films\":[{\"slug\":\"a\",\"kind\":\"FILM\",\"title\":\"A\",\"tagline\":null,\"genre\":null,\"runtimeMinutes\":null,\"fsk\":null,\"releaseDate\":null}]," +
+                "\"showings\":[{\"id\":\"1-1\",\"filmSlug\":\"a\",\"start\":\"2026-10-16T17:00\",\"cinema\":\"Odeon\",\"versions\":[],\"eventLabels\":[]}]}",
+        )
+        assertNull(cache.read())
+        assertEquals(2, ProgramCache.FORMAT_VERSION)
     }
 
     @Test
@@ -129,14 +165,15 @@ class ProgramCacheTest {
         // A film with a damaged slug is skipped, with its showings.
         file.writeText(original.replace("\"night-of-reels\"", "\"Night Of Reels\""))
         val withoutSpecial = cache.read()!!
-        assertEquals(listOf("the-quiet-hour"), withoutSpecial.films.map { it.slug })
+        assertEquals(listOf(QUIET, QUIET_SERIES), withoutSpecial.films.map { it.key })
         assertEquals(listOf("1001-1"), withoutSpecial.showings.map { it.id })
+        assertEquals(listOf(QUIET_SERIES), withoutSpecial.showings.single().specialKeys)
 
         // A control character in a title, an invalid showing ID, an unknown kind.
         file.writeText(original.replace("\"The Quiet Hour\"", "\"The\\u0000Quiet Hour\"").replace("\"1001-2\"", "\"1001-2&x\""))
         assertNull(cache.read())
         file.writeText(original.replace("\"SPECIAL\"", "\"TRAILER\""))
-        assertEquals(listOf("the-quiet-hour"), cache.read()!!.films.map { it.slug })
+        assertEquals(listOf(QUIET), cache.read()!!.films.map { it.key })
 
         // Unknown versions are dropped.
         file.writeText(original.replace("\"OmeU\"", "\"3D\""))

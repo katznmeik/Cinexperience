@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.program
 
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.program.Program
 import io.github.katznmeik.cinexperience.core.program.ProgramError
@@ -58,13 +59,9 @@ internal object ProgramScreenFixtures {
         events = setOf("Premiere"),
     )
 
-    fun film(id: FilmId = FilmId(FilmKind.FILM, "the-quiet-projectionist")): FilmUiState {
+    fun film(id: FilmKey = FilmKey(FilmKind.FILM, "the-quiet-projectionist")): FilmUiState {
         val film = ProgramLookup.film(program, id)!!
-        val showings = program.showings.filter { it.isUpcoming(now) && ProgramLookup.belongsTo(program, it, id) }
-        val groups = showings.groupBy { it.cinema.name }.values.map { list ->
-            val first = showingItem(program, list.first(), join)
-            FilmCinemaGroup(first.cinemaName, first.cinema, groupByDay(program, list, join))
-        }
+        val groups = filmGroups(program, film, now, join)
         return FilmUiState(content = FilmContent.Loaded(film, groups), today = today)
     }
 }

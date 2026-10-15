@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.program
 
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -7,6 +8,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.program.Film
+import io.github.katznmeik.cinexperience.core.program.Program
 import io.github.katznmeik.cinexperience.core.program.ProgramLinks
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramState
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 
 /** A cinema's upcoming showings of the film, by day. */
@@ -29,6 +32,22 @@ data class FilmCinemaGroup(
     val cinema: AppCinema?,
     val days: List<ShowingDay>,
 )
+
+/**
+ * The upcoming showings of [film] (its own and, for a special, those it lists) by
+ * cinema (in order of their first showing) and day. "Part of" leaves out [film] itself.
+ */
+internal fun filmGroups(program: Program, film: Film, now: Instant, join: CinemaJoin): List<FilmCinemaGroup> =
+    ProgramLookup.upcomingShowingsOf(program, film.key, now)
+        .groupBy { it.cinema.key }
+        .values
+        .map { list ->
+            val first = showingItem(program, list.first(), join)
+            val days = groupByDay(program, list, join).map { day ->
+                day.copy(showings = day.showings.map { it.copy(partOf = it.partOf - film.title) })
+            }
+            FilmCinemaGroup(first.cinemaName, first.cinema, days)
+        }
 
 sealed interface FilmContent {
     data object Loading : FilmContent
@@ -55,7 +74,7 @@ private data class FilmLocal(val message: String? = null, val pendingLink: Strin
  * the downloaded program; it never downloads.
  */
 class FilmViewModel(
-    private val filmId: FilmId,
+    private val filmId: FilmKey,
     private val programRepository: ProgramRepository,
     cinemaRepository: CinemaRepository,
     private val clock: Clock = Clock.systemDefaultZone(),
@@ -84,15 +103,7 @@ class FilmViewModel(
         if (!state.isLoaded) return FilmContent.Loading
         val program = state.program ?: return FilmContent.NotFound
         val film = ProgramLookup.film(program, filmId) ?: return FilmContent.NotFound
-        val now = clock.instant()
-        val showings = program.showings.filter { it.isUpcoming(now) && ProgramLookup.belongsTo(program, it, filmId) }
-        val groups = showings.groupBy { join[it.cinema.seedKey]?.seedKey ?: "yorck:${it.cinema.name}" }
-            .values
-            .map { list ->
-                val first = showingItem(program, list.first(), join)
-                FilmCinemaGroup(first.cinemaName, first.cinema, groupByDay(program, list, join))
-            }
-        return FilmContent.Loaded(film, groups)
+        return FilmContent.Loaded(film, filmGroups(program, film, clock.instant(), join))
     }
 
     private val film: Film? get() = (uiState.value.content as? FilmContent.Loaded)?.film
@@ -122,7 +133,7 @@ class FilmViewModel(
 
     companion object {
         fun factory(
-            filmId: FilmId,
+            filmId: FilmKey,
             programRepository: ProgramRepository,
             cinemaRepository: CinemaRepository,
         ): ViewModelProvider.Factory = viewModelFactory {

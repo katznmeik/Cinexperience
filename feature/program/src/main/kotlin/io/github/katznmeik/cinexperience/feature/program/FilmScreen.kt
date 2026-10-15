@@ -154,7 +154,8 @@ private fun FilmContentList(content: FilmContent.Loaded, state: FilmUiState, act
                         item = item,
                         onBook = { actions.onBook(item.showingId) },
                         onLogVisit = { actions.onLogVisit(item.showingId) },
-                        showFilmTitle = false,
+                        // A series page lists other films' showings: name them.
+                        showFilmTitle = item.film != film.key,
                         showCinema = false,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )

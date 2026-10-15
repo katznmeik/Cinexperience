@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -22,7 +25,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
@@ -45,7 +50,9 @@ fun CinexNavigationBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(76.dp)
+                // 76 dp as in the mockups; taller when large text needs it (labels may wrap).
+                .heightIn(min = 76.dp)
+                .height(IntrinsicSize.Min)
                 .selectableGroup(),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
@@ -75,6 +82,19 @@ fun RowScope.CinexNavigationBarItem(
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
     ) {
         Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
-        Text(text = label, style = CinexTheme.textStyles.navigationLabel, color = color)
+        // Four labels side by side: they grow with the font size up to 130 %, beyond
+        // that they stay at that size instead of breaking words (spec §7 accessibility).
+        val fontScale = LocalDensity.current.fontScale
+        val base = CinexTheme.textStyles.navigationLabel
+        val style = if (fontScale > MAX_LABEL_SCALE) base.copy(fontSize = base.fontSize * (MAX_LABEL_SCALE / fontScale)) else base
+        Text(
+            text = label,
+            style = style.copy(textAlign = TextAlign.Center),
+            color = color,
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
     }
 }
+
+/** The largest font scale the tab labels follow (see [CinexNavigationBarItem]). */
+private const val MAX_LABEL_SCALE = 1.3f
