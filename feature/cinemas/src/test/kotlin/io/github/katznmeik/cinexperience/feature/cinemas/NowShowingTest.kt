@@ -98,6 +98,22 @@ class NowShowingStateTest {
     }
 
     @Test
+    fun switchedOffWithADownloadedProgramStillShowsIt() {
+        val off = loaded.copy(permission = DownloadPermission.OFF)
+        val showings = of(off) as NowShowing.Showings
+        assertEquals(4, showings.days.size)
+        assertEquals(NowShowingFixtures.program.fetchedAt, showings.asOf)
+    }
+
+    @Test
+    fun anOldProgramIsCalledOut() {
+        assertEquals(false, (of(loaded) as NowShowing.Showings).isOld)
+        val old = NowShowingFixtures.program.copy(fetchedAt = NowShowingFixtures.now.minus(java.time.Duration.ofDays(8)))
+        val showings = of(loaded.copy(program = old)) as NowShowing.Showings
+        assertTrue(showings.isOld)
+    }
+
+    @Test
     fun hiddenUntilLoadedAndForCinemasYorckDoesNotHave() {
         assertEquals(NowShowing.Hidden, of(ProgramState()))
         assertEquals(NowShowing.Hidden, of(loaded, seedKey = null))
@@ -136,7 +152,13 @@ private val noDialogActions = object : EditDialogActions {
 }
 
 @androidx.compose.runtime.Composable
-private fun DetailWith(nowShowing: NowShowing, detail: CinemaDetail = NowShowingFixtures.detail(), onOpenFilm: (FilmKind, String) -> Unit = { _, _ -> }, onShowAll: () -> Unit = {}) {
+private fun DetailWith(
+    nowShowing: NowShowing,
+    detail: CinemaDetail = NowShowingFixtures.detail(),
+    onOpenFilm: (FilmKind, String) -> Unit = { _, _ -> },
+    onShowAll: () -> Unit = {},
+    onOpenProgram: () -> Unit = {},
+) {
     CinemaDetailScreen(
         state = CinemaDetailUiState(CinemaDetailContent.Loaded(detail), nowShowing = nowShowing),
         onBack = {},
@@ -149,6 +171,7 @@ private fun DetailWith(nowShowing: NowShowing, detail: CinemaDetail = NowShowing
         onMessageShown = {},
         onOpenFilm = onOpenFilm,
         onShowAllInProgram = onShowAll,
+        onOpenProgram = onOpenProgram,
     )
 }
 
@@ -177,10 +200,47 @@ class NowShowingScreenshotTest {
         }
         composeRule.waitForIdle()
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/cinema_detail_now_showing.png")
-        composeRule.onNodeWithText("Midnight Surprise Screening").performScrollTo().performClick()
+        composeRule.onNodeWithText("Midnight Surprise Screening", substring = true).performScrollTo().performClick()
         composeRule.onNodeWithText("Show all in Program").performScrollTo().performClick()
         assertEquals(listOf(FilmKind.SPECIAL to "midnight-surprise-screening"), opened)
         assertEquals(1, showAll)
+    }
+
+    @Test
+    fun oldProgram() {
+        val old = NowShowingFixtures.program.copy(fetchedAt = java.time.Instant.parse("2026-10-03T08:00:00Z"))
+        val state = NowShowing.of(
+            ProgramState(permission = DownloadPermission.ALLOWED, program = old, isLoaded = true),
+            "delphi-lux",
+            NowShowingFixtures.now,
+            NowShowingFixtures.today,
+        )
+        var opened = 0
+        var showAll = 0
+        composeRule.setContent {
+            ScreenshotSurface { DetailWith(state, NowShowingFixtures.detail(SampleData.BABYLON), onShowAll = { showAll++ }, onOpenProgram = { opened++ }) }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("As of 3 Oct 2026, 10:00").assertExists()
+        composeRule.onNodeWithText("Program from 3 Oct; open the Program tab to update.").assertExists()
+        composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/cinema_detail_now_showing_old.png")
+        composeRule.onNodeWithText("Open Program").performScrollTo().performClick()
+        assertEquals(1, opened)
+        assertEquals(0, showAll)
+    }
+
+    @Test
+    fun theHintOpensTheProgramTabAsItIs() {
+        var opened = 0
+        var showAll = 0
+        composeRule.setContent {
+            ScreenshotSurface {
+                DetailWith(NowShowing.Hint(NowShowing.HintReason.NOT_ASKED), NowShowingFixtures.detail(SampleData.BABYLON), onShowAll = { showAll++ }, onOpenProgram = { opened++ })
+            }
+        }
+        composeRule.onNodeWithText("Open Program").performScrollTo().performClick()
+        assertEquals(1, opened)
+        assertEquals(0, showAll)
     }
 
     @Test

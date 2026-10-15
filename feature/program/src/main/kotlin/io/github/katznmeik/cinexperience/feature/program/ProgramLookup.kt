@@ -17,9 +17,11 @@ import java.time.LocalDateTime
 
 internal object ProgramLookup {
 
-    /** The key in a route ([FilmKind.name] and slug), `null` for an unknown kind. */
-    fun keyOf(kind: String, slug: String): FilmKey? =
-        FilmKind.entries.firstOrNull { it.name == kind }?.let { FilmKey(it, slug) }
+    /** The key in a route ([FilmKind.name] and slug), `null` for an unknown kind or an invalid slug. */
+    fun keyOf(kind: String, slug: String): FilmKey? {
+        val filmKind = FilmKind.entries.firstOrNull { it.name == kind } ?: return null
+        return runCatching { FilmKey(filmKind, slug) }.getOrNull()
+    }
 
     /** The film (or special) [key] names in [program], `null` if it has none. */
     fun film(program: Program?, key: FilmKey): Film? = program?.film(key)

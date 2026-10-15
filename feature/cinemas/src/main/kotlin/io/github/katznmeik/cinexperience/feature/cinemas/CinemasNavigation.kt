@@ -88,6 +88,7 @@ fun NavGraphBuilder.cinemasScreen(
  * @param programRepository the downloaded program for "Now showing" (spec §6.2); only read here.
  * @param onOpenFilm opens the film page of a showing (film kind and slug).
  * @param onShowAllInProgram opens the Program tab filtered to the cinema with this seed key.
+ * @param onOpenProgram opens the Program tab as it is (the hints without a program).
  */
 fun NavGraphBuilder.cinemaDetailScreen(
     cinemaRepository: CinemaRepository,
@@ -98,6 +99,7 @@ fun NavGraphBuilder.cinemaDetailScreen(
     onCinemaDeleted: (message: String) -> Unit,
     onOpenFilm: (FilmKind, String) -> Unit,
     onShowAllInProgram: (cinemaSeedKey: String) -> Unit,
+    onOpenProgram: () -> Unit,
 ) {
     composable<CinemaDetailRoute> { entry ->
         val cinemaId = entry.toRoute<CinemaDetailRoute>().cinemaId
@@ -114,6 +116,7 @@ fun NavGraphBuilder.cinemaDetailScreen(
                 onShowAllInProgram = dropUnlessResumed {
                     viewModel.cinemaSeedKey?.let(onShowAllInProgram)
                 },
+                onOpenProgram = dropUnlessResumed(block = onOpenProgram),
             )
         }
     }

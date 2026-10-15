@@ -84,6 +84,33 @@ class ProgramNavigationTest {
     }
 
     @Test
+    fun theRememberedFilterComesBackOnTheNextOpen() {
+        val program = FakeProgramRepository.withProgram()
+        showApp(program)
+        composeRule.onNodeWithText("KANT KINO").performClick()
+        composeRule.onNodeWithText("Show all in Program").performScrollTo().performClick()
+        composeRule.onNodeWithText("Kant Kino · Any time · All versions").assertExists()
+
+        // (The Cinemas tab would come back with the cinema's page, which has no tab bar.)
+        composeRule.onNodeWithTag(TopLevelDestination.Rankings.testTag).performClick()
+        composeRule.onNodeWithTag(TopLevelDestination.Program.testTag).performClick()
+        composeRule.onNodeWithText("All cinemas · Any time · All versions").assertExists()
+        assertEquals(listOf("refreshIfStale", "refreshIfStale"), program.refreshCalls)
+    }
+
+    /** A film title with characters that need escaping in a route survives the trip to Add visit. */
+    @Test
+    fun aPrefilledTitleSurvivesTheRoute() {
+        val title = "Rock & Roll 100% / Teil 2? #1 Über 🎬"
+        showApp()
+        composeRule.runOnIdle {
+            navController.navigateToAddVisit(VisitPrefillArgs(7L, LocalDate.of(2026, 10, 17), title, null))
+        }
+        composeRule.onNodeWithText("ADD VISIT").assertExists()
+        composeRule.onNodeWithText(title).assertExists()
+    }
+
+    @Test
     fun logVisitOpensAddVisitPrefilled() {
         showApp()
         composeRule.runOnIdle {

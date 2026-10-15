@@ -5,8 +5,17 @@ import android.content.SharedPreferences
 import io.github.katznmeik.cinexperience.core.program.ShowingVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
+import io.github.katznmeik.cinexperience.core.ui.text.codePointLength
+import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -35,6 +44,7 @@ class SharedPreferencesProgramFilterStore(private val prefs: SharedPreferences) 
 
     override suspend fun read(): ProgramFilterSettings = withContext(Dispatchers.IO) {
         try {
+            // getString throws if another type is stored under the key: then the defaults.
             prefs.getString(KEY_FILTERS, null)?.let(ProgramFilterCodec::decode) ?: ProgramFilterSettings()
         } catch (e: Exception) {
             ProgramFilterSettings()
@@ -64,87 +74,102 @@ class InMemoryProgramFilterStore(var settings: ProgramFilterSettings = ProgramFi
     var writes: Int = 0
         private set
 
+    /** While true, writes fail (return false) and store nothing. */
+    var failWrites: Boolean = false
+
     override suspend fun read(): ProgramFilterSettings = settings
 
     override suspend fun write(settings: ProgramFilterSettings): Boolean {
         writes++
+        if (failWrites) return false
         this.settings = settings
         return true
     }
 }
 
 /**
- * The stored form of [ProgramFilterSettings]. Unknown or invalid values (an
- * unknown version, a malformed date) are dropped instead of failing the whole read.
+ * The stored form of [ProgramFilterSettings] (JSON). Reading is tolerant: every
+ * field of a filter and every saved filter is read on its own, so a wrong value
+ * (an unknown version, a malformed date, a field of the wrong type, a broken
+ * saved entry) only drops that value or entry and never the others.
  */
 internal object ProgramFilterCodec {
     private val json = Json { ignoreUnknownKeys = true }
 
-    /** Upper limits, so a damaged file can't blow up the UI. */
+    /** Upper limits, so a damaged file can't blow up the UI. Lengths in code points. */
     const val MAX_SAVED = 50
     const val MAX_NAME_LENGTH = 40
+    const val MAX_SEARCH_LENGTH = 100
     private const val MAX_ITEMS = 100
     private const val MAX_TEXT = 200
 
-    @Serializable
-    private data class StoredSettings(
-        val current: StoredFilter = StoredFilter(),
-        val saved: List<StoredSaved> = emptyList(),
-    )
+    fun encode(settings: ProgramFilterSettings): String = buildJsonObject {
+        put("current", settings.current.toJson())
+        put(
+            "saved",
+            buildJsonArray {
+                settings.saved.forEach { saved ->
+                    add(buildJsonObject {
+                        put("name", saved.name)
+                        put("filter", saved.filter.toJson())
+                    })
+                }
+            },
+        )
+    }.toString()
 
-    @Serializable
-    private data class StoredSaved(val name: String, val filter: StoredFilter)
-
-    @Serializable
-    private data class StoredFilter(
-        val cinemas: List<String> = emptyList(),
-        val day: String = DayChoice.TODAY.name,
-        val dates: List<String> = emptyList(),
-        val from: String? = null,
-        val to: String? = null,
-        val versions: List<String> = emptyList(),
-        val events: List<String> = emptyList(),
-        val search: String = "",
-    )
-
-    fun encode(settings: ProgramFilterSettings): String = json.encodeToString(
-        StoredSettings.serializer(),
-        StoredSettings(
-            current = settings.current.toStored(),
-            saved = settings.saved.map { StoredSaved(it.name, it.filter.toStored()) },
-        ),
-    )
-
+    /** Never throws: unreadable text gives the defaults, unreadable parts are skipped. */
     fun decode(text: String): ProgramFilterSettings {
-        val stored = json.decodeFromString(StoredSettings.serializer(), text)
-        return ProgramFilterSettings(
-            current = stored.current.toFilter(),
-            saved = stored.saved
-                .mapNotNull { saved -> saved.name.trim().take(MAX_NAME_LENGTH).takeIf { it.isNotEmpty() }?.let { SavedFilter(it, saved.filter.toFilter()) } }
-                .distinctBy { it.name }
-                .take(MAX_SAVED),
+        val root = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return ProgramFilterSettings()
+        val current = (root["current"] as? JsonObject)?.let(::filterOf) ?: ProgramFilter()
+        val saved = (root["saved"] as? JsonArray).orEmpty()
+            .mapNotNull { element -> runCatching { savedOf(element) }.getOrNull() }
+            .distinctBy { it.name }
+            .take(MAX_SAVED)
+        return ProgramFilterSettings(current, saved)
+    }
+
+    private fun savedOf(element: JsonElement): SavedFilter? {
+        val obj = element as? JsonObject ?: return null
+        val name = obj.string("name")?.trim()?.takeCodePoints(MAX_NAME_LENGTH)?.takeIf { it.isNotEmpty() } ?: return null
+        val filter = obj["filter"] as? JsonObject ?: return null
+        return SavedFilter(name, filterOf(filter))
+    }
+
+    private fun ProgramFilter.toJson(): JsonObject = buildJsonObject {
+        put("cinemas", strings(cinemas.sorted()))
+        put("day", day.name)
+        put("dates", strings(dates.sorted().map { it.toString() }))
+        from?.let { put("from", it.toString()) }
+        to?.let { put("to", it.toString()) }
+        put("versions", strings(versions.sorted().map { it.name }))
+        put("events", strings(events.sorted()))
+        put("search", search)
+    }
+
+    private fun strings(values: List<String>) = buildJsonArray { values.forEach { add(JsonPrimitive(it)) } }
+
+    /** Each field on its own: a wrong one keeps its default. */
+    private fun filterOf(obj: JsonObject): ProgramFilter {
+        val defaults = ProgramFilter()
+        fun <T> field(read: () -> T?, default: T): T = runCatching(read).getOrNull() ?: default
+        return ProgramFilter(
+            cinemas = field({ obj.strings("cinemas").filter { it.codePointLength <= MAX_TEXT }.toSet() }, defaults.cinemas),
+            day = field({ obj.string("day")?.let { name -> DayChoice.entries.firstOrNull { it.name == name } } }, defaults.day),
+            dates = field({ obj.strings("dates").mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.toSortedSet() }, defaults.dates),
+            from = field({ obj.string("from")?.let(LocalTime::parse) }, null),
+            to = field({ obj.string("to")?.let(LocalTime::parse) }, null),
+            versions = field({ obj.strings("versions").mapNotNull { name -> ShowingVersion.entries.firstOrNull { it.name == name } }.toSet() }, defaults.versions),
+            events = field({ obj.strings("events").filter { it.isNotBlank() && it.codePointLength <= MAX_TEXT }.toSet() }, defaults.events),
+            search = field({ obj.string("search")?.takeCodePoints(MAX_SEARCH_LENGTH) }, defaults.search),
         )
     }
 
-    private fun ProgramFilter.toStored() = StoredFilter(
-        cinemas = cinemas.sorted(),
-        day = day.name,
-        dates = dates.sorted().map { it.toString() },
-        from = from?.toString(),
-        to = to?.toString(),
-        versions = versions.sorted().map { it.name },
-        events = events.sorted(),
-        search = search,
-    )
+    /** The string [key], `null` if it is missing or not a string. */
+    private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
-    private fun StoredFilter.toFilter() = ProgramFilter(
-        cinemas = cinemas.take(MAX_ITEMS).filter { it.length <= MAX_TEXT }.toSet(),
-        day = DayChoice.entries.firstOrNull { it.name == day } ?: DayChoice.TODAY,
-        dates = dates.take(MAX_ITEMS).mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.toSortedSet(),
-        from = from?.let { runCatching { LocalTime.parse(it) }.getOrNull() },
-        to = to?.let { runCatching { LocalTime.parse(it) }.getOrNull() },
-        versions = versions.mapNotNull { name -> ShowingVersion.entries.firstOrNull { it.name == name } }.toSet(),
-        events = events.take(MAX_ITEMS).filter { it.isNotBlank() && it.length <= MAX_TEXT }.toSet(),
-        search = search.take(MAX_TEXT),
-    )
+    /** The strings of the array [key] (at most [MAX_ITEMS]); other elements are skipped. */
+    private fun JsonObject.strings(key: String): List<String> = (this[key] as? JsonArray).orEmpty()
+        .take(MAX_ITEMS)
+        .mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
 }

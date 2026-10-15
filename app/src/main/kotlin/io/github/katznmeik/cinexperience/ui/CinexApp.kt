@@ -150,6 +150,8 @@ fun CinexApp(
                         tabSwitch.entryId = navController.currentBackStackEntry?.id
                     }
                 },
+                // The hints open the Program tab as it is, with its remembered filter.
+                onOpenProgram = { if (!importing) navController.navigateToTab(TopLevelDestination.Program, tabSwitch) },
             )
             hallDetailScreen(
                 hallRepository = container.hallRepository,

@@ -35,6 +35,7 @@ import io.github.katznmeik.cinexperience.core.ui.component.ActionPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 /** Callbacks of the film page. */
@@ -83,6 +84,7 @@ internal fun FilmScreen(state: FilmUiState, actions: FilmActions, modifier: Modi
             FilmContent.Loading -> BackTopBar(actions::onBack)
             FilmContent.NotFound -> Column {
                 BackTopBar(actions::onBack)
+                ScreenTitle("Not in the program", Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp))
                 Text(
                     "This film is no longer in the downloaded program.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -139,9 +141,9 @@ private fun FilmContentList(content: FilmContent.Loaded, state: FilmUiState, act
             }
         }
         content.cinemas.forEach { group ->
-            item(key = "cinema-${group.cinemaName}") { CinemaHeader(group) }
+            item(key = "cinema-${group.key}") { CinemaHeader(group) }
             group.days.forEach { day ->
-                item(key = "day-${group.cinemaName}-${day.date}") {
+                item(key = "day-${group.key}-${day.date}") {
                     Text(
                         dayHeaderText(day.date, state.today),
                         style = MaterialTheme.typography.labelMedium,

@@ -6,6 +6,7 @@ import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.SampleData
+import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
 import io.github.katznmeik.cinexperience.feature.visits.AddVisitRoute
 import io.github.katznmeik.cinexperience.feature.visits.VisitPrefillArgs
 import org.junit.Assert.assertEquals

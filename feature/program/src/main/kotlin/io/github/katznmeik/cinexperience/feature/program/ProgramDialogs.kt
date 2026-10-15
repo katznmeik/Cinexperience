@@ -35,6 +35,8 @@ import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.text.isolate
+import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import java.time.Instant
 import java.time.LocalDate
@@ -91,20 +93,44 @@ internal fun SaveFilterDialog(actions: ProgramActions) {
         onDismissRequest = actions::onDismissDialog,
         title = { Text("Save filter") },
         text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = {
-                    name = it.take(ProgramFilterCodec.MAX_NAME_LENGTH)
-                    error = null
-                },
-                label = { Text("Name") },
-                singleLine = true,
-                isError = error != null,
-                supportingText = error?.let { { Text(it) } },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            SaveFilterName(name, error, onNameChange = {
+                name = it
+                error = null
+            })
         },
         confirmButton = { TextButton(onClick = { error = actions.onSaveFilter(name) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = actions::onDismissDialog) { Text("Cancel") } },
+    )
+}
+
+/** The name field of "Save filter" (at most 40 code points; an emoji is never cut in half). */
+@Composable
+internal fun SaveFilterName(name: String, error: String?, onNameChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = name,
+        onValueChange = { onNameChange(it.takeCodePoints(ProgramFilterCodec.MAX_NAME_LENGTH)) },
+        label = { Text("Name") },
+        singleLine = true,
+        isError = error != null,
+        supportingText = error?.let { { Text(it) } },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** Saving under a name that is already used asks first. */
+@Composable
+internal fun ReplaceFilterDialog(name: String, actions: ProgramActions) {
+    AlertDialog(
+        onDismissRequest = actions::onDismissDialog,
+        title = { Text("Replace “${isolate(name)}”?") },
+        text = {
+            Text(
+                "A saved filter with this name exists. It gets the current filter.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = CinexTheme.colors.textMuted,
+            )
+        },
+        confirmButton = { TextButton(onClick = actions::onConfirmReplace) { Text("Replace") } },
         dismissButton = { TextButton(onClick = actions::onDismissDialog) { Text("Cancel") } },
     )
 }

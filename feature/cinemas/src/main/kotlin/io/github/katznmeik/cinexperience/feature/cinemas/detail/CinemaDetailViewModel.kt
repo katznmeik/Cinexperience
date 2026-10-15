@@ -16,7 +16,10 @@ import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaEditor
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialog
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditMessages
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -25,6 +28,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Clock
+
+/** Emits now and then once a minute, so "now" stays current. */
+internal fun minuteTicks(): Flow<Unit> = flow {
+    while (true) {
+        emit(Unit)
+        delay(60_000)
+    }
+}
 
 sealed interface CinemaDetailContent {
     data object Loading : CinemaDetailContent
@@ -64,6 +75,7 @@ class CinemaDetailViewModel(
     hallRepository: HallRepository,
     programRepository: ProgramRepository,
     private val clock: Clock = Clock.systemDefaultZone(),
+    ticks: Flow<Unit> = minuteTicks(),
 ) : ViewModel() {
 
     private val ownDelete = MutableStateFlow<OwnDelete>(OwnDelete.None)
@@ -95,7 +107,14 @@ class CinemaDetailViewModel(
     private var lastLoaded: CinemaDetailContent.Loaded? = null
 
     val uiState: StateFlow<CinemaDetailUiState> =
-        combine(content, editor.dialog, editor.message, ownDelete, programRepository.state) { content, dialog, message, ownDelete, program ->
+        combine(
+            content,
+            editor.dialog,
+            editor.message,
+            ownDelete,
+            // ticks: "now" stays current, so started showings leave "Now showing".
+            combine(programRepository.state, ticks) { program, _ -> program },
+        ) { content, dialog, message, ownDelete, program ->
             if (content is CinemaDetailContent.Loaded) lastLoaded = content
             val shown = if (ownDelete != OwnDelete.None && content !is CinemaDetailContent.Loaded) {
                 lastLoaded ?: content

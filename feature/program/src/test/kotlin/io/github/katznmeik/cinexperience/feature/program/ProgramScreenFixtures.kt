@@ -43,6 +43,7 @@ internal object ProgramScreenFixtures {
         errorMessage = error?.message,
         filter = filter,
         cinemaOptions = join.cinemas,
+        cinemaChoices = cinemaChoices(join, program, filter),
         eventOptions = ProgramFilters.eventLabels(program, now),
         dateOptions = ProgramFilters.datesBetween(today, today.plusDays(13)).toList(),
         lastDate = program?.showings?.last()?.start?.toLocalDate(),

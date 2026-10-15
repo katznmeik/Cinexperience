@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.program.ShowingVersion
 import io.github.katznmeik.cinexperience.core.ui.component.ActionPillButton
@@ -87,6 +88,7 @@ internal interface ProgramActions {
     fun onResetFilters() {}
     fun onOpenDialog(dialog: ProgramDialog) {}
     fun onDismissDialog() {}
+    fun onConfirmReplace() {}
     fun onSaveFilter(name: String): String? = null
     fun onApplySavedFilter(name: String) {}
     fun onDeleteSavedFilter(name: String) {}
@@ -107,7 +109,10 @@ internal fun ProgramEntry(
     onLogVisit: (LogVisitRequest) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(viewModel) { viewModel.onOpened() }
+    // Once per open of the tab: the back stack entry is new after a tab switch, the
+    // same when coming back from the film page (see ProgramViewModel.onOpened).
+    val entry = LocalLifecycleOwner.current
+    LaunchedEffect(entry) { viewModel.onOpened(entry) }
     OpenLinkEffect(state.pendingLink, viewModel::onLinkHandled)
     val actions = remember(viewModel) {
         object : ProgramActions {
@@ -131,6 +136,7 @@ internal fun ProgramEntry(
             override fun onResetFilters() = viewModel.resetFilters()
             override fun onOpenDialog(dialog: ProgramDialog) = viewModel.openDialog(dialog)
             override fun onDismissDialog() = viewModel.dismissDialog()
+            override fun onConfirmReplace() = viewModel.confirmReplace()
             override fun onSaveFilter(name: String) = viewModel.saveFilter(name)
             override fun onApplySavedFilter(name: String) = viewModel.applySavedFilter(name)
             override fun onDeleteSavedFilter(name: String) = viewModel.deleteSavedFilter(name)
@@ -164,12 +170,12 @@ internal fun ProgramScreen(state: ProgramUiState, actions: ProgramActions, modif
                 button = "Download program",
                 onClick = actions::onAllowDownloads,
             )
-            ProgramMode.OFF -> MessageContent(
-                text = "Downloading the program is switched off, so the app makes no network requests. " +
-                    "Turn it on to see Yorck's showtimes here.",
-                button = "Turn on",
-                onClick = actions::onTurnOn,
-            )
+            ProgramMode.OFF -> if (state.hasProgram) {
+                // The downloaded program stays readable; nothing is downloaded.
+                ProgramList(state, actions)
+            } else {
+                MessageContent(text = OFF_TEXT, button = "Turn on", onClick = actions::onTurnOn)
+            }
             ProgramMode.PROGRAM -> PullToRefreshBox(
                 isRefreshing = state.isRefreshing,
                 onRefresh = actions::onRefresh,
@@ -257,6 +263,9 @@ private fun ProgramList(state: ProgramUiState, actions: ProgramActions) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item(key = "header") { Header(state, actions) }
+        if (state.mode == ProgramMode.OFF) {
+            item(key = "off") { OffBanner(actions) }
+        }
         state.errorMessage?.let { message ->
             item(key = "error") { ErrorCard(message, actions) }
         }
@@ -273,7 +282,9 @@ private fun Header(state: ProgramUiState, actions: ProgramActions) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ScreenTitle("Program", Modifier.weight(1f))
             TopBarIconButton(CinexIcons.Bookmark, "Saved filters", { actions.onOpenDialog(ProgramDialog.SAVED_FILTERS) })
-            TopBarIconButton(CinexIcons.Refresh, "Refresh program", actions::onRefresh)
+            if (state.mode == ProgramMode.PROGRAM) {
+                TopBarIconButton(CinexIcons.Refresh, "Refresh program", actions::onRefresh)
+            }
         }
         Text(
             text = when {
@@ -295,6 +306,29 @@ private fun Header(state: ProgramUiState, actions: ProgramActions) {
                 gapSize = 0.dp,
             )
         }
+    }
+}
+
+private const val OFF_TEXT = "Downloading the program is switched off, so the app makes no network requests. " +
+    "Turn it on to see Yorck's showtimes here."
+
+/** OFF with a downloaded program: it is shown as it is, without updates. */
+@Composable
+private fun OffBanner(actions: ProgramActions) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(CinexTheme.colors.surfaceRaised)
+            .padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 4.dp),
+    ) {
+        Text(
+            "Downloading is switched off: this is the last downloaded program, and it isn't updated.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = CinexTheme.colors.text,
+            modifier = Modifier.padding(end = 6.dp),
+        )
+        ActionPillButton(text = "Turn on", description = "Turn on program downloads", onClick = actions::onTurnOn, icon = CinexIcons.Refresh)
     }
 }
 
@@ -391,7 +425,7 @@ private fun DayFilter(state: ProgramUiState, actions: ProgramActions) {
 
 @Composable
 private fun FilterPanel(state: ProgramUiState, actions: ProgramActions) {
-    val names = remember(state.cinemaOptions) { state.cinemaOptions.associate { it.seedKey to it.name } }
+    val names = remember(state.cinemaChoices) { state.cinemaChoices.associate { it.key to it.name } }
     Column(
         Modifier
             .fillMaxWidth()
@@ -437,11 +471,11 @@ private fun FilterPanel(state: ProgramUiState, actions: ProgramActions) {
                         )
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        state.cinemaOptions.forEach { cinema ->
+                        state.cinemaChoices.forEach { cinema ->
                             ToggleChip(
                                 text = cinema.name,
-                                checked = cinema.seedKey in state.filter.cinemas,
-                                onCheckedChange = { actions.onToggleCinema(cinema.seedKey) },
+                                checked = cinema.key in state.filter.cinemas,
+                                onCheckedChange = { actions.onToggleCinema(cinema.key) },
                             )
                         }
                     }
@@ -557,6 +591,7 @@ private fun ProgramDialogs(state: ProgramUiState, actions: ProgramActions) {
         null -> Unit
         ProgramDialog.SAVED_FILTERS -> SavedFiltersDialog(state.savedFilters, actions)
         ProgramDialog.SAVE_FILTER -> SaveFilterDialog(actions)
+        ProgramDialog.CONFIRM_REPLACE -> ReplaceFilterDialog(state.pendingReplace.orEmpty(), actions)
         ProgramDialog.FROM_TIME -> TimeDialog("Earliest start", state.filter.from, actions::onSetFrom, actions::onDismissDialog)
         ProgramDialog.TO_TIME -> TimeDialog("Latest start", state.filter.to, actions::onSetTo, actions::onDismissDialog)
         ProgramDialog.PICK_DATE -> DateDialog(state.today, state.lastDate, actions::onAddDate, actions::onDismissDialog)

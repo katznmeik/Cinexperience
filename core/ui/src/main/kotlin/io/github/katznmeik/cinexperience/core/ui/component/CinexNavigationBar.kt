@@ -82,8 +82,9 @@ fun RowScope.CinexNavigationBarItem(
         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
     ) {
         Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
-        // Four labels side by side: they grow with the font size up to 130 %, beyond
-        // that they stay at that size instead of breaking words (spec §7 accessibility).
+        // Layout decision: four labels sit side by side, so they grow with the font
+        // size only up to 130 %; beyond that they keep that size, so all four fit
+        // without breaking words (the bar itself still grows with the text).
         val fontScale = LocalDensity.current.fontScale
         val base = CinexTheme.textStyles.navigationLabel
         val style = if (fontScale > MAX_LABEL_SCALE) base.copy(fontSize = base.fontSize * (MAX_LABEL_SCALE / fontScale)) else base

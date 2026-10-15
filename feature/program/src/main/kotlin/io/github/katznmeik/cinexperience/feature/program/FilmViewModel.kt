@@ -13,6 +13,7 @@ import io.github.katznmeik.cinexperience.core.program.ProgramLinks
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramState
 import io.github.katznmeik.cinexperience.core.program.ProgramTime
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,8 @@ import java.time.LocalDate
 
 /** A cinema's upcoming showings of the film, by day. */
 data class FilmCinemaGroup(
+    /** [io.github.katznmeik.cinexperience.core.program.ProgramCinema.key]: unique on the page (names may repeat). */
+    val key: String,
     val cinemaName: String,
     val cinema: AppCinema?,
     val days: List<ShowingDay>,
@@ -46,7 +49,7 @@ internal fun filmGroups(program: Program, film: Film, now: Instant, join: Cinema
             val days = groupByDay(program, list, join).map { day ->
                 day.copy(showings = day.showings.map { it.copy(partOf = it.partOf - film.title) })
             }
-            FilmCinemaGroup(first.cinemaName, first.cinema, days)
+            FilmCinemaGroup(list.first().cinema.key, first.cinemaName, first.cinema, days)
         }
 
 sealed interface FilmContent {
@@ -78,6 +81,7 @@ class FilmViewModel(
     private val programRepository: ProgramRepository,
     cinemaRepository: CinemaRepository,
     private val clock: Clock = Clock.systemDefaultZone(),
+    ticks: Flow<Unit> = minuteTicks(),
 ) : ViewModel() {
 
     private val local = MutableStateFlow(FilmLocal())
@@ -89,7 +93,8 @@ class FilmViewModel(
         .onStart { emit(CinemaJoin.EMPTY) }
 
     val uiState: StateFlow<FilmUiState> =
-        combine(programRepository.state, cinemas, local) { program, join, local ->
+        // ticks: "now" stays current, so started showings disappear.
+        combine(programRepository.state, cinemas, local, ticks) { program, join, local, _ ->
             latestJoin = join
             FilmUiState(
                 content = content(program, join),
@@ -115,8 +120,10 @@ class FilmViewModel(
     }
 
     fun book(showingId: String) {
-        val link = ShowingActions.bookingLink(programRepository.state.value.program, showingId, clock.instant())
-        local.update { if (link != null) it.copy(pendingLink = link) else it.copy(message = ShowingActions.NO_LINK) }
+        val booking = ShowingActions.booking(programRepository.state.value.program, showingId, clock.instant())
+        local.update {
+            if (booking is ShowingActions.Booking.Link) it.copy(pendingLink = booking.url) else it.copy(message = ShowingActions.messageFor(booking))
+        }
     }
 
     fun onLinkHandled(opened: Boolean) {

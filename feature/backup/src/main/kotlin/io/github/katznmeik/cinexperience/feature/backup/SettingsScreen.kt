@@ -281,6 +281,8 @@ private fun ProgramRows(program: ProgramSettingsState, enabled: Boolean, actions
         },
         enabled = enabled && program.hasProgram,
         onClick = actions::onDeleteProgram,
+        // Opens a confirmation, not a page: no chevron.
+        trailing = {},
     )
     program.errorMessage?.let { message ->
         RowDivider()

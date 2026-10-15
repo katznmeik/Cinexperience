@@ -23,13 +23,29 @@ data class LogVisitRequest(
 /** The actions of a showing row, shared by the Program tab and the film page. */
 internal object ShowingActions {
 
-    /**
-     * "Book on yorck.de": the link [ProgramLinks] builds for [showingId], `null` if
-     * there is none or the showing has started at [now] (only upcoming showings are booked).
-     */
-    fun bookingLink(program: Program?, showingId: String, now: Instant): String? {
-        val showing = program?.showings?.firstOrNull { it.id == showingId }?.takeIf { it.isUpcoming(now) } ?: return null
-        return ProgramLinks.booking(showing, ProgramLookup.filmOf(program, showing))
+    /** What "Book on yorck.de" does. */
+    sealed interface Booking {
+        data class Link(val url: String) : Booking
+
+        /** The showing has started meanwhile (only upcoming showings are booked). */
+        data object Started : Booking
+
+        /** No link (an unusable ID and no film page), or the showing is gone. */
+        data object None : Booking
+    }
+
+    /** "Book on yorck.de" for [showingId] at [now]: the link [ProgramLinks] builds, if it is still upcoming. */
+    fun booking(program: Program?, showingId: String, now: Instant): Booking {
+        val showing = program?.showings?.firstOrNull { it.id == showingId } ?: return Booking.None
+        if (!showing.isUpcoming(now)) return Booking.Started
+        return ProgramLinks.booking(showing, ProgramLookup.filmOf(program, showing))?.let { Booking.Link(it) } ?: Booking.None
+    }
+
+    /** The state change for [booking]: a link to open, or a message. */
+    fun messageFor(booking: Booking): String? = when (booking) {
+        is Booking.Link -> null
+        Booking.Started -> ALREADY_STARTED
+        Booking.None -> NO_LINK
     }
 
     /** The pre-fill of "Log visit" for [showingId], `null` if the showing is gone. */
@@ -45,6 +61,7 @@ internal object ShowingActions {
     }
 
     const val NO_LINK = "There is no yorck.de page for this showing."
+    const val ALREADY_STARTED = "This showing has already started."
     const val NO_BROWSER = "No browser found to open yorck.de."
     const val SHOWING_GONE = "This showing is no longer in the program."
 }

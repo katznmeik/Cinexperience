@@ -70,6 +70,7 @@ internal fun CinemaDetailEntry(
     onCinemaDeleted: (message: String) -> Unit,
     onOpenFilm: (FilmKind, String) -> Unit = { _, _ -> },
     onShowAllInProgram: () -> Unit = {},
+    onOpenProgram: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.deletedMessage) {
@@ -89,6 +90,7 @@ internal fun CinemaDetailEntry(
         onMessageShown = viewModel::messageShown,
         onOpenFilm = onOpenFilm,
         onShowAllInProgram = onShowAllInProgram,
+        onOpenProgram = onOpenProgram,
     )
 }
 
@@ -117,6 +119,7 @@ internal fun CinemaDetailScreen(
     onToggleFavourite: () -> Unit = {},
     onOpenFilm: (FilmKind, String) -> Unit = { _, _ -> },
     onShowAllInProgram: () -> Unit = {},
+    onOpenProgram: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.message) {
@@ -139,6 +142,7 @@ internal fun CinemaDetailScreen(
                 nowShowing = state.nowShowing,
                 onOpenFilm = onOpenFilm,
                 onShowAllInProgram = onShowAllInProgram,
+                onOpenProgram = onOpenProgram,
             )
             CinemaDetailContent.Loading -> BackTopBar(onBack)
             CinemaDetailContent.NotFound -> MessageContent("This cinema no longer exists.", onBack)
@@ -175,6 +179,7 @@ private fun LoadedContent(
     nowShowing: NowShowing,
     onOpenFilm: (FilmKind, String) -> Unit,
     onShowAllInProgram: () -> Unit,
+    onOpenProgram: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -232,7 +237,7 @@ private fun LoadedContent(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
-        nowShowingItems(nowShowing, onOpenFilm, onShowAllInProgram)
+        nowShowingItems(nowShowing, onOpenFilm, onShowAllInProgram, onOpenProgram)
     }
 }
 

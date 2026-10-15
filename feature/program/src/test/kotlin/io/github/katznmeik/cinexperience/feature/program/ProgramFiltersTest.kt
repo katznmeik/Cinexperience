@@ -134,6 +134,37 @@ class ProgramFiltersTest {
         )
     }
 
+    /** Thursday 22:30, Friday 00:30 (after midnight) and Thursday 00:30 (last night). */
+    private val lateProgram = buildProgram {
+        film("Late Show") {
+            showing("2026-10-15T00:30", "Kant Kino") // last night, already started at 10:00
+            showing("2026-10-15T22:30", "Kant Kino")
+            showing("2026-10-16T00:30", "Kant Kino") // tonight, after midnight
+            showing("2026-10-16T22:30", "Kant Kino")
+            showing("2026-10-17T00:30", "Kant Kino") // tomorrow night, after midnight
+        }
+    }
+
+    private fun late(filter: ProgramFilter, at: Instant = now) =
+        ProgramFilters.apply(lateProgram, filter, at, thursday).map { it.start.toString() }
+
+    @Test
+    fun aRangeAcrossMidnightKeepsTheNightTogether() {
+        val todayLate = ProgramFilter(from = t("22:00"), to = t("01:00"))
+        assertEquals(listOf("2026-10-15T22:30", "2026-10-16T00:30"), late(todayLate))
+        val tomorrowLate = todayLate.copy(day = DayChoice.TOMORROW)
+        assertEquals(listOf("2026-10-16T22:30", "2026-10-17T00:30"), late(tomorrowLate))
+        // Last night's 00:30 belongs to Wednesday, not to Today (even before it started).
+        assertEquals(
+            listOf("2026-10-15T22:30", "2026-10-16T00:30"),
+            late(todayLate, at = Instant.parse("2026-10-14T20:00:00Z")),
+        )
+        // Without a range across midnight, a showing counts for its own date.
+        assertEquals(listOf("2026-10-15T22:30"), late(ProgramFilter()))
+        assertEquals(thursday, ProgramFilters.filterDate(java.time.LocalDateTime.parse("2026-10-16T00:30"), t("22:00"), t("01:00")))
+        assertEquals(d("2026-10-16"), ProgramFilters.filterDate(java.time.LocalDateTime.parse("2026-10-16T00:30"), t("00:00"), t("01:00")))
+    }
+
     @Test
     fun searchIgnoresCaseAndAccents() {
         val program = buildProgram {
@@ -165,6 +196,44 @@ class ProgramFiltersTest {
             saved = listOf(SavedFilter("After work", ProgramFilter(from = t("16:00"))), SavedFilter("Weekend", ProgramFilter(day = DayChoice.WEEKEND))),
         )
         assertEquals(settings, ProgramFilterCodec.decode(ProgramFilterCodec.encode(settings)))
+    }
+
+    @Test
+    fun wrongTypesDropOnlyTheirOwnValue() {
+        val text = """{"current":{"day":7,"cinemas":"delphi-lux","dates":[1,"2026-10-17",null],"from":true,"to":"23:00",
+            |"versions":{"x":1},"events":["Sneak",3],"search":["x"]},
+            |"saved":[{"name":"Good","filter":{"from":"18:00"}},"broken",{"name":5,"filter":{}},{"name":"No filter"},
+            |{"name":"Also good","filter":{"day":"WEEKEND","versions":"OV"}}]}""".trimMargin()
+        val settings = ProgramFilterCodec.decode(text)
+        with(settings.current) {
+            assertEquals(DayChoice.TODAY, day)
+            assertEquals(emptySet<String>(), cinemas)
+            assertEquals(setOf(saturday), dates)
+            assertEquals(null, from)
+            assertEquals(t("23:00"), to)
+            assertEquals(emptySet<ShowingVersion>(), versions)
+            assertEquals(setOf("Sneak"), events)
+            assertEquals("", search)
+        }
+        assertEquals(listOf("Good", "Also good"), settings.saved.map { it.name })
+        assertEquals(t("18:00"), settings.saved[0].filter.from)
+        assertEquals(DayChoice.WEEKEND, settings.saved[1].filter.day)
+    }
+
+    @Test
+    fun unreadableTextGivesTheDefaults() {
+        assertEquals(ProgramFilterSettings(), ProgramFilterCodec.decode("not json"))
+        assertEquals(ProgramFilterSettings(), ProgramFilterCodec.decode("[1,2]"))
+        assertEquals(ProgramFilterSettings(), ProgramFilterCodec.decode("{\"current\":\"x\",\"saved\":{}}"))
+    }
+
+    @Test
+    fun storedTextsAreCutByCodePoints() {
+        val emoji = "\uD83C\uDFAC"
+        val text = """{"current":{"search":"${emoji.repeat(101)}"},"saved":[{"name":"${emoji.repeat(41)}","filter":{}}]}"""
+        val settings = ProgramFilterCodec.decode(text)
+        assertEquals(emoji.repeat(100), settings.current.search)
+        assertEquals(emoji.repeat(40), settings.saved.single().name)
     }
 
     @Test

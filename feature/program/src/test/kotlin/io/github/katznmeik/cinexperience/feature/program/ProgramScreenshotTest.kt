@@ -156,6 +156,21 @@ class ProgramScreenshotTest {
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/film_page_series.png")
     }
 
+    /** Two cinemas may have the same name (the owner renames cinemas): keys use the cinema key. */
+    @Test
+    fun sameCinemaNamesDontClash() {
+        val film = F.film()
+        val content = film.content as FilmContent.Loaded
+        val twins = content.cinemas.take(2).map { it.copy(cinemaName = "Twin") }
+        composeRule.setContent { ScreenshotSurface { FilmScreen(film.copy(content = content.copy(cinemas = twins)), FilmActions.None) } }
+        composeRule.waitForIdle()
+        // Before the fix this crashed: "Key … was already used".
+        assertEquals(2, composeRule.onAllNodesWithContentDescription("Twin", substring = true).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun offWithAProgram() = capture("program_off_cached", F.state(mode = ProgramMode.OFF))
+
     @Test
     fun filmNotFound() {
         composeRule.setContent { ScreenshotSurface { FilmScreen(FilmUiState(content = FilmContent.NotFound), FilmActions.None) } }
@@ -211,4 +226,61 @@ class ProgramAccessibilityTest(private val fontScale: Float) {
 
     @Test
     fun filmPage() = check("film_page") { FilmScreen(F.film(), FilmActions.None) }
+
+    @Test
+    fun seriesPage() = check("film_page_series") { FilmScreen(F.film(SampleProgram.AUTUMN_CLASSICS), FilmActions.None) }
+
+    @Test
+    fun specialPage() = check("film_page_special") { FilmScreen(F.film(SampleProgram.MIDNIGHT_SURPRISE), FilmActions.None) }
+
+    @Test
+    fun filmNotFound() = check("film_page_not_found") { FilmScreen(FilmUiState(content = FilmContent.NotFound), FilmActions.None) }
+
+    @Test
+    fun notNow() = check("program_not_now") { ProgramScreen(F.state(program = null, mode = ProgramMode.NOT_NOW), ProgramActions.None) }
+
+    @Test
+    fun offWithAProgram() = check("program_off_cached") { ProgramScreen(F.state(mode = ProgramMode.OFF), ProgramActions.None) }
+
+    /**
+     * A dialog over the tab. The clock is held, so the dialog's animations and a
+     * text cursor can't keep Compose busy; the screen capture includes the dialog.
+     */
+    @OptIn(ExperimentalRoborazziApi::class)
+    private fun checkDialog(name: String, dialog: ProgramDialog, state: ProgramUiState = F.state()) {
+        composeRule.mainClock.autoAdvance = false
+        composeRule.setContent { ScreenshotSurface(fontScale) { ProgramScreen(state.copy(dialog = dialog), ProgramActions.None) } }
+        composeRule.mainClock.advanceTimeBy(2_000)
+        captureScreenRoboImage("build/outputs/roborazzi/${name}_${fontScaleSuffix(fontScale)}.png")
+        composeRule.assertAccessible()
+    }
+
+    @Test
+    fun savedFiltersDialog() = checkDialog(
+        "program_saved_filters",
+        ProgramDialog.SAVED_FILTERS,
+        F.state().copy(savedFilters = listOf(SavedFilter("After work", F.busyFilter), SavedFilter("Kids weekend", ProgramFilter(day = DayChoice.WEEKEND)))),
+    )
+
+    /**
+     * "Save filter": its name field (the AlertDialog with a text field never lets
+     * Robolectric go idle, so the field is checked on its own, empty and with an error).
+     */
+    @Test
+    fun saveFilterName() {
+        composeRule.setContent {
+            ScreenshotSurface(fontScale) {
+                androidx.compose.foundation.layout.Column {
+                    SaveFilterName("", null) {}
+                    SaveFilterName("After work", ProgramViewModel.NAME_TOO_LONG) {}
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        if (fontScale != 1f) composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/program_save_filter_${fontScaleSuffix(fontScale)}.png")
+        composeRule.assertAccessible(requireHeading = false)
+    }
+
+    @Test
+    fun replaceFilterDialog() = checkDialog("program_replace_filter", ProgramDialog.CONFIRM_REPLACE, F.state().copy(pendingReplace = "After work"))
 }

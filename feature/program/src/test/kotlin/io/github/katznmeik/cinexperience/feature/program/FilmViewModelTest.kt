@@ -9,6 +9,7 @@ import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.testing.SampleProgram
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -32,7 +33,7 @@ class FilmViewModelTest {
     private val quietProjectionist = FilmKey(FilmKind.FILM, "the-quiet-projectionist")
 
     private fun TestScope.viewModel(film: FilmKey = quietProjectionist, now: Instant = SampleProgram.FETCHED_AT): FilmViewModel {
-        val vm = FilmViewModel(film, program, FakeCinexRepository(SampleData.store()), Clock.fixed(now, ZoneOffset.UTC))
+        val vm = FilmViewModel(film, program, FakeCinexRepository(SampleData.store()), Clock.fixed(now, ZoneOffset.UTC), ticks = flowOf(Unit))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         return vm
     }

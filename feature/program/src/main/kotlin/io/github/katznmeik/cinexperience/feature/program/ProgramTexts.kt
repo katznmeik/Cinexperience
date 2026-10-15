@@ -5,6 +5,7 @@ import io.github.katznmeik.cinexperience.core.program.Film
 import io.github.katznmeik.cinexperience.core.program.ProgramTime
 import io.github.katznmeik.cinexperience.core.program.ShowingVersion
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
+import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -16,15 +17,6 @@ private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Local
 private val DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE d MMM", Locale.ENGLISH)
 private val SHORT_DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
 private val AS_OF: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.ENGLISH)
-
-/**
- * Wraps a text from Yorck's page (title, tagline, genre, label, cinema name) in
- * Unicode first-strong isolates (U+2068 … U+2069), so right-to-left or unusual
- * characters in it can't visually reorder the times, names and numbers next to it
- * when it is joined into one string or content description. Texts shown alone in
- * their own Text don't need it.
- */
-internal fun isolate(text: String): String = "\u2068$text\u2069"
 
 /** "16:30" */
 internal fun timeText(time: LocalTime): String = TIME.format(time)

@@ -34,6 +34,7 @@ import androidx.core.net.toUri
 import io.github.katznmeik.cinexperience.core.ui.component.ActionPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.LabelChip
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 /** Only links to yorck.de are opened; [io.github.katznmeik.cinexperience.core.program.ProgramLinks] builds them. */
@@ -46,22 +47,40 @@ private const val YORCK_PREFIX = "https://www.yorck.de/"
 @Composable
 internal fun rememberBrowserOpener(): (String) -> Boolean {
     val context = LocalContext.current
-    return remember(context) {
-        { link ->
-            if (!link.startsWith(YORCK_PREFIX)) {
-                false
-            } else {
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, link.toUri()).addCategory(Intent.CATEGORY_BROWSABLE)
-                    context.startActivity(intent)
-                    true
-                } catch (e: ActivityNotFoundException) {
-                    false
-                } catch (e: SecurityException) {
-                    false
-                }
-            }
-        }
+    return remember(context) { { link -> BrowserLinks.open(link, context::startActivity) } }
+}
+
+/** How a link is handed to the browser; [open] is testable with a fake `startActivity`. */
+internal object BrowserLinks {
+
+    /**
+     * `ACTION_VIEW` for [link], aimed at the browser app: the selector (`ACTION_MAIN` +
+     * `CATEGORY_APP_BROWSER`, as built by `Intent.makeMainSelectorActivity`) picks the
+     * browser, which then gets the link.
+     */
+    fun browserIntent(link: String): Intent = viewIntent(link).apply {
+        selector = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_BROWSER)
+    }
+
+    /** The plain `ACTION_VIEW` for [link] (the fallback). */
+    fun viewIntent(link: String): Intent = Intent(Intent.ACTION_VIEW, link.toUri()).addCategory(Intent.CATEGORY_BROWSABLE)
+
+    /**
+     * Opens [link] (only `https://www.yorck.de/…`) with the browser selector; if no
+     * browser takes it, once more with the plain `ACTION_VIEW`. False if neither works.
+     */
+    fun open(link: String, start: (Intent) -> Unit): Boolean {
+        if (!link.startsWith(YORCK_PREFIX)) return false
+        return tryStart(browserIntent(link), start) || tryStart(viewIntent(link), start)
+    }
+
+    private fun tryStart(intent: Intent, start: (Intent) -> Unit): Boolean = try {
+        start(intent)
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
+    } catch (e: SecurityException) {
+        false
     }
 }
 
@@ -181,7 +200,8 @@ private fun CinemaLine(item: ShowingItem) {
                 modifier = Modifier.size(with(LocalDensity.current) { 13.sp.toDp() }),
             )
         }
-        if (cinema != null) {
+        // An unrated cinema shows just its name.
+        if (cinema?.overallScore != null) {
             Text(
                 "· ${cinemaScoreText(item)}",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),

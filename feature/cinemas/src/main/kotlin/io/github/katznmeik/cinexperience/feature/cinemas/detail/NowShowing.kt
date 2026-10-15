@@ -5,6 +5,7 @@ import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.program.ProgramState
 import io.github.katznmeik.cinexperience.core.program.ShowingVersion
 import io.github.katznmeik.cinexperience.core.program.YorckCinemas
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -30,14 +31,27 @@ sealed interface NowShowing {
     /** No downloaded program: a hint pointing to the Program tab, worded by [reason]. */
     data class Hint(val reason: HintReason) : NowShowing
 
-    /** The cinema's upcoming showings of the next [NOW_SHOWING_DAYS] days, by day (may be empty). */
-    data class Showings(val days: List<NowShowingDay>, val today: LocalDate) : NowShowing
+    /**
+     * The cinema's upcoming showings of the next [NOW_SHOWING_DAYS] days, by day (may
+     * be empty), from the program downloaded at [asOf]; [isOld] if that is more than
+     * [OLD_AFTER_DAYS] days ago (the program may lack later showings). Also shown
+     * while downloading is switched off.
+     */
+    data class Showings(
+        val days: List<NowShowingDay>,
+        val today: LocalDate,
+        val asOf: Instant,
+        val isOld: Boolean = false,
+    ) : NowShowing
 
     enum class HintReason { NOT_ASKED, OFF, NOT_DOWNLOADED }
 
     companion object {
         /** Today and the 6 days after it. */
         const val NOW_SHOWING_DAYS = 7
+
+        /** A program downloaded longer ago than this is called out as old. */
+        const val OLD_AFTER_DAYS = 7L
 
         /**
          * The section for the cinema [seedKey] from the already downloaded program in
@@ -67,7 +81,8 @@ sealed interface NowShowing {
                     )
                 }
                 .sortedBy { it.date }
-            return Showings(days, today)
+            val isOld = Duration.between(program.fetchedAt, now) > Duration.ofDays(OLD_AFTER_DAYS)
+            return Showings(days, today, program.fetchedAt, isOld)
         }
     }
 }

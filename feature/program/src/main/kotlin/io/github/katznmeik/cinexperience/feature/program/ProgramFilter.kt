@@ -6,6 +6,7 @@ import io.github.katznmeik.cinexperience.core.program.ShowingVersion
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
@@ -28,12 +29,13 @@ enum class DayChoice(val label: String) {
 /**
  * The Program tab's filters (spec §6.9). Empty sets mean "any".
  *
- * @property cinemas seed keys of the app cinemas to show ([io.github.katznmeik.cinexperience.core.model.Cinema.seedKey]);
- *   empty = every cinema, including those Yorck has and the app doesn't know.
+ * @property cinemas keys of the cinemas to show ([io.github.katznmeik.cinexperience.core.program.ProgramCinema.key]:
+ *   the seed key of a matched cinema, else Yorck's name); empty = every cinema.
  * @property dates the chosen dates, used when [day] is [DayChoice.DATES].
  * @property from earliest start time (inclusive), `null` = any.
  * @property to latest start time (inclusive), `null` = any. Earlier than [from]
- *   means a range across midnight (e.g. 22:00–01:00).
+ *   means a range across midnight (e.g. 22:00–01:00): its part after midnight
+ *   belongs to the evening before, so "Today 22:00–01:00" includes tonight's 00:30.
  * @property versions and [events] together: a showing matches if it has any
  *   selected version or event label; both empty = every showing.
  * @property search part of the film title, ignoring case and accents.
@@ -99,37 +101,67 @@ object ProgramFilters {
     }
 
     /**
-     * The film search: true if a title of [showing] ([ProgramLookup.searchableTitles])
-     * contains [search], ignoring case, accents and surrounding spaces.
+     * The date a showing that starts at [start] counts for: its own date, except the
+     * after-midnight part of a range across midnight ([from] later than [to]), which
+     * belongs to the evening before.
      */
-    fun matchesSearch(program: Program, showing: Showing, search: String): Boolean {
-        val needle = normalise(search)
-        return needle.isEmpty() || ProgramLookup.searchableTitles(program, showing).any { normalise(it).contains(needle) }
+    fun filterDate(start: LocalDateTime, from: LocalTime?, to: LocalTime?): LocalDate {
+        val acrossMidnight = from != null && to != null && from.isAfter(to)
+        return if (acrossMidnight && !start.toLocalTime().isAfter(to)) start.toLocalDate().minusDays(1) else start.toLocalDate()
     }
+
+    /**
+     * The film search: true if a title of [showing] ([ProgramLookup.searchableTitles]:
+     * its film's and its specials') contains [search], ignoring case, accents and
+     * surrounding spaces.
+     */
+    fun matchesSearch(program: Program, showing: Showing, search: String): Boolean =
+        SearchIndex(program).matches(showing, normalise(search))
 
     private val MARKS = Regex("\\p{Mn}+")
     private val SPACES = Regex("\\s+")
 
-    private fun normalise(text: String): String =
+    /** [text] as the search compares it: no accents, single spaces, lower case. */
+    fun normalise(text: String): String =
         java.text.Normalizer.normalize(text.trim(), java.text.Normalizer.Form.NFD)
             .replace(MARKS, "")
             .replace(SPACES, " ")
             .lowercase(Locale.ROOT)
 
     /**
+     * The searchable titles of every showing of a program, normalised once (the
+     * search runs on every keystroke); build one per program and reuse it.
+     */
+    class SearchIndex(private val program: Program) {
+        private val titles = HashMap<String, List<String>>()
+
+        fun matches(showing: Showing, needle: String): Boolean =
+            needle.isEmpty() ||
+                titles.getOrPut(showing.id) { ProgramLookup.searchableTitles(program, showing).map(::normalise) }
+                    .any { it.contains(needle) }
+    }
+
+    /**
      * The showings of [program] that match [filter], upcoming at [now] and on a date
      * of the filter (seen on [today], Berlin time), sorted by start.
      */
-    fun apply(program: Program, filter: ProgramFilter, now: Instant, today: LocalDate): List<Showing> {
+    fun apply(
+        program: Program,
+        filter: ProgramFilter,
+        now: Instant,
+        today: LocalDate,
+        index: SearchIndex = SearchIndex(program),
+    ): List<Showing> {
         val dates = datesOf(filter.day, filter.dates, today)
         if (dates.isEmpty()) return emptyList()
+        val needle = normalise(filter.search)
         return program.showings.filter { showing ->
             showing.isUpcoming(now) &&
-                showing.start.toLocalDate() in dates &&
-                (filter.cinemas.isEmpty() || showing.cinema.seedKey in filter.cinemas) &&
+                filterDate(showing.start, filter.from, filter.to) in dates &&
+                (filter.cinemas.isEmpty() || showing.cinema.key in filter.cinemas) &&
                 inTimeRange(showing.start.toLocalTime(), filter.from, filter.to) &&
                 matchesLabels(showing, filter.versions, filter.events) &&
-                matchesSearch(program, showing, filter.search)
+                index.matches(showing, needle)
         }
     }
 

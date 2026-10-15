@@ -17,6 +17,7 @@ import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.labels
+import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
 import io.github.katznmeik.cinexperience.feature.visits.VisitPrefillArgs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -163,8 +164,10 @@ class VisitEditViewModel(
         try {
             cinemaRepository.observeCinemaDetails().collect { details ->
                 cinemasLoaded = true
-                val withCinemas = state.copy(cinemas = details.map(CinemaDetail::toOption))
-                _uiState.value = withPrefilledCinema(withCinemas).derived()
+                val options = details.map(CinemaDetail::toOption)
+                // The pre-fill is taken out first, so a retried update can't apply it twice.
+                val prefillId = prefillCinemaId.also { prefillCinemaId = null }
+                _uiState.update { withPrefilledCinema(it.copy(cinemas = options), prefillId).derived() }
             }
         } catch (e: CancellationException) {
             throw e
@@ -180,9 +183,8 @@ class VisitEditViewModel(
      * itself when it has several (the owner picks the hall). The pre-filled form
      * counts as unchanged, like a hall pre-selected from the hall page.
      */
-    private fun withPrefilledCinema(current: VisitEditUiState): VisitEditUiState {
-        val cinemaId = prefillCinemaId ?: return current
-        prefillCinemaId = null
+    private fun withPrefilledCinema(current: VisitEditUiState, cinemaId: Long?): VisitEditUiState {
+        cinemaId ?: return current
         val cinema = current.cinemas.firstOrNull { it.id == cinemaId } ?: return current
         val onlyHall = cinema.halls.singleOrNull()?.id
         val form = current.form.copy(hallId = onlyHall, cinemaId = if (onlyHall == null) cinema.id else null)
@@ -552,12 +554,5 @@ class VisitEditViewModel(
         }
     }
 }
-
-/**
- * The first [max] code points of this text: unlike `take`, it never splits a
- * surrogate pair (e.g. an emoji or another character outside the BMP).
- */
-internal fun String.takeCodePoints(max: Int): String =
-    if (codePointCount(0, length) <= max) this else substring(0, offsetByCodePoints(0, max))
 
 private fun CinemaDetail.toOption(): CinemaOption = CinemaOption(cinema.id, cinema.name, halls.map { it.hall })

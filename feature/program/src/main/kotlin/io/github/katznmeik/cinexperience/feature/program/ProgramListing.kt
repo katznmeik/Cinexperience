@@ -100,3 +100,15 @@ fun groupByDay(program: Program, showings: List<Showing>, join: CinemaJoin): Lis
     showings.groupBy { it.start.toLocalDate() }
         .map { (date, list) -> ShowingDay(date, list.sortedBy { it.start }.map { showingItem(program, it, join) }) }
         .sortedBy { it.date }
+
+/** The app's cinemas, then Yorck's cinemas without an app cinema (and selected ones gone from the program). */
+internal fun cinemaChoices(join: CinemaJoin, program: Program?, filter: ProgramFilter): List<CinemaChoice> {
+    val app = join.cinemas.map { CinemaChoice(it.seedKey, it.name) }
+    val known = app.mapTo(HashSet()) { it.key }
+    val yorck = program?.cinemas.orEmpty()
+        .filter { join[it.seedKey] == null && it.key !in known }
+        .map { CinemaChoice(it.key, it.name) }
+    val listed = known + yorck.map { it.key }
+    val missing = filter.cinemas.filter { it !in listed }.sorted().map { CinemaChoice(it, it) }
+    return app + yorck.sortedBy { it.name.lowercase() } + missing
+}
