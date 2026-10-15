@@ -4,6 +4,8 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.net.CookieHandler
 import java.net.URI
+import java.net.URL
+import java.net.URLConnection
 import javax.net.ssl.HttpsURLConnection
 
 /**
@@ -25,15 +27,20 @@ import javax.net.ssl.HttpsURLConnection
  *   can't be interrupted).
  * - TLS uses the system's certificate authorities only and cleartext is blocked,
  *   by the app's network security config (`app/src/main/res/xml/network_security_config.xml`).
+ *
+ * @param open opens the connection for the checked address without connecting
+ *   (`URL.openConnection()`). Only tests pass another one: a fake
+ *   `HttpsURLConnection` without sockets that records how it was configured.
  */
 internal class HttpsProgramTransport(
     private val connectTimeoutMs: Int = ProgramDownloader.CONNECT_TIMEOUT_MS,
     private val readTimeoutMs: Int = ProgramDownloader.READ_TIMEOUT_MS,
+    private val open: (URL) -> URLConnection = { url -> url.openConnection() },
 ) : ProgramTransport {
 
     override fun get(uri: URI, headers: Map<String, String>, abort: TransportAbort): TransportResponse {
         checkAllowed(uri, CookieHandler.getDefault() != null)
-        val connection = uri.toURL().openConnection() as? HttpsURLConnection
+        val connection = open(uri.toURL()) as? HttpsURLConnection
             ?: throw IOException("Not an HTTPS connection")
         abort.onAbort { connection.disconnect() }
         try {
