@@ -6,10 +6,11 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import io.github.katznmeik.cinexperience.core.data.backup.BackupRepository
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
+import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import kotlinx.serialization.Serializable
 
-/** Settings tab (spec §6.7): backup, data management and about. */
+/** Settings tab (spec §6.7): backup, data management, program and about. */
 @Serializable
 data object SettingsRoute
 
@@ -20,6 +21,7 @@ data object SettingsRoute
 fun NavGraphBuilder.settingsScreen(
     cinemaRepository: CinemaRepository,
     backupRepository: BackupRepository,
+    programRepository: ProgramRepository,
     appVersion: String,
     buildId: String,
     onOpenManage: () -> Unit,
@@ -28,7 +30,7 @@ fun NavGraphBuilder.settingsScreen(
     composable<SettingsRoute> {
         ScreenBackground {
             SettingsEntry(
-                viewModel = viewModel(factory = SettingsViewModel.factory(cinemaRepository, backupRepository, appVersion, buildId)),
+                viewModel = viewModel(factory = SettingsViewModel.factory(cinemaRepository, backupRepository, programRepository, appVersion, buildId)),
                 onOpenManage = dropUnlessResumed(block = onOpenManage),
                 onOpenAllVisits = dropUnlessResumed(block = onOpenAllVisits),
             )

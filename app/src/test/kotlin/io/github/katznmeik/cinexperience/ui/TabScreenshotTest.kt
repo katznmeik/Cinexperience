@@ -23,6 +23,7 @@ import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.di.AppContainer
+import io.github.katznmeik.cinexperience.feature.program.InMemoryProgramFilterStore
 import io.github.katznmeik.cinexperience.feature.cinemas.closeDeletedCinema
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -37,6 +38,7 @@ import org.robolectric.annotation.GraphicsMode
 internal class FakeAppContainer(
     repository: FakeCinexRepository,
     override val backupRepository: FakeBackupRepository = FakeBackupRepository(),
+    override val programRepository: FakeProgramRepository = FakeProgramRepository(),
 ) : AppContainer {
     override val applicationContext: Context = RuntimeEnvironment.getApplication()
     override val appVersion: String = "0.1.0"
@@ -47,7 +49,7 @@ internal class FakeAppContainer(
     override val seatOverrideRepository = repository
     override val referenceImageStore = FakeReferenceImageStore()
     override val visitPhotoStore = FakeVisitPhotoStore()
-    override val programRepository = FakeProgramRepository()
+    override val programFilterStore = InMemoryProgramFilterStore()
 }
 
 /**

@@ -9,12 +9,17 @@ import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
+import io.github.katznmeik.cinexperience.core.program.ProgramRepository
+import io.github.katznmeik.cinexperience.core.program.ProgramTime
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaDeleteListener
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaEditor
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialog
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditMessages
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -22,6 +27,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Clock
+
+/** Emits now and then once a minute, so "now" stays current. */
+internal fun minuteTicks(): Flow<Unit> = flow {
+    while (true) {
+        emit(Unit)
+        delay(60_000)
+    }
+}
 
 sealed interface CinemaDetailContent {
     data object Loading : CinemaDetailContent
@@ -39,6 +53,8 @@ data class CinemaDetailUiState(
      * on the screen it returns to.
      */
     val deletedMessage: String? = null,
+    /** "Now showing" (spec §6.2), from the already downloaded program. */
+    val nowShowing: NowShowing = NowShowing.Hidden,
 )
 
 /** Where a delete started on this screen stands. */
@@ -48,11 +64,18 @@ private sealed interface OwnDelete {
     data class Done(val message: String) : OwnDelete
 }
 
-/** Cinema detail (spec §6.2): header scores, halls, edit / add hall / delete actions. */
+/**
+ * Cinema detail (spec §6.2): header scores, halls, edit / add hall / delete actions
+ * and "Now showing", which only reads the program [programRepository] already
+ * holds: this screen never asks for a download.
+ */
 class CinemaDetailViewModel(
     private val cinemaId: Long,
     private val cinemaRepository: CinemaRepository,
     hallRepository: HallRepository,
+    programRepository: ProgramRepository,
+    private val clock: Clock = Clock.systemDefaultZone(),
+    ticks: Flow<Unit> = minuteTicks(),
 ) : ViewModel() {
 
     private val ownDelete = MutableStateFlow<OwnDelete>(OwnDelete.None)
@@ -84,18 +107,30 @@ class CinemaDetailViewModel(
     private var lastLoaded: CinemaDetailContent.Loaded? = null
 
     val uiState: StateFlow<CinemaDetailUiState> =
-        combine(content, editor.dialog, editor.message, ownDelete) { content, dialog, message, ownDelete ->
+        combine(
+            content,
+            editor.dialog,
+            editor.message,
+            ownDelete,
+            // ticks: "now" stays current, so started showings leave "Now showing".
+            combine(programRepository.state, ticks) { program, _ -> program },
+        ) { content, dialog, message, ownDelete, program ->
             if (content is CinemaDetailContent.Loaded) lastLoaded = content
             val shown = if (ownDelete != OwnDelete.None && content !is CinemaDetailContent.Loaded) {
                 lastLoaded ?: content
             } else {
                 content
             }
-            CinemaDetailUiState(shown, dialog, message, (ownDelete as? OwnDelete.Done)?.message)
+            val seedKey = (shown as? CinemaDetailContent.Loaded)?.detail?.cinema?.seedKey
+            val nowShowing = NowShowing.of(program, seedKey, clock.instant(), ProgramTime.now(clock).toLocalDate())
+            CinemaDetailUiState(shown, dialog, message, (ownDelete as? OwnDelete.Done)?.message, nowShowing)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CinemaDetailUiState())
 
     private val detail: CinemaDetail?
         get() = (uiState.value.content as? CinemaDetailContent.Loaded)?.detail
+
+    /** The cinema's seed key, for "Show all in Program"; `null` while loading or for a user-added cinema. */
+    val cinemaSeedKey: String? get() = detail?.cinema?.seedKey
 
     fun editCinema() {
         detail?.let(editor::startEditCinema)
@@ -151,8 +186,9 @@ class CinemaDetailViewModel(
             cinemaId: Long,
             cinemaRepository: CinemaRepository,
             hallRepository: HallRepository,
+            programRepository: ProgramRepository,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { CinemaDetailViewModel(cinemaId, cinemaRepository, hallRepository) }
+            initializer { CinemaDetailViewModel(cinemaId, cinemaRepository, hallRepository, programRepository) }
         }
     }
 }

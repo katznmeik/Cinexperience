@@ -202,6 +202,7 @@ dependencies {
     implementation(projects.feature.visits)
     implementation(projects.feature.rankings)
     implementation(projects.feature.backup)
+    implementation(projects.feature.program)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

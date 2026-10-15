@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
+import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
@@ -45,7 +46,7 @@ class CinemasUiTest {
     private val repository = FakeCinexRepository(SampleData.store())
 
     private fun showDetail() {
-        val viewModel = CinemaDetailViewModel(SampleData.DELPHI_LUX, repository, repository)
+        val viewModel = CinemaDetailViewModel(SampleData.DELPHI_LUX, repository, repository, FakeProgramRepository())
         composeRule.setContent {
             CinexTheme { CinemaDetailEntry(viewModel, onBack = {}, onOpenHall = {}, onCinemaDeleted = {}) }
         }

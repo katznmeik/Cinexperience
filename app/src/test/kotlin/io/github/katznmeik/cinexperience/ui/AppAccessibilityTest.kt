@@ -54,4 +54,7 @@ class AppAccessibilityTest(private val fontScale: Float) {
 
     @Test
     fun settingsTab() = showTab(TopLevelDestination.Settings)
+
+    @Test
+    fun programTab() = showTab(TopLevelDestination.Program)
 }

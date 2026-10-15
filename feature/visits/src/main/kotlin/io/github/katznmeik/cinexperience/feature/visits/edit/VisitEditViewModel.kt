@@ -17,6 +17,8 @@ import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.labels
+import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
+import io.github.katznmeik.cinexperience.feature.visits.VisitPrefillArgs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,8 +30,12 @@ import java.time.LocalDate
 
 /** Which visit the form edits. */
 sealed interface VisitEditMode {
-    /** A new visit; [hallId] pre-selects the hall (opened from a hall), `null` from the Cinemas tab. */
-    data class Add(val hallId: Long?) : VisitEditMode
+    /**
+     * A new visit; [hallId] pre-selects the hall (opened from a hall), `null` from the
+     * Cinemas tab. [prefill] fills cinema, date, film and format ("Log visit" from a
+     * showing of the program, spec §11.1); its cinema is used only without [hallId].
+     */
+    data class Add(val hallId: Long?, val prefill: VisitPrefillArgs? = null) : VisitEditMode
 
     data class Edit(val visitId: Long) : VisitEditMode
 }
@@ -61,7 +67,15 @@ class VisitEditViewModel(
     private val _uiState = MutableStateFlow(
         VisitEditUiState(
             isEdit = mode is VisitEditMode.Edit,
-            form = VisitForm(hallId = (mode as? VisitEditMode.Add)?.hallId, date = today()),
+            form = (mode as? VisitEditMode.Add).let { add ->
+                val prefill = add?.prefill
+                VisitForm(
+                    hallId = add?.hallId,
+                    date = prefill?.date ?: today(),
+                    filmTitle = prefill?.filmTitle?.trim()?.takeCodePoints(MAX_FILM_LENGTH).orEmpty(),
+                    format = prefill?.format,
+                )
+            },
         ),
     )
     val uiState: StateFlow<VisitEditUiState> = _uiState.asStateFlow()
@@ -83,6 +97,10 @@ class VisitEditViewModel(
     private var visitLoaded = mode is VisitEditMode.Add
     private var cinemasLoaded = false
 
+    /** The pre-filled cinema, applied once the cinemas have loaded (then `null`). */
+    private var prefillCinemaId: Long? =
+        (mode as? VisitEditMode.Add)?.takeIf { it.hallId == null }?.prefill?.cinemaId
+
     init {
         val draft = VisitDraft.decodeOrNull(savedState.get<String>(DRAFT_KEY))
         if (draft != null) {
@@ -94,6 +112,7 @@ class VisitEditViewModel(
     }
 
     private fun restore(draft: VisitDraft) {
+        prefillCinemaId = null // the draft already holds it
         baseline = draft.baseline.toForm()
         visitId = draft.visitId
         sessionPhotos += draft.sessionPhotos
@@ -145,7 +164,10 @@ class VisitEditViewModel(
         try {
             cinemaRepository.observeCinemaDetails().collect { details ->
                 cinemasLoaded = true
-                _uiState.update { it.copy(cinemas = details.map(CinemaDetail::toOption)).derived() }
+                val options = details.map(CinemaDetail::toOption)
+                // The pre-fill is taken out first, so a retried update can't apply it twice.
+                val prefillId = prefillCinemaId.also { prefillCinemaId = null }
+                _uiState.update { withPrefilledCinema(it.copy(cinemas = options), prefillId).derived() }
             }
         } catch (e: CancellationException) {
             throw e
@@ -154,6 +176,20 @@ class VisitEditViewModel(
                 if (it.status == VisitEditStatus.Loading) it.copy(status = VisitEditStatus.LoadFailed) else it.copy(message = LOAD_FAILED)
             }
         }
+    }
+
+    /**
+     * Applies the pre-filled cinema once (spec §11.1): its only hall, or the cinema
+     * itself when it has several (the owner picks the hall). The pre-filled form
+     * counts as unchanged, like a hall pre-selected from the hall page.
+     */
+    private fun withPrefilledCinema(current: VisitEditUiState, cinemaId: Long?): VisitEditUiState {
+        cinemaId ?: return current
+        val cinema = current.cinemas.firstOrNull { it.id == cinemaId } ?: return current
+        val onlyHall = cinema.halls.singleOrNull()?.id
+        val form = current.form.copy(hallId = onlyHall, cinemaId = if (onlyHall == null) cinema.id else null)
+        if (baseline == current.form) baseline = form
+        return current.copy(form = form)
     }
 
     // ---- Cinema, hall, date, film, format ----
@@ -179,9 +215,9 @@ class VisitEditViewModel(
 
     fun setDate(date: LocalDate) = editForm { it.copy(date = date) }
 
-    fun setFilmTitle(text: String) = editForm { it.copy(filmTitle = text.take(MAX_FILM_LENGTH)) }
+    fun setFilmTitle(text: String) = editForm { it.copy(filmTitle = text.takeCodePoints(MAX_FILM_LENGTH)) }
 
-    fun setNote(text: String) = editForm { it.copy(note = text.take(MAX_NOTE_LENGTH)) }
+    fun setNote(text: String) = editForm { it.copy(note = text.takeCodePoints(MAX_NOTE_LENGTH)) }
 
     /** Selects [format], or clears it when it is already selected. */
     fun toggleFormat(format: ScreeningFormat) = editForm { it.copy(format = if (it.format == format) null else format) }
@@ -489,6 +525,7 @@ class VisitEditViewModel(
         /** Key of the [VisitDraft] in the saved state. */
         internal const val DRAFT_KEY = "visitEdit.draft"
 
+        /** Limits in Unicode code points (an emoji counts once; a surrogate pair is never split). */
         const val MAX_FILM_LENGTH = 200
         const val MAX_NOTE_LENGTH = 4000
 
