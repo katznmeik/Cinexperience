@@ -249,8 +249,14 @@ Don't duplicate config in module build files.
   paths outside their folder. Files are copied in when picked; a replaced or
   removed file is deleted only after a successful save, discarding deletes the
   files added in that session, deleting a visit deletes its photo. The startup
-  sweep (`DataContainer.sweepOrphanFiles`) deletes unreferenced files older than
-  1 h. Auto Backup excludes them (database and preferences only); the backup
+  sweep (`DataContainer.sweepOrphanFiles`) deletes unreferenced visit photos
+  (and camera captures) older than 7 days, because a visit form restored after
+  process death still holds its unsaved photos, and unreferenced reference
+  screenshots older than 1 h (the editor's draft doesn't survive process death).
+  A restored visit form drops session photos whose files are gone
+  (`VisitPhotoStore.exists`); if its photo was one, it clears it and says "The
+  photo is no longer available." The saved visit's photo is never touched.
+  Auto Backup excludes these files (database and preferences only); the backup
   export includes the referenced ones. Tests use the fakes in `core:testing`
   (`FakeReferenceImageStore`, `FakeVisitPhotoStore`, `FakeBackupRepository`).
 - **Program / network (v1.1, spec §11.1 "Network & security", binding):**
