@@ -170,7 +170,9 @@ enum class NumberingDirection {
  *   entry means "automatic". The index is the block counted from the left as
  *   stored, whatever the [numberingDirection]; the value is the number of that
  *   block's first numbered seat in numbering order, i.e. of its rightmost seat
- *   when the row runs right to left. See [labels].
+ *   when the row runs right to left. See [labels]. When a cell change splits,
+ *   merges or shortens blocks, each start stays with that seat
+ *   ([withBlockStartsKeyedOn]).
  * @property halfSeatOffset the whole row is drawn shifted half a seat to the right
  *   (staggered rows). Alternating rows with and without the offset model staggering.
  * @property numberingDirection which way the row's seats are numbered.
@@ -227,6 +229,56 @@ data class LayoutRow(
             }
             return blocks
         }
+
+    /** The seats of each block in numbering order (the rightmost seat first when the row runs right to left). */
+    private val blockSeatsInNumberingOrder: List<List<LayoutCell.Seat>>
+        get() = blocks.map { columns ->
+            val seats = columns.map { cells[it] as LayoutCell.Seat }
+            if (numberingDirection == NumberingDirection.RIGHT_TO_LEFT) seats.asReversed() else seats
+        }
+
+    /**
+     * The seat each block's start number is keyed on, with that start (`null` =
+     * automatic): the block's first numbered seat in numbering order, whose number
+     * the start is (spec §4.3). Seats with a [LayoutCell.Seat.fixedLabel] use no
+     * number and don't count; a block with only such seats (its start is unused)
+     * keys it on its first seat, so the stored value is kept as long as that seat is.
+     */
+    internal fun blockStartAnchors(): Map<SeatId, Int?> {
+        val anchors = LinkedHashMap<SeatId, Int?>()
+        blockSeatsInNumberingOrder.forEachIndexed { block, seats ->
+            val anchor = seats.firstOrNull { it.fixedLabel == null } ?: seats.first()
+            anchors[anchor.id] = blockStartNumbers.getOrNull(block)
+        }
+        return anchors
+    }
+
+    /**
+     * This row with its [blockStartNumbers] re-keyed after a cell change, so that
+     * every start stays with the seat it was keyed on ([blockStartAnchors] of the
+     * row before the change, plus any restored seat's start): each block gets the
+     * start of the first of its seats, in numbering order, that carries one.
+     *
+     * So a split-off part without that seat gets `null` (it counts on with
+     * [SeatNumbering.CONTINUOUS] or restarts with [SeatNumbering.RESTART_PER_BLOCK]);
+     * when blocks merge, the start of the one whose first numbered seat comes first
+     * in numbering order is kept and the other is dropped; a start whose seat is
+     * gone is dropped; and a row whose blocks hold the same seats as before comes
+     * out with the same starts. The list is normalised (no entries beyond the blocks,
+     * no trailing `null`s).
+     */
+    internal fun withBlockStartsKeyedOn(anchors: Map<SeatId, Int?>): LayoutRow {
+        val starts = blockSeatsInNumberingOrder.map { seats -> seats.firstOrNull { it.id in anchors }?.let { anchors[it.id] } }
+        return copy(blockStartNumbers = starts.dropLastWhile { it == null })
+    }
+
+    /**
+     * This row with [newCells] and its block starts re-keyed from this row's seats
+     * (see [withBlockStartsKeyedOn]); [restored] adds the start a seat put back by
+     * [SeatLayout.withSeat] was keyed on.
+     */
+    internal fun withCells(newCells: List<LayoutCell>, restored: Map<SeatId, Int?> = emptyMap()): LayoutRow =
+        copy(cells = newCells).withBlockStartsKeyedOn(blockStartAnchors() + restored)
 
     companion object {
         /** The stored [label] of a row without a name: "-", as in Yorck's booking data. */
@@ -305,7 +357,8 @@ data class SeatLayout(
         return monotone { it.row } && monotone { it.column }
     }
 
-    // ---- Editing (all keep existing seat ids attached to their cells) ----
+    // ---- Editing (all keep existing seat ids attached to their cells, and block
+    // starts with their seats: see LayoutRow.withBlockStartsKeyedOn) ----
 
     /** Sets one cell's type. A cell that becomes a seat gets a fresh id; an unchanged type is a no-op. */
     fun withCellType(row: Int, column: Int, type: CellType): SeatLayout {
@@ -313,14 +366,17 @@ data class SeatLayout(
         val allocator = IdAllocator(nextSeatId)
         val newCell = allocator.cell(type)
         val newRows = rows.toMutableList()
-        newRows[row] = rows[row].copy(cells = rows[row].cells.toMutableList().also { it[column] = newCell })
+        newRows[row] = rows[row].withCells(rows[row].cells.toMutableList().also { it[column] = newCell })
         return SeatLayout(newRows, allocator.next)
     }
 
     /**
      * Turns one non-seat cell into a seat with the given, currently unused [id]
      * and [fixedLabel] (used by [LayoutEditSession] to give a seat its original id
-     * and fixed label back).
+     * and fixed label back). [blockStart] is the start number the seat was keyed
+     * on when it was painted away (see [LayoutRow.blockStartNumbers]); it comes
+     * back with the seat when the seat is again its block's first in numbering
+     * order, else it is dropped.
      */
     fun withSeat(
         row: Int,
@@ -328,10 +384,15 @@ data class SeatLayout(
         id: SeatId,
         kind: SeatKind = SeatKind.STANDARD,
         fixedLabel: String? = null,
+        blockStart: Int? = null,
     ): SeatLayout {
         require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
         require(id !in seatPositions) { "$id is already used in this layout" }
-        return SeatLayout(replaceCell(row, column, LayoutCell.Seat(id, kind, fixedLabel)), maxOf(nextSeatId, id.value + 1))
+        require(blockStart == null || blockStart >= 0) { "Block start numbers must not be negative: $blockStart" }
+        val newCells = rows[row].cells.toMutableList().also { it[column] = LayoutCell.Seat(id, kind, fixedLabel) }
+        val restored = if (blockStart == null) emptyMap() else mapOf(id to blockStart)
+        val newRows = rows.toMutableList().also { it[row] = rows[row].withCells(newCells, restored) }
+        return SeatLayout(newRows, maxOf(nextSeatId, id.value + 1))
     }
 
     /** Changes the [SeatKind] of the seat at ([row], [column]); the seat keeps its id and fixed label. */
@@ -429,7 +490,7 @@ data class SeatLayout(
         require(index in 0..columnCount) { "Column index $index out of 0..$columnCount" }
         val allocator = IdAllocator(nextSeatId)
         val newRows = rows.map { row ->
-            row.copy(cells = row.cells.toMutableList().also { it.add(index, allocator.cell(fill)) })
+            row.withCells(row.cells.toMutableList().also { it.add(index, allocator.cell(fill)) })
         }
         return SeatLayout(newRows, allocator.next)
     }
@@ -437,7 +498,7 @@ data class SeatLayout(
     /** Removes the column at [index]. Its seats disappear; the last column cannot be removed. */
     fun removeColumn(index: Int): SeatLayout {
         require(columnCount > 1) { "Cannot remove the only column" }
-        return copy(rows = rows.map { row -> row.copy(cells = row.cells.toMutableList().also { it.removeAt(index) }) })
+        return copy(rows = rows.map { row -> row.withCells(row.cells.toMutableList().also { it.removeAt(index) }) })
     }
 
     /** Grows or shrinks the grid at the bottom / right edge; new cells are [fill]. */
