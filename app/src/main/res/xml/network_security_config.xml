@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network security (spec §11.1, Network & security rule 5). The app's only request
+  is GET https://www.yorck.de/en/films (core:program):
+  - HTTPS only: unencrypted (cleartext) traffic is blocked for every host.
+  - Only the phone's system certificate authorities are trusted, no user-installed
+    ones, also in debug builds (no debug-overrides).
+  - No certificate pinning: Yorck's routine certificate changes would break the
+    Program, and the data is public.
+  NetworkSecurityConfigTest (app) checks this file.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

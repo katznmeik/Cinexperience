@@ -110,7 +110,9 @@ class DataContainer(
     /**
      * The startup sweep: [sweepOrphanReferenceImages], [sweepOrphanVisitPhotos] and
      * the leftover backup import staging in the cache. Returns the total number of
-     * deleted photos and reference images.
+     * deleted photos and reference images. It only looks into `files/reference/`,
+     * `files/photos/` and the cache; the downloaded program (`files/program/`, owned
+     * by core:program) is never touched (ProgramStorageTest in app).
      */
     suspend fun sweepOrphanFiles(now: Long = System.currentTimeMillis()): Int {
         clearLeftoverImportStaging()

@@ -2,9 +2,13 @@
 
 A personal Android app for rating the halls and seats of the Berlin cinema chain
 Yorck Kinos. You log every visit, and over time the app shows which cinema, which
-hall and which seat to book next. It works fully offline, has a dark theme only
+hall and which seat to book next. It works offline, has a dark theme only
 and is installed directly from an APK. It is unofficial and not affiliated with
 Yorck Kinos.
+
+The one exception to offline (from v1.1): the Program tab downloads Yorck's
+public program page from www.yorck.de, only after you agree and never in the
+background. Nothing from your data is sent; Settings can switch it off.
 
 The full product specification is in [`docs/SPEC.md`](docs/SPEC.md).
 

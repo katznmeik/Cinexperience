@@ -6,10 +6,11 @@ plugins {
 }
 
 // Test helpers shared by the feature and app modules (testImplementation only):
-// in-memory fake repositories, illustrative fixtures, the main-dispatcher rule and
+// in-memory fake repositories (also FakeProgramRepository), illustrative fixtures, the main-dispatcher rule and
 // the screenshot surface and accessibility checks for Compose tests.
 dependencies {
     api(projects.core.data)
+    api(projects.core.program)
     api(projects.core.ui)
     api(libs.kotlinx.coroutines.test)
     api(libs.junit4)
