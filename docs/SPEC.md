@@ -1,8 +1,8 @@
 # Cinexperience — Product Specification
 
-**Status:** v1.0.0 released (2026-10-14); v1.1.0 (Program, §11.1) built, release pending
+**Status:** v1.1.0 released (2026-10-15)
 **Owner:** katznmeik
-**Last updated:** 2026-10-15 (rev. 23)
+**Last updated:** 2026-10-15 (rev. 24)
 
 ---
 
