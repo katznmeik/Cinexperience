@@ -1,8 +1,14 @@
 package io.github.katznmeik.cinexperience.core.program.net
 
 import io.github.katznmeik.cinexperience.core.program.ProgramError
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,13 +17,18 @@ import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.URI
 import java.net.UnknownHostException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLHandshakeException
 
 /** The download policy, tested with [FakeTransport]: no sockets. */
 class ProgramDownloaderTest {
 
-    private fun downloader(transport: FakeTransport, maxBytes: Long = ProgramDownloader.MAX_BYTES, nanoTime: () -> Long = { 0L }) =
-        ProgramDownloader(transport, "1.1.0", nanoTime, maxBytes)
+    private fun downloader(
+        transport: FakeTransport,
+        maxBytes: Long = ProgramDownloader.MAX_BYTES,
+        totalTimeoutMs: Long = ProgramDownloader.TOTAL_TIMEOUT_MS,
+    ) = ProgramDownloader(transport, "1.1.0", maxBytes, totalTimeoutMs)
 
     private suspend fun ProgramDownloader.get(isAllowed: () -> Boolean = { true }) = download(isAllowed)
 
@@ -212,13 +223,60 @@ class ProgramDownloaderTest {
     }
 
     @Test
-    fun theWholeDownloadHasADeadline() = runTest {
-        var now = 0L
-        val transport = FakeTransport().then {
-            now += (ProgramDownloader.TOTAL_TIMEOUT_MS + 1) * 1_000_000 // a slow server
-            response(200, body = FakeTransport.CountingBody(10))
+    fun theRealTotalTimeoutIsNinetySeconds() {
+        assertEquals(90_000L, ProgramDownloader.TOTAL_TIMEOUT_MS)
+    }
+
+    // --- Watchdog: real threads, because the fake transport blocks like a stalled socket ---------
+
+    private fun <T> onRealThreads(block: suspend CoroutineScope.() -> T): T {
+        val executor = Executors.newFixedThreadPool(3)
+        try {
+            return runBlocking(executor.asCoroutineDispatcher()) { withTimeout(15_000) { block() } }
+        } finally {
+            executor.shutdownNow()
         }
-        assertEquals(ProgramError.NETWORK, downloader(transport, nanoTime = { now }).get().error())
+    }
+
+    @Test
+    fun theTotalTimeoutAbortsAStalledConnect() = onRealThreads {
+        val transport = FakeTransport().then { abort -> blockUntilAborted(abort) }
+        val started = System.nanoTime()
+        val result = downloader(transport, totalTimeoutMs = 300).get()
+        assertEquals(ProgramError.NETWORK, result.error())
+        assertEquals(1, transport.aborted)
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 10_000) // not a socket timeout
+    }
+
+    @Test
+    fun theTotalTimeoutAbortsAStalledRead() = onRealThreads {
+        val transport = FakeTransport().then { abort -> response(200, body = FakeTransport.StallingBody(abort)) }
+        assertEquals(ProgramError.NETWORK, downloader(transport, totalTimeoutMs = 300).get().error())
+        assertEquals(1, transport.closed)
+    }
+
+    @Test
+    fun cancellingTheDownloadAbortsTheBlockedCallAtOnce() = onRealThreads {
+        val transport = FakeTransport().then { abort -> blockUntilAborted(abort) }
+        val download = async { downloader(transport).get() } // 90 s timeout: only the cancel can end it
+        assertTrue(transport.blocking.await(5, TimeUnit.SECONDS))
+        val started = System.nanoTime()
+        download.cancel()
+        download.join()
+        assertTrue(download.isCancelled)
+        assertEquals(1, transport.aborted)
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 5_000)
+    }
+
+    @Test
+    fun aFinishedDownloadIsNotAborted() = runTest {
+        var abortHandle: TransportAbort? = null
+        val transport = FakeTransport().then { abort ->
+            abortHandle = abort
+            ok("page")
+        }
+        assertEquals("page", downloader(transport).get().page())
+        assertFalse(abortHandle!!.isAborted)
     }
 
     // --- Failures never throw -------------------------------------------------------------------

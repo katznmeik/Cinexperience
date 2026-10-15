@@ -11,7 +11,7 @@ class ProgramLinksTest {
     private val special = Film(slug = "night-of-reels", title = "Night of Reels", kind = FilmKind.SPECIAL)
     private val showing = Showing(
         id = "1001-89886",
-        filmSlug = "the-quiet-hour",
+        filmKey = FilmKey(FilmKind.FILM, "the-quiet-hour"),
         start = LocalDateTime.of(2026, 10, 16, 17, 0),
         cinema = ProgramCinema.fromYorckName("delphi LUX"),
     )

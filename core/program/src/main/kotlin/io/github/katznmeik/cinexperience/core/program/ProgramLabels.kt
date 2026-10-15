@@ -10,12 +10,13 @@ internal object ProgramLabels {
 
     /**
      * Display texts of the known event labels, by Yorck's label in lower case.
-     * KF is the children's film label (verified by the films that carry it); SV
-     * marks special screenings (inferred).
+     * KF is the children's film label (verified by the films that carry it). SV
+     * probably marks special screenings, but that isn't confirmed, so it is shown
+     * as "SV".
      */
     private val EVENT_TEXTS: Map<String, String> = mapOf(
         "kf" to "Kids",
-        "sv" to "Special",
+        "sv" to "SV",
         "inthemood" to "In the Mood",
         "festival" to "Festival",
         "premiere" to "Premiere",

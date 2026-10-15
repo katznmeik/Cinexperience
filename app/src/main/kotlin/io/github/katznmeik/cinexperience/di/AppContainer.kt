@@ -60,9 +60,8 @@ interface AppContainer {
 class DefaultAppContainer(context: Context) : AppContainer {
     override val applicationContext: Context = context.applicationContext
 
-    override val appVersion: String by lazy {
-        applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0).versionName.orEmpty()
-    }
+    /** The one version source of the container: Settings → About and the program's User-Agent use it. */
+    override val appVersion: String = BuildConfig.VERSION_NAME
 
     override val buildId: String = BuildConfig.BUILD_ID
 
@@ -86,7 +85,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
      * owner has agreed.
      */
     override val programRepository: ProgramRepository by lazy {
-        DefaultProgramRepository.create(applicationContext, BuildConfig.VERSION_NAME, applicationScope)
+        DefaultProgramRepository.create(applicationContext, appVersion, applicationScope)
     }
 
     private val started = AtomicBoolean(false)

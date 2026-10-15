@@ -2,6 +2,7 @@ package io.github.katznmeik.cinexperience.core.testing
 
 import io.github.katznmeik.cinexperience.core.program.DownloadPermission
 import io.github.katznmeik.cinexperience.core.program.Program
+import io.github.katznmeik.cinexperience.core.program.ProgramActionResult
 import io.github.katznmeik.cinexperience.core.program.ProgramError
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramState
@@ -14,13 +15,19 @@ import java.time.Instant
 
 /**
  * In-memory [ProgramRepository] for ViewModel and screenshot tests, with the real
- * repository's rules: nothing is "downloaded" unless the permission is
- * [DownloadPermission.ALLOWED], [refreshIfStale] only without a program or with
- * one older than 6 hours at [now], a failed download keeps the program.
+ * repository's rules:
+ *
+ * - nothing is "downloaded" unless the permission is [DownloadPermission.ALLOWED];
+ * - [refreshIfStale] only without a program, or with one older than 6 hours or
+ *   from the future (at [now]); otherwise it clears an old error;
+ * - concurrent refreshes share one download;
+ * - switching off or deleting during a download (held by [gate]) keeps nothing
+ *   from it; a failed download keeps the program;
+ * - status is for downloads only; commands return a [ProgramActionResult]
+ *   ([nextActionFailure] makes the next one fail).
  *
  * A "download" results in [nextProgram] (stamped with [now]) or, if set,
- * [nextError]; [gate] holds it in [ProgramStatus.Loading] until completed.
- * [downloads] counts the downloads that ran.
+ * [nextError]. [downloads] counts the downloads that started.
  */
 class FakeProgramRepository(
     initial: ProgramState = ProgramState(isLoaded = true),
@@ -40,31 +47,44 @@ class FakeProgramRepository(
     /** If set, a download waits for it while in [ProgramStatus.Loading]. */
     var gate: CompletableDeferred<Unit>? = null
 
+    /** If set, the next command ([setDownloadsEnabled], [deleteProgram]) fails with it, once. */
+    var nextActionFailure: ProgramError? = null
+
     var downloads: Int = 0
         private set
 
     val refreshCalls = mutableListOf<String>()
 
-    override suspend fun allowDownloads() {
-        state.update { it.copy(permission = DownloadPermission.ALLOWED) }
+    private var running: CompletableDeferred<Unit>? = null
+    private var generation = 0L
+
+    override suspend fun allowDownloads(): ProgramActionResult = setDownloadsEnabled(true)
+
+    override suspend fun setDownloadsEnabled(enabled: Boolean): ProgramActionResult {
+        val permission = if (enabled) DownloadPermission.ALLOWED else DownloadPermission.OFF
+        state.update { it.copy(permission = permission) }
+        if (!enabled) stopDownload()
+        return actionResult()
     }
 
-    override suspend fun setDownloadsEnabled(enabled: Boolean) {
-        state.update {
-            if (enabled) {
-                it.copy(permission = DownloadPermission.ALLOWED)
-            } else {
-                it.copy(permission = DownloadPermission.OFF, status = ProgramStatus.Idle)
-            }
-        }
+    override suspend fun deleteProgram(): ProgramActionResult {
+        val failure = nextActionFailure
+        stopDownload()
+        if (failure == null) state.update { it.copy(program = null) }
+        return actionResult()
+    }
+
+    override fun dismissError() {
+        state.update { if (it.status is ProgramStatus.Failed) it.copy(status = ProgramStatus.Idle) else it }
     }
 
     override suspend fun refreshIfStale() {
         refreshCalls += "refreshIfStale"
-        val program = state.value.program
-        val stale = program == null ||
-            Duration.between(program.fetchedAt, now) >= Duration.ofHours(ProgramRepository.STALE_AFTER_HOURS)
-        if (stale) download()
+        if (running == null && !isStale(state.value.program)) {
+            dismissError()
+            return
+        }
+        download()
     }
 
     override suspend fun refresh() {
@@ -72,23 +92,50 @@ class FakeProgramRepository(
         download()
     }
 
+    private fun isStale(program: Program?): Boolean {
+        if (program == null) return true
+        val age = Duration.between(program.fetchedAt, now)
+        return age.isNegative || age >= Duration.ofHours(ProgramRepository.STALE_AFTER_HOURS)
+    }
+
     private suspend fun download() {
         if (state.value.permission != DownloadPermission.ALLOWED) return
+        running?.let {
+            it.await() // single flight: join the running download
+            return
+        }
+        val done = CompletableDeferred<Unit>().also { running = it }
+        val mine = ++generation
         downloads++
         state.update { it.copy(status = ProgramStatus.Loading) }
-        gate?.await()
-        val error = nextError
-        state.update {
-            if (error != null) {
-                it.copy(status = ProgramStatus.Failed(error))
-            } else {
-                it.copy(program = nextProgram.copy(fetchedAt = now), status = ProgramStatus.Idle)
+        try {
+            gate?.await()
+            if (mine != generation) return // stopped meanwhile: keep nothing
+            val error = nextError
+            state.update {
+                if (error != null) {
+                    it.copy(status = ProgramStatus.Failed(error))
+                } else {
+                    it.copy(program = nextProgram.copy(fetchedAt = now), status = ProgramStatus.Idle)
+                }
             }
+        } finally {
+            if (running === done) running = null
+            done.complete(Unit)
         }
     }
 
-    override suspend fun deleteProgram() {
-        state.update { it.copy(program = null, status = ProgramStatus.Idle) }
+    private fun stopDownload() {
+        generation++
+        running?.complete(Unit)
+        running = null
+        state.update { it.copy(status = ProgramStatus.Idle) }
+    }
+
+    private fun actionResult(): ProgramActionResult {
+        val failure = nextActionFailure ?: return ProgramActionResult.Success
+        nextActionFailure = null
+        return ProgramActionResult.Failure(failure)
     }
 
     companion object {

@@ -252,33 +252,60 @@ Don't duplicate config in module build files.
 - **Program / network (v1.1, spec §11.1 "Network & security", binding):**
   `core:program` is the only module with network code and the only manifest
   with `INTERNET`; inside it only the `net/` package (`HttpsProgramTransport`,
-  `ProgramDownloader`). `NetworkConfinementTest` (core:program) fails the build
-  otherwise; it scans every module's non-test sources, manifests and build files
-  (no `java.net` except `URI`, `javax.net`, WebView, OkHttp, Retrofit, Ktor, …).
-  The one request is `GET https://www.yorck.de/en/films` over `HttpsURLConnection`:
-  no query, body or cookies (no `CookieHandler`), only `User-Agent:
-  Cinexperience/<version> (Android; personal app)` and `Accept`; at most 3
-  redirects, each only to `https://www.yorck.de/…`; 15 s connect, 30 s read, 90 s
-  total; at most 10 MB, counted while streaming; only HTTP 200. Nothing reaches
-  the transport unless `DownloadPermission.ALLOWED` (asked again before every
-  request; off cancels a running download); downloads happen only in
-  `refreshIfStale()` (no program, or older than 6 h) and `refresh()`, never in
-  the background, one at a time. The page is untrusted: `ProgramPageParser` cuts
-  out the `__NEXT_DATA__` block by text search, parses JSON into its own types
-  and checks every field (`ProgramRules`; the model types' `init` blocks check
-  again); texts are cleaned plain text (`ProgramText`), never HTML. Start times
-  are Berlin wall-clock; Yorck's `+01:00` is ignored. Links only from
-  `ProgramLinks` (fixed patterns, checked ID/slug), opened in the browser. The
-  cache `files/program/program.json` (own versioned format, atomic replace,
-  unreadable = none) is not in the database, the backup or Auto Backup, and the
-  startup sweep never touches it. `app/src/main/res/xml/network_security_config.xml`:
-  HTTPS only, system CAs only, no pinning. No WebView, no images from Yorck.
-  Failures become `ProgramStatus.Failed` with a user-facing message; the last good
-  program stays. Tests: `FakeTransport` (no sockets) and the invented fixture
-  `core/program/src/test/resources/program/films-page.html`. Never commit Yorck's
-  page or parts of it; `RealProgramPageTest` checks a local copy named by
-  `CINEX_PROGRAM_PAGE` (skipped otherwise). UI tests use `FakeProgramRepository`,
-  `buildProgram` and `SampleProgram` (core:testing).
+  `ProgramDownloader`). Three checks fail the build otherwise:
+  `NetworkConfinementTest` (core:program) scans every module's sources (non-test
+  sets: no `java.net` except `URI`, `javax.net`, `URLConnection`,
+  `openConnection`/`openStream`/`.toURL(`, WebView, MediaPlayer, VideoView,
+  ExoPlayer/media3, `DownloadManager`, OkHttp, Retrofit, Ktor, …), manifests and
+  resources of all sets (INTERNET, cleartext, `src="user"`, `debug-overrides`,
+  network security configs outside `app/src/main/res/xml/`, WebView layouts) and
+  build files (network, image, media, WebView, Firebase, Sentry, Play services
+  libraries); `AppPermissionsTest` (app) pins the merged manifest's permissions;
+  `:app:checkReleaseDependencyGroups` (runs before every build) allows release
+  dependencies only from `androidx.*` (not webkit, media3, browser),
+  `org.jetbrains*`, `org.jspecify` and `com.google.guava`; review a new group
+  before adding it there (its denylist line carries `// network-scan: denylist`,
+  the only line the build-file scan accepts). The one request is `GET https://www.yorck.de/en/films`
+  over `HttpsURLConnection`: no query, body or cookies (no `CookieHandler`); the
+  app sends `User-Agent: Cinexperience/<version> (Android; personal app)` and
+  `Accept`, the HTTP client adds `Host`, `Connection` and `Accept-Encoding: gzip`;
+  at most 3 redirects, each only to `https://www.yorck.de/…`; 15 s connect, 30 s
+  read; a watchdog aborts the connection (`TransportAbort` → `disconnect()`) when
+  the download is cancelled and after 90 s in total, so switching off or deleting
+  never waits for a timeout; at most 10 MB, counted while streaming; only HTTP 200.
+  Nothing reaches the transport unless `DownloadPermission.ALLOWED` (asked again
+  before every request); downloads happen only in `refreshIfStale()` (no
+  program, older than 6 h or from the future) and `refresh()`, never in the
+  background, one at a time. Commands (`setDownloadsEnabled`, `allowDownloads`,
+  `deleteProgram`) run to the end even if the caller is cancelled (off is stored
+  first, then the download stopped) and return a `ProgramActionResult`;
+  `ProgramStatus` is for downloads only (`dismissError()`). One
+  `ProgramRepository` per process (`AppContainer`). The page is untrusted:
+  `ProgramPageParser` cuts out the `__NEXT_DATA__` block by text search, bounds
+  it (500,000 JSON values, depth 64), decodes only the used fields into its own
+  types (unknown parts are skipped, not built) and checks every field
+  (`ProgramRules`; the model types' `init` blocks check again); texts are cleaned
+  plain text (`ProgramText`), never HTML. Films and specials are keyed by
+  `FilmKey` (kind + slug); a showing a film and specials both list belongs to the
+  film and names the specials (`Showing.specialKeys`, `Program.showingsOf(key)`).
+  Start times are Berlin wall-clock: only `+01:00`, `+02:00` or no offset is
+  accepted (Yorck writes `+01:00` all year), anything else makes the showing
+  invalid; clock changes follow `ProgramTime`. SV is shown as "SV" until its
+  meaning is confirmed. Links only from `ProgramLinks` (fixed patterns, checked
+  ID/slug), opened in the browser. The cache `files/program/program.json` (own
+  format, `ProgramCache.FORMAT_VERSION`, at most 4 MB, atomic replace,
+  unreadable = none and deleted) is not in the database, the backup or Auto
+  Backup, and the startup sweep never touches it.
+  `app/src/main/res/xml/network_security_config.xml`: HTTPS only, system CAs only,
+  no pinning. No WebView, no images from Yorck. Download failures become
+  `ProgramStatus.Failed` with a user-facing message (Errors such as out of memory
+  too); the last good program stays. Tests: `FakeTransport` (no sockets) and the
+  invented fixture `core/program/src/test/resources/program/films-page.html`;
+  app tests pass `DefaultProgramRepository.create(…, transport = …)` a transport
+  that always fails. Never commit Yorck's page or parts of it; `RealProgramPageTest`
+  checks a local copy named by `CINEX_PROGRAM_PAGE` (skipped otherwise; keep it in
+  the git-ignored `yorck-pages/` or as `*.yorck.html`). UI tests use
+  `FakeProgramRepository`, `buildProgram` and `SampleProgram` (core:testing).
 - **Seed data:** `core/data/src/main/assets/seed/yorck.json`. Bump `seedVersion`
   for every change; `seedKey`s are permanent. Seeding only inserts missing items
   and fills empty fields, it never overwrites or deletes (a renamed seed hall
