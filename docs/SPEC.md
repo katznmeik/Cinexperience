@@ -1,8 +1,8 @@
 # Cinexperience — Product Specification
 
-**Status:** v1.0.0 released (2026-10-14)
+**Status:** v1.0.0 released (2026-10-14); v1.1 (Program, §11.1) planned
 **Owner:** katznmeik
-**Last updated:** 2026-10-15 (rev. 21)
+**Last updated:** 2026-10-15 (rev. 22)
 
 ---
 
@@ -16,6 +16,9 @@ Halls differ a lot in size, sound and picture quality. By logging every visit
 (where you sat, how it was), the app builds up a personal picture of which
 cinema, which hall and which seat to book next time.
 
+From v1.1 the app also shows Yorck's current program with the filters the Yorck
+app and website lack (e.g. "this week at delphi LUX, starting 16–17 o'clock").
+
 ## 2. Goals & non-goals
 
 ### Goals (v1)
@@ -27,11 +30,18 @@ cinema, which hall and which seat to book next time.
 - Rank halls / cinemas by any category.
 - Export / import all data as a backup file.
 
+### Goals (v1.1)
+- Show Yorck's current program (films and showings of all Yorck cinemas) with
+  filters by cinema, day, start time, version and film (§11.1).
+- Link each showing to its seat selection on yorck.de, and log a visit from a
+  showing.
+
 ### Non-goals (v1)
 - Multiple users, accounts, login, cloud sync or a backend server.
 - Publishing on Google Play (installed directly via APK).
-- Linking to the Yorck customer account (no public API; see §11).
-- Showtimes, ticket booking, film information lookups.
+- Linking to the Yorck customer account (no public API; see §11.2).
+- Showtimes, ticket booking, film information lookups (v1.1 adds Yorck's
+  program, §11.1; booking stays on yorck.de).
 - Cinemas outside the Yorck chain (data model keeps this possible later).
 - Languages other than English.
 
@@ -42,7 +52,10 @@ cinema, which hall and which seat to book next time.
 - **Supported Android versions:** minSdk 34 (Android 14), targetSdk 36 (Android 16);
   compiled against API 37 (required by current AndroidX libraries; no runtime effect).
 - **Orientation:** portrait.
-- **Connectivity:** fully offline. No network permission needed in v1.
+- **Connectivity:** v1 is fully offline, with no network permission. From
+  v1.1 the app is offline except for the Program: after the owner agrees on
+  first use, it downloads Yorck's public program page from www.yorck.de, and
+  nothing else (§11.1, Network & security).
 
 ## 4. Domain concepts & data model
 
@@ -167,6 +180,8 @@ The favourite seat is shown with a ⭐ on top of its colour.
 ## 6. Screens & navigation
 
 Bottom navigation with three tabs: **Cinemas**, **Rankings**, **Settings**.
+From v1.1 there are four: **Cinemas**, **Program** (§6.9), **Rankings**,
+**Settings**.
 
 ### 6.1 Cinemas (home)
 - List of all cinemas: name, overall score, number of visits.
@@ -180,6 +195,10 @@ Bottom navigation with three tabs: **Cinemas**, **Rankings**, **Settings**.
   toggle to mark the cinema as a favourite.
 - List of halls with overall score and a ⭐ marker if a favourite seat is set.
 - Actions: edit cinema, add hall.
+- **Now showing** (v1.1): this cinema's showings of the next 7 days from the
+  downloaded program, by day, with "Show all in Program" (opens the Program
+  filtered to this cinema). It only reads the downloaded program and never
+  downloads itself; without one it points to the Program tab (§11.1).
 
 ### 6.3 Hall detail
 - **Seat map** (zoomable/pannable) coloured per §5, every numbered seat showing
@@ -252,12 +271,43 @@ Save is always allowed — nothing besides hall is required.
 - **About:** version and build ID (the short commit hash the APK was built
   from; it matches the APK file name from CI), note that the app is unofficial
   and not affiliated with Yorck Kinos
+- **Program** (v1.1): "Download program from yorck.de" switch (off until the
+  owner agrees on first use; off = the app makes no network requests at all),
+  date of the last download, "Delete downloaded program"
 
 ### 6.8 All visits
 - One chronological list of every visit across all cinemas, newest first.
 - Each entry: film, date, cinema · hall, seat, screening format, seat rating.
 - Tap to open/edit the visit (§6.4).
 - Reached from Settings → Data → All visits.
+
+### 6.9 Program (v1.1)
+- **First use:** explains that the app will download Yorck's public program
+  from www.yorck.de and asks for permission ("Download program" / "Not now").
+  Nothing is downloaded before that.
+- **Filters** (remembered between visits):
+  - Cinemas: several can be picked; a "Favourites" shortcut picks the
+    favourite cinemas.
+  - Days: Today (default) / Tomorrow / This week (until Sunday) / Weekend /
+    chosen dates.
+  - Start time: from–to (e.g. 16:00–17:30); default any time.
+  - Version: German (DF), OmU (German subtitles), OmeU (English subtitles),
+    OV; events (e.g. Sneak, Premiere) as their own labels.
+  - Film: search by title.
+- **Saved filters:** a filter can be saved under a name (e.g. "After work:
+  delphi LUX, Mon–Fri, 16–17:30, OmU/OV") and picked again from a list.
+- **Results:** grouped by day, sorted by start time. Each row: time, film
+  title, cinema (with the cinema's overall score and ★ if it is a favourite),
+  version labels, runtime and "ends about" (start + runtime), and the hall for
+  cinemas with one hall (§11.1). Past showings are hidden.
+- **Showing actions:** "Book on yorck.de" (opens the showing's seat selection
+  in the browser) and "Log visit" (opens Add visit pre-filled, §11.1).
+- **Film page:** title, tagline, genre, runtime, age rating (FSK), release
+  date and all upcoming showings by cinema and day; "Open on yorck.de".
+- **State:** "as of" date and time of the downloaded program; pull to refresh.
+  Clear messages when downloading is switched off, when offline, and when the
+  page could not be read (the last good program stays visible).
+- No posters or other images from Yorck.
 
 ## 7. Look & feel
 
@@ -302,6 +352,10 @@ Save is always allowed — nothing besides hall is required.
   newer app version are rejected with a clear message.
 - **Android Auto Backup** covers the database and settings (not photos or
   screenshots) as an additional safety net; Settings shows it as "On".
+- **Program (v1.1):** the downloaded program is not part of backups or Auto
+  Backup (it can always be downloaded again). Saved program filters and the
+  download switch are app settings, covered by Auto Backup, not by the backup
+  file; the backup format does not change.
 
 ## 9. Preloaded data
 
@@ -368,27 +422,150 @@ can be renamed but not deleted).
 | DI | Manual DI (small app container) |
 | Navigation | Navigation Compose |
 | Images | Coil; photos copied into app-private storage |
-| Serialization | kotlinx.serialization (backup JSON) |
+| Serialization | kotlinx.serialization (backup JSON; v1.1 also the program data) |
+| Network (v1.1) | Android's built-in HTTPS client, only in `core:program`; no third-party network or HTML library (§11.1) |
 | Seat map | Custom Compose `Canvas` with zoom/pan |
 | Build | Gradle (Kotlin DSL), version catalog |
 | Testing | Unit tests for rating logic & backup; Compose UI tests for key flows |
 | Distribution | Signed APK, sideloaded (see §14) |
 | CI | GitHub Actions: build, tests, screenshots (see §14) |
 
-## 11. Future: ticket import (v1.1)
+## 11. Future versions
+
+### 11.1 v1.1: Program (Yorck showtimes)
+
+The Yorck app and website lack good filters. v1.1 shows Yorck's program in
+the app with the filters of §6.9, read-only; booking stays on yorck.de.
+
+**Source.** Yorck's public page `https://www.yorck.de/en/films` contains the
+whole program as data embedded in the page (no login, no API key; robots.txt
+allows it). Checked on 2026-10-15: 14 cinemas, 114 films, about 1,070
+showings, up to March 2027.
+- Per showing: start date and time, cinema, version labels (DF, OmU, OmeU,
+  OV, plus event labels such as Sneak or Premiere) and an ID (e.g.
+  `1001-90006`).
+- Per film: title, tagline, genre, runtime, age rating (FSK), release date and
+  the film's page name (slug).
+- **Not included: the hall.** Yorck only shows it in its booking system (the
+  seat selection loads it afterwards). The app never accesses the booking
+  system, so the hall is shown only for the six cinemas with a single hall
+  (Capitol Dahlem, Cinema Paris, Delphi Filmpalast, International, Neues Off,
+  Odeon). For the others, the seat selection on yorck.de shows it, and the
+  ticket import (§11.2) fills it into the visit.
+- Yorck's cinema names are matched to the app's cinemas by a fixed table
+  (e.g. "Kino International" → International); a cinema without a match is
+  shown with Yorck's name and no score.
+
+**Links.** The app builds every link itself from a fixed pattern; it never
+opens an address taken from the page:
+- Showing: `https://www.yorck.de/en/checkout/seats?sessionid=<ID>` opens the
+  showing's seat selection (works without login; nothing is reserved until a
+  seat is tapped there). Used only for upcoming showings whose ID has the form
+  digits-dash-digits.
+- Film: `https://www.yorck.de/en/films/<slug>`, also the fallback when a
+  showing's ID is unusable.
+- Links open in the phone's browser, never inside the app: login, seat choice
+  and payment happen only in the browser.
+
+**Log visit from a showing.** Opens Add visit (§6.4) with cinema, date, film
+title and screening format filled in (DF → German dub, OmU → OmU, OV → OV;
+other labels leave the format empty). The hall is pre-selected for cinemas
+with one hall; otherwise the owner picks it.
+
+**Downloading and storage.**
+- The program is downloaded only when the Program tab is opened and the last
+  download is older than 6 hours (or none exists), or on pull to refresh;
+  never in the background. One download is about 3 MB.
+- It is stored as one cache file in app-private storage
+  (`files/program/program.json`, the app's own format), not in the database.
+  A new download replaces it only after it has been fully read and checked;
+  if anything fails, the last good program stays.
+- Without a connection, the last program is shown with its "as of" time.
+
+**Network & security** (the app's first network access; these rules are
+binding):
+1. Consent: nothing is downloaded before the owner agrees on first use; the
+   Settings switch turns downloading off again (off = no network requests).
+2. One request only: `GET https://www.yorck.de/en/films`, with no
+   parameters, no cookies, no account and nothing from the owner's data.
+   Filters, favourites, visits and ratings never leave the phone.
+3. One place: only the `core:program` module contains network code; a test
+   fails the build if any other module uses network APIs. The address is
+   fixed; any other host, and any redirect away from
+   `https://www.yorck.de`, is refused.
+4. No third-party network, HTML or image libraries: Android's built-in HTTPS
+   client and kotlinx.serialization (already used for backups).
+5. Encryption: HTTPS only; unencrypted traffic is blocked by the network
+   security config; only the phone's system certificate authorities are
+   trusted (no user-installed ones). No certificate pinning: Yorck's routine
+   certificate changes would break the feature, and the data is public.
+6. Limits: connect and read timeouts, at most 10 MB per download, and upper
+   limits on films and showings far above today's numbers; anything larger is
+   rejected.
+7. Untrusted data: no WebView, no JavaScript, no HTML rendering. The app cuts
+   the embedded data block out of the page by a plain text search, parses it
+   as JSON into its own types and checks every field (lengths, allowed
+   characters, valid dates and times; IDs and slugs against strict patterns);
+   control and format characters are removed. Invalid entries are skipped; if
+   nothing valid remains, the download is rejected. All texts are shown as
+   plain text.
+8. No images from Yorck (no posters).
+9. Separate data: the program file is never written into the database or
+   backups and is excluded from Auto Backup.
+10. Tests: a small fixture with the page's structure (reduced, not a copy of
+    Yorck's page) plus broken, oversized and manipulated variants; the app
+    shows an error and never crashes. The network-module test from rule 3.
+11. Review: a security review of the change before it is merged, and an
+    independent review agent.
+
+**Non-goals (v1.1):** booking inside the app; posters or other images; the
+hall for cinemas with several halls; notifications (§11.3); any use of the
+Yorck account or booking system.
+
+**To verify before building:**
+- Times: every start time is labelled `+01:00`, also in summer time. Most
+  likely it is the plain Berlin clock time; compare a few showings with the
+  website before relying on it.
+- The meaning of the version labels `SV` and `KF`.
+- Yorck's terms of use (robots.txt allows all access).
+- That the showing link pattern still works.
+
+### 11.2 v1.2: Ticket import
 
 Linking directly to a Yorck customer account is **not planned**: there is no
 public API, and it would require storing the Yorck password and relying on
 undocumented endpoints that can break at any time.
 
-Instead, v1.1 adds **ticket import via Android's Share menu**:
+Instead, v1.2 adds **ticket import via Android's Share menu**:
 - Share a booking-confirmation email or ticket PDF to Cinexperience.
 - The app extracts cinema, hall, date/time, film, row and seat.
 - Opens a pre-filled "Add visit" form; the user adds ratings.
 - Unrecognised fields are left empty for manual entry.
 
+This also fills in the hall that the program (§11.1) cannot provide.
+
 **Prerequisite:** one or two real sample tickets/emails (personal data
 redacted) to build and test the parser.
+
+### 11.3 Later: notifications (ideas, not planned for a version yet)
+
+Not part of v1.1. Possible notifications, all opt-in:
+
+| # | Notification | Example | Background download? |
+|---|---|---|---|
+| a | Watchlist | A marked film (also an upcoming one from Yorck's "coming soon" list) gets showings: "Hope is now showing in OmU at delphi LUX, first showing Fri 17:15" | yes, once a day |
+| b | Saved filter | A saved filter (§6.9) gets new showings | yes, once a day |
+| c | Weekly digest | Monday morning: "This week at your favourite cinemas: 12 showings match your filters" | yes, once a week |
+| d | Last chance | A watchlist film has its last showings this week | yes, once a day |
+| e | Showtime reminder | For a showing marked "I'm going": "Hope starts at 17:15 at delphi LUX" (e.g. 2 h before) | no |
+| f | Rate your visit | After a marked showing has ended: "How was Hope? Log your visit" opens Add visit pre-filled | no |
+
+- All need Android's notification permission (asked once).
+- a–d would download the program in the background, which §11.1 excludes
+  (downloads only when the Program tab is opened). They would need their own
+  switch (off by default, optionally Wi-Fi only) and the same single fixed
+  request.
+- e and f work entirely on the phone. Suggested order: e and f first, then a.
 
 ## 12. Milestones
 
@@ -403,7 +580,8 @@ redacted) to build and test the parser.
 | M6 | Backup | Export / import zip, Auto Backup |
 | M7 | Polish & release prep | Accessibility pass, app icon, signed release APK, release workflow |
 | M8 | Polish from testing | Fixes and improvements from the owner's tests on the phone, delivered in batches → v1.0 release |
-| M9 | Ticket import | Share-intent parser (v1.1) |
+| M9 | Program | Yorck's program with filters, film page, "Now showing", links to yorck.de, log visit from a showing (v1.1, §11.1) |
+| M10 | Ticket import | Share-intent parser (v1.2, §11.2) |
 
 ## 13. Development approach
 
@@ -422,7 +600,9 @@ complexity:
 | `feature:visits` | Add/edit visit form, photo handling | Medium |
 | `feature:rankings` | Rankings screen | Low |
 | `feature:backup` | Export / import, schema migration | Medium |
-| `feature:ticketimport` | Share-intent parser (v1.1) | High |
+| `core:program` | v1.1: downloading, checking and caching Yorck's program; the only module with network code (§11.1) | High |
+| `feature:program` | v1.1: Program tab, filters, saved filters, film page (§6.9) | Medium |
+| `feature:ticketimport` | Share-intent parser (v1.2) | High |
 
 Working rules:
 - **Sequential first:** M0 (project setup) and `core:model` / `core:data` are
@@ -457,7 +637,9 @@ complexity (higher effort = more careful reasoning, but more time and usage):
 | `feature:backup`: export / import | high | Errors mean data loss |
 | Seed layouts from Yorck-app screenshots | high | Seats must be transcribed exactly |
 | M8 polish items | medium (high when data, backup or the seat map change) | Small changes, but existing data must stay intact |
-| `feature:ticketimport` parser (v1.1) | xhigh | Error-prone free-text parsing |
+| `core:program`: download, parser, cache (v1.1) | xhigh | First network access; parses untrusted data (§11.1 security rules) |
+| `feature:program`: Program tab & film page (v1.1) | medium | Standard screens on top of `core:program` |
+| `feature:ticketimport` parser (v1.2) | xhigh | Error-prone free-text parsing |
 | Review agents | high (xhigh for seat map & backup) | Independent check before merge |
 | Stubborn bugs | max | Only when needed |
 
@@ -526,5 +708,6 @@ but cannot run an emulator there — hands-on verification is done by the owner.
 ## 15. Open items
 
 - Verify the current list of Yorck cinemas and hall names (M1).
-- Sample ticket email/PDF for v1.1 parser.
+- Sample ticket email/PDF for the v1.2 parser.
+- v1.1 Program: the checks listed under "To verify before building" (§11.1).
 - Yorck-app screenshots of hall seat plans (for preloaded layouts).
