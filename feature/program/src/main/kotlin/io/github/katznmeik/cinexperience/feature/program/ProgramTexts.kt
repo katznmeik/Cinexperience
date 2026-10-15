@@ -64,7 +64,7 @@ internal fun filmFactsText(film: Film): String? = listOfNotNull(
 internal fun filterSummary(filter: ProgramFilter, cinemaNames: Map<String, String>): String = listOf(
     when (filter.cinemas.size) {
         0 -> "All cinemas"
-        1 -> cinemaNames[filter.cinemas.single()] ?: "1 cinema"
+        1 -> cinemaNames[filter.cinemas.single()]?.let(::isolate) ?: "1 cinema"
         else -> "${filter.cinemas.size} cinemas"
     },
     timeRangeText(filter.from, filter.to),
