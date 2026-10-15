@@ -13,6 +13,10 @@ import io.github.katznmeik.cinexperience.core.data.backup.LastExport
 import io.github.katznmeik.cinexperience.core.data.backup.SafetyCopy
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
+import io.github.katznmeik.cinexperience.core.program.DownloadPermission
+import io.github.katznmeik.cinexperience.core.program.ProgramActionResult
+import io.github.katznmeik.cinexperience.core.program.ProgramRepository
+import io.github.katznmeik.cinexperience.core.program.ProgramStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +29,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
 
 /** Counts shown in Settings → Data (spec §6.7). */
@@ -76,6 +81,26 @@ data class BackupUiState(
     val isBusy: Boolean get() = task != null || preview != null || choosingSafetyCopy
 }
 
+/**
+ * Settings → Program (spec §6.7).
+ *
+ * @property isLoaded the stored permission and the cached program have been read.
+ * @property downloadsOn the switch "Download program from yorck.de" (on = allowed).
+ * @property lastDownload when the downloaded program was fetched, `null` without one.
+ * @property errorMessage why the last switch or delete failed ([ProgramActionResult.Failure]).
+ * @property confirmingDelete "Delete downloaded program" waits for confirmation.
+ */
+data class ProgramSettingsState(
+    val isLoaded: Boolean = false,
+    val downloadsOn: Boolean = false,
+    val lastDownload: Instant? = null,
+    val isDownloading: Boolean = false,
+    val errorMessage: String? = null,
+    val confirmingDelete: Boolean = false,
+) {
+    val hasProgram: Boolean get() = lastDownload != null
+}
+
 data class SettingsUiState(
     val appVersion: String,
     /** Short commit hash the APK was built from, or `unknown`. */
@@ -84,16 +109,35 @@ data class SettingsUiState(
     val counts: DataCounts? = null,
     val countsError: Boolean = false,
     val backup: BackupUiState = BackupUiState(),
+    val program: ProgramSettingsState = ProgramSettingsState(),
 )
 
 /** Settings tab (spec §6.7): data counts, backup export / import and the safety copy. */
 class SettingsViewModel(
     cinemaRepository: CinemaRepository,
     private val backupRepository: BackupRepository,
+    private val programRepository: ProgramRepository,
     private val appVersion: String,
     private val buildId: String,
     private val today: () -> LocalDate = LocalDate::now,
 ) : ViewModel() {
+
+    private val confirmingProgramDelete = MutableStateFlow(false)
+
+    /** The message of the last failed Program command, cleared by the next one. */
+    private val programError = MutableStateFlow<String?>(null)
+
+    private val programSettings: Flow<ProgramSettingsState> =
+        combine(programRepository.state, confirmingProgramDelete, programError) { state, confirming, error ->
+            ProgramSettingsState(
+                isLoaded = state.isLoaded,
+                downloadsOn = state.permission == DownloadPermission.ALLOWED,
+                lastDownload = state.fetchedAt,
+                isDownloading = state.status == ProgramStatus.Loading,
+                errorMessage = error,
+                confirmingDelete = confirming && state.program != null,
+            )
+        }
 
     /** Task, preview and message; the rest of the state comes from the repositories. */
     private val transient = MutableStateFlow(BackupUiState())
@@ -106,13 +150,20 @@ class SettingsViewModel(
     private val safetyCopies: Flow<List<SafetyCopy>> = backupRepository.safetyCopies.catch { emit(emptyList()) }
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(counts.onStart<Result<DataCounts>?> { emit(null) }, lastExport, safetyCopies, transient) { counts, last, copies, backup ->
+        combine(
+            counts.onStart<Result<DataCounts>?> { emit(null) },
+            lastExport,
+            safetyCopies,
+            transient,
+            programSettings,
+        ) { counts, last, copies, backup, program ->
             SettingsUiState(
                 appVersion = appVersion,
                 buildId = buildId,
                 counts = counts?.getOrNull(),
                 countsError = counts?.isFailure == true,
                 backup = backup.copy(lastExport = last, safetyCopies = copies),
+                program = program,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState(appVersion, buildId))
 
@@ -231,6 +282,41 @@ class SettingsViewModel(
         transient.update { it.copy(message = null) }
     }
 
+    // ---- Program (spec §6.7) ----
+
+    /**
+     * The switch "Download program from yorck.de": on allows downloads (like the
+     * consent screen), off stops them (no network requests). Ignored during an import.
+     */
+    fun onProgramDownloadsChanged(enabled: Boolean) {
+        if (transient.value.task is BackupTask.Importing) return
+        programError.value = null
+        viewModelScope.launch {
+            report(if (enabled) programRepository.allowDownloads() else programRepository.setDownloadsEnabled(false))
+        }
+    }
+
+    /** "Delete downloaded program": asks to confirm first. */
+    fun onDeleteProgram() {
+        if (transient.value.task is BackupTask.Importing || programRepository.state.value.program == null) return
+        confirmingProgramDelete.value = true
+    }
+
+    fun onConfirmDeleteProgram() {
+        if (!confirmingProgramDelete.value) return
+        confirmingProgramDelete.value = false
+        programError.value = null
+        viewModelScope.launch { report(programRepository.deleteProgram()) }
+    }
+
+    private fun report(result: ProgramActionResult) {
+        programError.value = (result as? ProgramActionResult.Failure)?.message
+    }
+
+    fun onCancelDeleteProgram() {
+        confirmingProgramDelete.value = false
+    }
+
     /** Starts [task] unless another backup operation is running or a preview is open. */
     private fun start(task: BackupTask): Boolean {
         while (true) {
@@ -244,10 +330,11 @@ class SettingsViewModel(
         fun factory(
             cinemaRepository: CinemaRepository,
             backupRepository: BackupRepository,
+            programRepository: ProgramRepository,
             appVersion: String,
             buildId: String,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { SettingsViewModel(cinemaRepository, backupRepository, appVersion, buildId) }
+            initializer { SettingsViewModel(cinemaRepository, backupRepository, programRepository, appVersion, buildId) }
         }
     }
 }

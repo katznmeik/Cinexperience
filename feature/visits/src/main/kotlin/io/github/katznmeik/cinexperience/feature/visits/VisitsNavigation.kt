@@ -9,6 +9,7 @@ import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
+import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
 import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditEntry
@@ -17,13 +18,46 @@ import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditViewModel
 import io.github.katznmeik.cinexperience.feature.visits.list.AllVisitsEntry
 import io.github.katznmeik.cinexperience.feature.visits.list.AllVisitsViewModel
 import kotlinx.serialization.Serializable
+import java.time.LocalDate
 
 /**
  * Add a visit (spec §6.4). [hallId] pre-selects the hall (opened from a hall);
  * `null` lets the user pick cinema and hall (Cinemas tab).
+ *
+ * The other arguments pre-fill the form when it is opened from a showing of the
+ * program ("Log visit", spec §11.1), see [VisitPrefillArgs]: [date] is an ISO date
+ * (`2026-10-15`), [format] a [ScreeningFormat.storageKey]; unreadable values are ignored.
  */
 @Serializable
-data class AddVisitRoute(val hallId: Long? = null)
+data class AddVisitRoute(
+    val hallId: Long? = null,
+    val cinemaId: Long? = null,
+    val date: String? = null,
+    val filmTitle: String? = null,
+    val format: String? = null,
+) {
+    internal fun prefill(): VisitPrefillArgs? {
+        if (cinemaId == null && date == null && filmTitle == null && format == null) return null
+        return VisitPrefillArgs(
+            cinemaId = cinemaId,
+            date = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+            filmTitle = filmTitle,
+            format = format?.let { key -> ScreeningFormat.entries.firstOrNull { it.storageKey == key } },
+        )
+    }
+}
+
+/**
+ * What a new visit is pre-filled with ("Log visit" from a showing, spec §11.1).
+ * The form selects the cinema's hall if it has only one; otherwise the cinema is
+ * set and the owner picks the hall. `null` fields stay as for a blank visit.
+ */
+data class VisitPrefillArgs(
+    val cinemaId: Long? = null,
+    val date: LocalDate? = null,
+    val filmTitle: String? = null,
+    val format: ScreeningFormat? = null,
+)
 
 /** Edit (or delete) an existing visit (spec §6.4). */
 @Serializable
@@ -34,6 +68,16 @@ data class EditVisitRoute(val visitId: Long)
 data object AllVisitsRoute
 
 fun NavController.navigateToAddVisit(hallId: Long? = null) = navigate(AddVisitRoute(hallId))
+
+/** Add visit pre-filled from a showing of the program (spec §11.1). */
+fun NavController.navigateToAddVisit(prefill: VisitPrefillArgs) = navigate(
+    AddVisitRoute(
+        cinemaId = prefill.cinemaId,
+        date = prefill.date?.toString(),
+        filmTitle = prefill.filmTitle,
+        format = prefill.format?.storageKey,
+    ),
+)
 
 fun NavController.navigateToEditVisit(visitId: Long) = navigate(EditVisitRoute(visitId))
 
@@ -51,11 +95,11 @@ fun NavGraphBuilder.visitEditScreens(
     onClose: () -> Unit,
 ) {
     composable<AddVisitRoute> { entry ->
-        val hallId = entry.toRoute<AddVisitRoute>().hallId
+        val route = entry.toRoute<AddVisitRoute>()
         ScreenBackground {
             VisitEditEntry(
                 viewModel = viewModel(
-                    factory = VisitEditViewModel.factory(VisitEditMode.Add(hallId), cinemaRepository, visitRepository, visitPhotoStore),
+                    factory = VisitEditViewModel.factory(VisitEditMode.Add(route.hallId, route.prefill()), cinemaRepository, visitRepository, visitPhotoStore),
                 ),
                 photoStore = visitPhotoStore,
                 onClose = onClose,

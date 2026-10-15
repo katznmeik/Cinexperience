@@ -12,6 +12,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
+import io.github.katznmeik.cinexperience.core.program.FilmKind
+import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailEntry
@@ -82,21 +84,39 @@ fun NavGraphBuilder.cinemasScreen(
     }
 }
 
+/**
+ * @param programRepository the downloaded program for "Now showing" (spec §6.2); only read here.
+ * @param onOpenFilm opens the film page of a showing (film kind and slug).
+ * @param onShowAllInProgram opens the Program tab filtered to the cinema with this seed key.
+ * @param onOpenProgram opens the Program tab as it is (the hints without a program).
+ */
 fun NavGraphBuilder.cinemaDetailScreen(
     cinemaRepository: CinemaRepository,
     hallRepository: HallRepository,
+    programRepository: ProgramRepository,
     onBack: () -> Unit,
     onOpenHall: (Long) -> Unit,
     onCinemaDeleted: (message: String) -> Unit,
+    onOpenFilm: (FilmKind, String) -> Unit,
+    onShowAllInProgram: (cinemaSeedKey: String) -> Unit,
+    onOpenProgram: () -> Unit,
 ) {
     composable<CinemaDetailRoute> { entry ->
         val cinemaId = entry.toRoute<CinemaDetailRoute>().cinemaId
         ScreenBackground {
+            val viewModel: CinemaDetailViewModel =
+                viewModel(factory = CinemaDetailViewModel.factory(cinemaId, cinemaRepository, hallRepository, programRepository))
+            val openFilm = dropUnlessResumedWith<Pair<FilmKind, String>> { (kind, slug) -> onOpenFilm(kind, slug) }
             CinemaDetailEntry(
-                viewModel = viewModel(factory = CinemaDetailViewModel.factory(cinemaId, cinemaRepository, hallRepository)),
+                viewModel = viewModel,
                 onBack = dropUnlessResumed(block = onBack),
                 onOpenHall = dropUnlessResumedWith(onOpenHall),
                 onCinemaDeleted = dropUnlessResumedWith(onCinemaDeleted),
+                onOpenFilm = { kind, slug -> openFilm(kind to slug) },
+                onShowAllInProgram = dropUnlessResumed {
+                    viewModel.cinemaSeedKey?.let(onShowAllInProgram)
+                },
+                onOpenProgram = dropUnlessResumed(block = onOpenProgram),
             )
         }
     }

@@ -75,6 +75,7 @@ import io.github.katznmeik.cinexperience.core.seatmapui.seatMapDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.seatStatesDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.viewingAngleText
 import io.github.katznmeik.cinexperience.core.seatmapui.windowSeatMapMaxHeight
+import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
@@ -670,7 +671,7 @@ private fun VisitHistoryRow(visit: HallVisitRow, onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                text = visit.filmTitle ?: "Untitled",
+                text = visit.filmTitle?.let(::isolate) ?: "Untitled",
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = if (visit.filmTitle == null) CinexTheme.colors.textMuted else CinexTheme.colors.text,
                 maxLines = 2,

@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
+import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
@@ -105,7 +106,8 @@ private fun VisitRow(item: VisitListItem, onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                text = visit.filmTitle ?: UNTITLED,
+                // Isolated: a title from Yorck may hold right-to-left text (rows are read as one).
+                text = visit.filmTitle?.let(::isolate) ?: UNTITLED,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = if (visit.filmTitle == null) CinexTheme.colors.textMuted else CinexTheme.colors.text,
                 maxLines = 2,

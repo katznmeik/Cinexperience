@@ -33,6 +33,27 @@ object CinexIcons {
         )
     }
 
+    /** The Program tab (v1.1): a cinema ticket with a perforation. */
+    val Program: ImageVector by lazy {
+        strokeIcon(
+            "Program",
+            "M4 6h16a1 1 0 0 1 1 1v3a2 2 0 0 0 0 4v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a2 2 0 0 0 0-4V7a1 1 0 0 1 1-1z",
+            "M15 6v2M15 11v2M15 16v2",
+        )
+    }
+
+    val Refresh: ImageVector by lazy { strokeIcon("Refresh", "M20 12a8 8 0 1 1-2.4-5.7", "M20 4v4.5h-4.5") }
+
+    /** Opens a page in the browser (e.g. "Book on yorck.de"). */
+    val External: ImageVector by lazy { strokeIcon("External", "M14 4h6v6", "M20 4l-9 9", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5") }
+
+    val Search: ImageVector by lazy { strokeIcon("Search", "M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z", "M20 20l-4-4") }
+
+    val Filter: ImageVector by lazy { strokeIcon("Filter", "M4 6h16M7 12h10M10 18h4") }
+
+    /** Saved filters. */
+    val Bookmark: ImageVector by lazy { strokeIcon("Bookmark", "M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z") }
+
     val Back: ImageVector by lazy { strokeIcon("Back", "M15 18l-6-6 6-6") }
 
     val ChevronRight: ImageVector by lazy { strokeIcon("ChevronRight", "M9 6l6 6-6 6") }
