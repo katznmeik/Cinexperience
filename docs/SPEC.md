@@ -1,8 +1,8 @@
 # Cinexperience — Product Specification
 
-**Status:** v1.0.0 released (2026-10-14); v1.1 (Program, §11.1) planned
+**Status:** v1.0.0 released (2026-10-14); v1.1.0 (Program, §11.1) built, release pending
 **Owner:** katznmeik
-**Last updated:** 2026-10-15 (rev. 22)
+**Last updated:** 2026-10-15 (rev. 23)
 
 ---
 
@@ -439,13 +439,20 @@ the app with the filters of §6.9, read-only; booking stays on yorck.de.
 
 **Source.** Yorck's public page `https://www.yorck.de/en/films` contains the
 whole program as data embedded in the page (no login, no API key; robots.txt
-allows it). Checked on 2026-10-15: 14 cinemas, 114 films, about 1,070
-showings, up to March 2027.
+allows it). Checked on 2026-10-15: 14 cinemas, 114 films and 52 specials
+(festivals and series), 977 showings, up to March 2027.
 - Per showing: start date and time, cinema, version labels (DF, OmU, OmeU,
   OV, plus event labels such as Sneak or Premiere) and an ID (e.g.
-  `1001-90006`).
+  `1001-90006`). The start time is Berlin clock time; Yorck labels it
+  `+01:00` all year, so the app accepts only `+01:00`, `+02:00` or no offset
+  and ignores it. `KF` is shown as "Kids" (children's film); `SV` is shown as
+  "SV" (most likely a special screening, not confirmed).
 - Per film: title, tagline, genre, runtime, age rating (FSK), release date and
   the film's page name (slug).
+- Specials (festivals and series) are listed like films, by kind and page
+  name. A showing listed under both a film and a special belongs to the film
+  and is linked to the special, so the special's page and a search for its
+  title still find it.
 - **Not included: the hall.** Yorck only shows it in its booking system (the
   seat selection loads it afterwards). The app never accesses the booking
   system, so the hall is shown only for the six cinemas with a single hall
@@ -464,6 +471,8 @@ opens an address taken from the page:
   digits-dash-digits.
 - Film: `https://www.yorck.de/en/films/<slug>`, also the fallback when a
   showing's ID is unusable.
+- Special (festival or series): `https://www.yorck.de/en/specials/<slug>`,
+  likewise the fallback for a showing owned by a special.
 - Links open in the phone's browser, never inside the app: login, seat choice
   and payment happen only in the browser.
 
@@ -522,13 +531,16 @@ binding):
 hall for cinemas with several halls; notifications (§11.3); any use of the
 Yorck account or booking system.
 
-**To verify before building:**
-- Times: every start time is labelled `+01:00`, also in summer time. Most
-  likely it is the plain Berlin clock time; compare a few showings with the
-  website before relying on it.
-- The meaning of the version labels `SV` and `KF`.
-- Yorck's terms of use (robots.txt allows all access).
-- That the showing link pattern still works.
+**Checked before building (2026-10-15):**
+- Times: a showing labelled `15:00+01:00` on 15 Oct (summer time) is shown by
+  Yorck as 15:00, so the clock time is Berlin time.
+- `KF` marks children's films. `SV` is still unconfirmed and shown as is.
+- Terms of use: the ticket-store terms say nothing about automated access;
+  the imprint provides the website "for your personal use" and protects its
+  content. The app is personal use, and no Yorck content is committed to the
+  repository (test fixtures are invented). The owner chose to go ahead.
+- The showing link opens that showing's seat selection (checked without
+  selecting a seat).
 
 ### 11.2 v1.2: Ticket import
 
@@ -709,5 +721,5 @@ but cannot run an emulator there — hands-on verification is done by the owner.
 
 - Verify the current list of Yorck cinemas and hall names (M1).
 - Sample ticket email/PDF for the v1.2 parser.
-- v1.1 Program: the checks listed under "To verify before building" (§11.1).
+- v1.1 Program: the meaning of the `SV` label (§11.1).
 - Yorck-app screenshots of hall seat plans (for preloaded layouts).
