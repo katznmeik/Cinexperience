@@ -2,6 +2,7 @@ package io.github.katznmeik.cinexperience
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import io.github.katznmeik.cinexperience.core.program.ProgramFiles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,7 +14,8 @@ import java.io.File
 
 /**
  * Android Auto Backup covers the database and shared preferences only (spec §8);
- * app files such as the reference screenshots (files/reference/) are left out.
+ * app files such as the reference screenshots (files/reference/) and the
+ * downloaded program (files/program/) are left out.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -48,6 +50,18 @@ class BackupRulesTest {
 
         val (legacy, _) = rules(R.xml.backup_rules)
         assertEquals(expected, legacy.map { it.second })
+    }
+
+    /**
+     * The downloaded program (spec §8, §11.1 rule 9) lives in files/program/, the
+     * "file" domain, which the include-only rules leave out.
+     */
+    @Test
+    fun theDownloadedProgramIsNotBackedUp() {
+        assertEquals(context.filesDir.canonicalFile, File(context.filesDir, ProgramFiles.FOLDER).canonicalFile.parentFile)
+        val (includes, _) = rules(R.xml.data_extraction_rules)
+        val (legacy, _) = rules(R.xml.backup_rules)
+        assertTrue((includes + legacy).none { it.second == "file" || it.second == "root" })
     }
 
     @Test

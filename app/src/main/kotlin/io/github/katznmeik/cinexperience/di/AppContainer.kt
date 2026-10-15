@@ -12,6 +12,8 @@ import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RankingsRepository
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
+import io.github.katznmeik.cinexperience.core.program.DefaultProgramRepository
+import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,9 +22,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Manual dependency injection (no Hilt, spec §10). The container owns the
- * app-wide singletons — the Room database, the repositories from core:data and
- * the reference screenshot and visit photo stores — and hands them to ViewModel factories in the
- * feature modules.
+ * app-wide singletons — the Room database, the repositories from core:data, the
+ * reference screenshot and visit photo stores and the program repository from
+ * core:program — and hands them to ViewModel factories in the feature modules.
  */
 interface AppContainer {
     val applicationContext: Context
@@ -44,6 +46,12 @@ interface AppContainer {
 
     /** Backup export and import (Settings, spec §8). */
     val backupRepository: BackupRepository
+
+    /**
+     * Yorck's program (v1.1, spec §11.1): the download permission, the cached
+     * program and the download, from core:program (the only module with network code).
+     */
+    val programRepository: ProgramRepository
 
     /** Housekeeping when the app starts (once per process), off the main thread. */
     fun onAppStart() {}
@@ -71,6 +79,15 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val referenceImageStore: ReferenceImageStore get() = data.referenceImageStore
     override val visitPhotoStore: VisitPhotoStore get() = data.visitPhotoStore
     override val backupRepository: BackupRepository get() = data.backupRepository
+
+    /**
+     * Created on first use; it then reads the stored permission and the cached
+     * program (files/program/). It downloads only when the Program UI asks and the
+     * owner has agreed.
+     */
+    override val programRepository: ProgramRepository by lazy {
+        DefaultProgramRepository.create(applicationContext, BuildConfig.VERSION_NAME, applicationScope)
+    }
 
     private val started = AtomicBoolean(false)
 

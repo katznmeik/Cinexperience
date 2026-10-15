@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      The app's only network permission (spec §11.1, Network & security). Only this
+      module may declare it; NetworkConfinementTest fails the build otherwise. It is
+      used for one request, GET https://www.yorck.de/en/films, and only after the
+      owner agreed (DownloadPermission.ALLOWED).
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+</manifest>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<!--
+  Synthetic test fixture for ProgramPageParserTest. It has the structure of
+  https://www.yorck.de/en/films (a Next.js page with the program embedded in the
+  __NEXT_DATA__ script block), but every film, text and ID is INVENTED; nothing
+  is copied from Yorck's page. Only the cinema names are Yorck's (with Yorck's
+  spellings, e.g. "Blauer Stern " with a trailing space).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Films | Example</title>
+<script src="/_next/static/chunks/main-0000000000000000.js" defer=""></script>
+<script>window.dataLayer = window.dataLayer || [];</script>
+</head>
+<body>
+<div id="__next"><main><h1>Films</h1><a href="/en/films/the-quiet-projectionist">The Quiet Projectionist</a></main></div>
+<script id="__NEXT_DATA__" type="application/json">{
+  "props": {
+    "pageProps": {
+      "films": [
+        {
+          "sys": { "id": "aaaaaaaaa1" },
+          "fields": {
+            "title": "The Quiet Projectionist",
+            "vistaId": "HO00000001",
+            "yorckPick": false,
+            "runtime": 118,
+            "mainLabel": "Drama",
+            "heroImage": { "fields": { "file": { "url": "//images.example.invalid/hero.jpg" } } },
+            "fsk": 12,
+            "tagline": "A night shift that never ends.",
+            "slug": "the-quiet-projectionist",
+            "releaseDate": "2026-10-01",
+            "distributor": "Example Distribution",
+            "sessions": [
+              {
+                "sys": { "id": "1001-1001" },
+                "fields": {
+                  "startTime": "2026-10-15T17:00:00+01:00",
+                  "formats": ["OmU"],
+                  "cinema": { "fields": { "name": "delphi LUX", "accessibility": "Step-free access" } }
+                }
+              },
+              {
+                "sys": { "id": "1002-1002" },
+                "fields": {
+                  "startTime": "2026-10-16T20:30:00+01:00",
+                  "formats": ["DF"],
+                  "cinema": { "fields": { "name": "Kino International", "accessibility": "" } }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "sys": { "id": "aaaaaaaaa2" },
+          "fields": {
+            "title": "Neon Harbour",
+            "vistaId": "HO00000002",
+            "yorckPick": true,
+            "runtime": "97",
+            "mainLabel": "Thriller",
+            "heroImage": null,
+            "fsk": "16",
+            "tagline": "Every light hides a secret.",
+            "slug": "neon-harbour",
+            "releaseDate": "2026-09-24",
+            "distributor": "Example Distribution",
+            "descriptors": ["Example descriptor"],
+            "sessions": [
+              {
+                "sys": { "id": "1004-2002" },
+                "fields": {
+                  "startTime": "2026-10-18T15:00:00+01:00",
+                  "formats": ["OV", "Premiere"],
+                  "cinema": { "fields": { "name": "Rollberg", "accessibility": "" } }
+                }
+              },
+              {
+                "sys": { "id": "1003-2001" },
+                "fields": {
+                  "startTime": "2026-10-15T21:15:00+01:00",
+                  "formats": ["OmeU", "SV"],
+                  "cinema": { "fields": { "name": "Blauer Stern ", "accessibility": "" } }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "sys": { "id": "aaaaaaaaa3" },
+          "fields": {
+            "title": "Paper Kites",
+            "vistaId": "HO00000003",
+            "yorckPick": false,
+            "runtime": 84,
+            "mainLabel": "Animation",
+            "heroImage": null,
+            "fsk": 0,
+            "tagline": "Small hands, big skies.",
+            "slug": "paper-kites",
+            "releaseDate": "2026-10-08",
+            "distributor": "Example Distribution",
+            "sessions": [
+              {
+                "sys": { "id": "1005-3001" },
+                "fields": {
+                  "startTime": "2026-10-17T11:00:00+01:00",
+                  "formats": ["DF", "KF"],
+                  "cinema": { "fields": { "name": "Filmtheater am Friedrichshain", "accessibility": "" } }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "metaData": { "title": "Films" },
+      "banners": [],
+      "top5PromotedSpecials": [],
+      "specials": [
+        {
+          "sys": { "id": "bbbbbbbbb1" },
+          "fields": {
+            "assignedFilms": { "fields": { "title": "Example" } },
+            "type": "Festival",
+            "slug": "night-of-the-long-reels",
+            "cinemas": [],
+            "title": "Night of the Long Reels",
+            "specialImage": {},
+            "sessions": [
+              {
+                "sys": { "id": "1006-4001" },
+                "fields": {
+                  "startTime": "2026-10-24T22:00:00+01:00",
+                  "formats": ["OmU", "Festival", "InTheMood"],
+                  "cinema": { "fields": { "name": "Babylon Kreuzberg", "accessibility": "" } }
+                }
+              },
+              {
+                "sys": { "id": "1001-1001" },
+                "fields": {
+                  "startTime": "2026-10-15T17:00:00+01:00",
+                  "formats": ["OmU"],
+                  "cinema": { "fields": { "name": "delphi LUX", "accessibility": "" } }
+                }
+              }
+            ],
+            "startDate": "2026-10-15",
+            "endDate": "2026-10-31",
+            "aboutText": "An invented festival.",
+            "specialSubline": "Twelve hours of cinema.",
+            "category": "Festival",
+            "heroImage": {},
+            "yorckPick": false
+          }
+        },
+        {
+          "sys": { "id": "bbbbbbbbb2" },
+          "fields": {
+            "assignedFilms": { "fields": { "title": "Example" } },
+            "type": "Film Series",
+            "slug": "neon-harbour",
+            "cinemas": [],
+            "title": "Neon Harbour",
+            "specialImage": {},
+            "sessions": [
+              {
+                "sys": { "id": "1007-5001" },
+                "fields": {
+                  "startTime": "2026-10-20T19:00:00+01:00",
+                  "formats": ["OV"],
+                  "cinema": { "fields": { "name": "Odeon", "accessibility": "" } }
+                }
+              }
+            ],
+            "startDate": "2026-10-15",
+            "endDate": "2026-10-31",
+            "aboutText": "A series with the same page name as a film.",
+            "specialSubline": "",
+            "category": "Film Series",
+            "heroImage": {},
+            "yorckPick": false
+          }
+        }
+      ],
+      "comingSoon": [],
+      "activeDates": ["2026-10-15", "2026-10-16"]
+    },
+    "__N_SSG": true
+  },
+  "page": "/films",
+  "query": {},
+  "buildId": "example-build",
+  "isFallback": false,
+  "gsp": true,
+  "locale": "en",
+  "locales": ["de", "en"],
+  "defaultLocale": "de",
+  "scriptLoader": []
+}</script>
+<script src="/_next/static/chunks/pages/films-0000000000000000.js" defer=""></script>
+</body>
+</html>

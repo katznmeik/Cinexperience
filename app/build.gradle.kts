@@ -126,6 +126,8 @@ dependencies {
     implementation(projects.core.model)
     implementation(projects.core.data)
     implementation(projects.core.ui)
+    // Yorck's program (v1.1): the only module with network code and the INTERNET permission.
+    implementation(projects.core.program)
     implementation(projects.feature.cinemas)
     implementation(projects.feature.seatmap)
     implementation(projects.feature.visits)

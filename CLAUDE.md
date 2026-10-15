@@ -60,7 +60,8 @@ Look at the screenshot PNGs after every UI change.
 | `app` | application | `MainActivity`, `CinexApp` (NavHost + bottom bar), manual DI `AppContainer`, screenshot tests |
 | `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic (no Android) |
 | `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos), backup export/import engine |
-| `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories and file stores, illustrative screenshot fixtures, `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
+| `core:program` | Android lib + kotlinx.serialization | Yorck's program (v1.1, spec §11.1): model (`Program`, `Film`, `Showing`), page parser, Yorck-name → seed-key table, `ProgramLinks`, visit pre-fill, the HTTPS download (the app's **only network code**), cache `files/program/program.json`, `ProgramRepository` |
+| `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories (incl. `FakeProgramRepository`) and file stores, illustrative screenshot fixtures (incl. `buildProgram`, `SampleProgram`), `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips) |
 | `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
 | `feature:cinemas` | feature | cinema list (start tab; sort chips and the Favourites filter), cinema detail (☆/★ favourite toggle), manage cinemas & halls |
@@ -248,6 +249,36 @@ Don't duplicate config in module build files.
   1 h. Auto Backup excludes them (database and preferences only); the backup
   export includes the referenced ones. Tests use the fakes in `core:testing`
   (`FakeReferenceImageStore`, `FakeVisitPhotoStore`, `FakeBackupRepository`).
+- **Program / network (v1.1, spec §11.1 "Network & security", binding):**
+  `core:program` is the only module with network code and the only manifest
+  with `INTERNET`; inside it only the `net/` package (`HttpsProgramTransport`,
+  `ProgramDownloader`). `NetworkConfinementTest` (core:program) fails the build
+  otherwise; it scans every module's non-test sources, manifests and build files
+  (no `java.net` except `URI`, `javax.net`, WebView, OkHttp, Retrofit, Ktor, …).
+  The one request is `GET https://www.yorck.de/en/films` over `HttpsURLConnection`:
+  no query, body or cookies (no `CookieHandler`), only `User-Agent:
+  Cinexperience/<version> (Android; personal app)` and `Accept`; at most 3
+  redirects, each only to `https://www.yorck.de/…`; 15 s connect, 30 s read, 90 s
+  total; at most 10 MB, counted while streaming; only HTTP 200. Nothing reaches
+  the transport unless `DownloadPermission.ALLOWED` (asked again before every
+  request; off cancels a running download); downloads happen only in
+  `refreshIfStale()` (no program, or older than 6 h) and `refresh()`, never in
+  the background, one at a time. The page is untrusted: `ProgramPageParser` cuts
+  out the `__NEXT_DATA__` block by text search, parses JSON into its own types
+  and checks every field (`ProgramRules`; the model types' `init` blocks check
+  again); texts are cleaned plain text (`ProgramText`), never HTML. Start times
+  are Berlin wall-clock; Yorck's `+01:00` is ignored. Links only from
+  `ProgramLinks` (fixed patterns, checked ID/slug), opened in the browser. The
+  cache `files/program/program.json` (own versioned format, atomic replace,
+  unreadable = none) is not in the database, the backup or Auto Backup, and the
+  startup sweep never touches it. `app/src/main/res/xml/network_security_config.xml`:
+  HTTPS only, system CAs only, no pinning. No WebView, no images from Yorck.
+  Failures become `ProgramStatus.Failed` with a user-facing message; the last good
+  program stays. Tests: `FakeTransport` (no sockets) and the invented fixture
+  `core/program/src/test/resources/program/films-page.html`. Never commit Yorck's
+  page or parts of it; `RealProgramPageTest` checks a local copy named by
+  `CINEX_PROGRAM_PAGE` (skipped otherwise). UI tests use `FakeProgramRepository`,
+  `buildProgram` and `SampleProgram` (core:testing).
 - **Seed data:** `core/data/src/main/assets/seed/yorck.json`. Bump `seedVersion`
   for every change; `seedKey`s are permanent. Seeding only inserts missing items
   and fills empty fields, it never overwrites or deletes (a renamed seed hall

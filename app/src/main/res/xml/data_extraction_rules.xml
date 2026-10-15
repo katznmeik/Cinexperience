@@ -4,7 +4,9 @@
   Listing includes leaves out every other domain, in particular the files domain:
   the layout editor's reference screenshots (files/reference/) and the visit
   photos (files/photos/) would count against the 25 MB backup quota. Those are covered by the
-  app's own backup export / import (Settings).
+  app's own backup export / import (Settings). The downloaded Yorck program
+  (files/program/, v1.1) is left out too: it can always be downloaded again (spec §8, §11.1).
+  BackupRulesTest checks this.
 -->
 <data-extraction-rules>
     <cloud-backup>
