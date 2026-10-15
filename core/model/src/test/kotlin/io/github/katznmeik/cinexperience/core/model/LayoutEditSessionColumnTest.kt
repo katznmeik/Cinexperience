@@ -50,6 +50,20 @@ class LayoutEditSessionColumnTest {
     }
 
     @Test
+    fun aGapThatMovesIntoARemovedColumnsPlaceDoesNotReviveItsSeat() {
+        // Row 2: seat 4, seat 5 ("R"), a gap.
+        val labelled = layoutOf("SSS", "SS.").withFixedLabel(1, 1, "R")
+        val removed = start(labelled)
+            .setCellType(1, 1, CellType.GAP)
+            .removeColumn(1) // the gap moves from column 2 to column 1
+        assertEquals(LayoutCell.Gap, removed.layout!!.cell(1, 1))
+
+        val painted = seat(removed.setCellType(1, 1, CellType.SEAT), 1, 1)
+        assertTrue(painted.id.value >= MARK, "new id, got ${painted.id}")
+        assertNull(painted.fixedLabel)
+    }
+
+    @Test
     fun aSeatPaintedOverAndThenCutOffByResizeNeverComesBack() {
         // Row 2: seats 4, 5, 6 ("R") at the right edge.
         val labelled = layoutOf("SSS", "SSS").withFixedLabel(1, 2, "R")
