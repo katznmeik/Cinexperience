@@ -64,11 +64,12 @@ Look at the screenshot PNGs after every UI change.
 | `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories (incl. `FakeProgramRepository`) and file stores, illustrative screenshot fixtures (incl. `buildProgram`, `SampleProgram`), `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips) |
 | `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
-| `feature:cinemas` | feature | cinema list (start tab; sort chips and the Favourites filter), cinema detail (☆/★ favourite toggle), manage cinemas & halls |
+| `feature:cinemas` | feature | cinema list (start tab; sort chips and the Favourites filter), cinema detail (☆/★ favourite toggle, "Now showing"), manage cinemas & halls |
 | `feature:seatmap` | feature | hall detail with seat map, layout editor |
 | `feature:visits` | feature | add/edit visit (seat picker, photos), all visits |
 | `feature:rankings` | feature | rankings tab |
-| `feature:backup` | feature | settings tab, export/import UI (file pickers, preview, progress), restore safety copy |
+| `feature:backup` | feature | settings tab, export/import UI (file pickers, preview, progress), restore safety copy, Settings → Program |
+| `feature:program` | feature | Program tab (v1.1, spec §6.9: consent, filters, saved filters, results), film page, `ProgramFilterStore` (filters in shared preferences) |
 
 Build configuration lives in the convention plugins in `build-logic/convention`
 (`cinex.android.application`, `.library`, `.compose`, `.feature`, `.room`,
@@ -114,7 +115,10 @@ Don't duplicate config in module build files.
 - **Navigation:** type-safe `@Serializable` routes. Each feature exposes its
   routes, `NavGraphBuilder.xxxScreen(...)` and `NavController.navigateToXxx()`.
   Features never depend on each other; `app/.../ui/CinexApp.kt` wires them
-  together with callbacks.
+  together with callbacks. Four tabs (`TopLevelDestination`), in this order:
+  Cinemas · Program · Rankings · Settings. "Show all in Program" (cinema detail)
+  switches to `ProgramRoute(cinemaSeedKey)` with the tab options; "Log visit"
+  opens `AddVisitRoute` with pre-fill arguments (`VisitPrefillArgs`).
 - **Transitions** (spec §7) live only in `app/.../ui/CinexTransitions.kt`, passed
   to the NavHost in `CinexApp` (features never set their own): opening a screen
   slides it in from the right while the old one slides out left by the full
@@ -279,6 +283,19 @@ Don't duplicate config in module build files.
   page or parts of it; `RealProgramPageTest` checks a local copy named by
   `CINEX_PROGRAM_PAGE` (skipped otherwise). UI tests use `FakeProgramRepository`,
   `buildProgram` and `SampleProgram` (core:testing).
+- **Program UI** (`feature:program`, spec §6.9): the tab asks for consent first
+  (`ProgramMode`); opening it calls `refreshIfStale()`, pull to refresh and the
+  refresh button `refresh()`; "Now showing" (cinema detail), the film page and
+  Settings never download. Showings join the app's cinemas by seed key
+  (`CinemaJoin`: score, ★, the hall of one-hall cinemas). Day/time/version/search
+  logic is pure (`ProgramFilters`, Berlin dates via `ProgramTime`); the filter and
+  saved filters are app settings in `program_filters.xml` (Auto Backup, not the
+  backup file). Model details that may change (film identity `FilmId`, search
+  titles, "ends about", which failures are download errors) are read only
+  through `ProgramLookup`. Links come only from `ProgramLinks` and open in the
+  browser (`ACTION_VIEW`, only `https://www.yorck.de/`; no browser = a message).
+  Texts from Yorck's page joined with other text go through `isolate()` (Unicode
+  isolates), so right-to-left text can't reorder times or names.
 - **Seed data:** `core/data/src/main/assets/seed/yorck.json`. Bump `seedVersion`
   for every change; `seedKey`s are permanent. Seeding only inserts missing items
   and fills empty fields, it never overwrites or deletes (a renamed seed hall

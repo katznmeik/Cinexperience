@@ -14,6 +14,8 @@ import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideReposi
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.program.DefaultProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
+import io.github.katznmeik.cinexperience.feature.program.ProgramFilterStore
+import io.github.katznmeik.cinexperience.feature.program.SharedPreferencesProgramFilterStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -53,6 +55,9 @@ interface AppContainer {
      */
     val programRepository: ProgramRepository
 
+    /** The Program tab's current and saved filters (app settings, spec §6.9, §8). */
+    val programFilterStore: ProgramFilterStore
+
     /** Housekeeping when the app starts (once per process), off the main thread. */
     fun onAppStart() {}
 }
@@ -88,6 +93,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val programRepository: ProgramRepository by lazy {
         DefaultProgramRepository.create(applicationContext, BuildConfig.VERSION_NAME, applicationScope)
     }
+
+    override val programFilterStore: ProgramFilterStore by lazy { SharedPreferencesProgramFilterStore(applicationContext) }
 
     private val started = AtomicBoolean(false)
 

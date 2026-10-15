@@ -14,12 +14,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,6 +41,7 @@ import io.github.katznmeik.cinexperience.core.data.backup.BackupRepository
 import io.github.katznmeik.cinexperience.core.data.backup.ImportPreview
 import io.github.katznmeik.cinexperience.core.data.backup.ImportSource
 import io.github.katznmeik.cinexperience.core.data.backup.SafetyCopy
+import io.github.katznmeik.cinexperience.core.program.ProgramTime
 import io.github.katznmeik.cinexperience.core.ui.component.CinexScreen
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
@@ -59,6 +63,18 @@ internal interface BackupActions {
 
     companion object {
         val None = object : BackupActions {}
+    }
+}
+
+/** Program callbacks of the Settings screen (spec §6.7), implemented by [SettingsViewModel]. */
+internal interface ProgramSettingsActions {
+    fun onDownloadsChanged(enabled: Boolean) {}
+    fun onDeleteProgram() {}
+    fun onConfirmDelete() {}
+    fun onCancelDelete() {}
+
+    companion object {
+        val None = object : ProgramSettingsActions {}
     }
 }
 
@@ -87,7 +103,15 @@ internal fun SettingsEntry(
             override fun onMessageShown() = viewModel.onMessageShown()
         }
     }
-    SettingsScreen(state, onOpenManage, onOpenAllVisits, actions = actions)
+    val programActions = remember(viewModel) {
+        object : ProgramSettingsActions {
+            override fun onDownloadsChanged(enabled: Boolean) = viewModel.onProgramDownloadsChanged(enabled)
+            override fun onDeleteProgram() = viewModel.onDeleteProgram()
+            override fun onConfirmDelete() = viewModel.onConfirmDeleteProgram()
+            override fun onCancelDelete() = viewModel.onCancelDeleteProgram()
+        }
+    }
+    SettingsScreen(state, onOpenManage, onOpenAllVisits, actions = actions, programActions = programActions)
 }
 
 private fun launchPicker(viewModel: SettingsViewModel, launch: () -> Unit) {
@@ -106,6 +130,7 @@ internal fun SettingsScreen(
     onOpenAllVisits: () -> Unit,
     modifier: Modifier = Modifier,
     actions: BackupActions = BackupActions.None,
+    programActions: ProgramSettingsActions = ProgramSettingsActions.None,
 ) {
     val backup = state.backup
     // While an import replaces the data nothing else may write: Back and the Data rows
@@ -145,6 +170,7 @@ internal fun SettingsScreen(
                     onClick = onOpenAllVisits,
                 )
             }
+            Section("Program") { ProgramRows(state.program, enabled = !importing, programActions) }
             Section("About") {
                 Column(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -173,6 +199,98 @@ internal fun SettingsScreen(
     }
     backup.preview?.let { ImportPreviewDialog(it, actions) }
     if (backup.choosingSafetyCopy) SafetyCopyChooser(backup.safetyCopies, actions)
+    if (state.program.confirmingDelete) {
+        AlertDialog(
+            onDismissRequest = programActions::onCancelDelete,
+            title = { Text("Delete downloaded program?") },
+            text = {
+                Text(
+                    "The program is removed from this phone. It can be downloaded again in the Program tab.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CinexTheme.colors.textMuted,
+                )
+            },
+            confirmButton = { TextButton(onClick = programActions::onConfirmDelete) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = programActions::onCancelDelete) { Text("Cancel") } },
+        )
+    }
+}
+
+/**
+ * Settings → Program (spec §6.7): the download switch (off = no network requests),
+ * the date of the last download and "Delete downloaded program".
+ */
+@Composable
+private fun ProgramRows(program: ProgramSettingsState, enabled: Boolean, actions: ProgramSettingsActions) {
+    val switchEnabled = enabled && program.isLoaded
+    val titleColor = if (switchEnabled) CinexTheme.colors.text else CinexTheme.colors.textMuted
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .toggleable(
+                value = program.downloadsOn,
+                enabled = switchEnabled,
+                role = Role.Switch,
+                onValueChange = actions::onDownloadsChanged,
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(CinexIcons.Program, contentDescription = null, tint = titleColor, modifier = Modifier.size(22.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                "Download program from yorck.de",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = titleColor,
+            )
+            Text(
+                if (program.downloadsOn) {
+                    "Only when you open the Program tab or pull to refresh"
+                } else {
+                    "Off: the app makes no network requests"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = CinexTheme.colors.textMuted,
+            )
+        }
+        // The row is the toggle; the switch only shows its state.
+        Switch(
+            checked = program.downloadsOn,
+            onCheckedChange = null,
+            enabled = switchEnabled,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = CinexTheme.colors.onPrimary,
+                checkedTrackColor = CinexTheme.colors.text,
+                uncheckedThumbColor = CinexTheme.colors.fieldOutline,
+                uncheckedTrackColor = CinexTheme.colors.surface,
+                uncheckedBorderColor = CinexTheme.colors.fieldOutline,
+            ),
+        )
+    }
+    RowDivider()
+    SettingsRow(
+        icon = CinexIcons.Delete,
+        title = "Delete downloaded program",
+        subtitle = when {
+            program.isDownloading -> "Downloading…"
+            program.lastDownload != null -> "Last download: ${dateTimeText(program.lastDownload, ProgramTime.ZONE)}"
+            program.isLoaded -> "No program downloaded"
+            else -> null
+        },
+        enabled = enabled && program.hasProgram,
+        onClick = actions::onDeleteProgram,
+    )
+    program.errorMessage?.let { message ->
+        RowDivider()
+        Text(
+            message,
+            style = MaterialTheme.typography.bodySmall,
+            color = CinexTheme.colors.text,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        )
+    }
 }
 
 /** The safety copies to restore from, newest first; picking one leads to the usual preview. */

@@ -31,6 +31,23 @@ The full product specification is in [`docs/SPEC.md`](docs/SPEC.md).
   it again, with a safety copy of the data it replaces.
 - Works with TalkBack and large font sizes.
 
+## Features (v1.1)
+
+Four tabs: **Cinemas · Program · Rankings · Settings**.
+
+- **Program:** Yorck's showtimes (after you agree on first use), with filters by
+  cinema (with a Favourites shortcut), day (today, tomorrow, this week, weekend
+  or chosen dates), start time, version (DF, OmU, OmeU, OV and events) and film
+  title; filters are remembered and can be saved under a name. Each showing
+  shows the cinema's score, ★ for favourites, the runtime and when it ends about,
+  and the hall of one-hall cinemas. "Book on yorck.de" opens the seat selection
+  in the browser; "Log visit" opens Add visit pre-filled. A film page lists all
+  its showings.
+- **Now showing** on each cinema's page: its showings of the next 7 days from the
+  downloaded program.
+- **Settings → Program:** switch downloading off (no network requests at all),
+  see the last download, delete the downloaded program.
+
 ## Install and update
 
 Every version is published as a GitHub Release with the APK

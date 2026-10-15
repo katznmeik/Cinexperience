@@ -48,6 +48,7 @@ import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.core.model.NO_SCORE_TEXT
 import io.github.katznmeik.cinexperience.core.model.formatScore
+import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
@@ -67,6 +68,8 @@ internal fun CinemaDetailEntry(
     onBack: () -> Unit,
     onOpenHall: (Long) -> Unit,
     onCinemaDeleted: (message: String) -> Unit,
+    onOpenFilm: (FilmKind, String) -> Unit = { _, _ -> },
+    onShowAllInProgram: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.deletedMessage) {
@@ -84,6 +87,8 @@ internal fun CinemaDetailEntry(
         onDeleteHall = viewModel::deleteHall,
         dialogActions = actions,
         onMessageShown = viewModel::messageShown,
+        onOpenFilm = onOpenFilm,
+        onShowAllInProgram = onShowAllInProgram,
     )
 }
 
@@ -110,6 +115,8 @@ internal fun CinemaDetailScreen(
     onMessageShown: () -> Unit,
     modifier: Modifier = Modifier,
     onToggleFavourite: () -> Unit = {},
+    onOpenFilm: (FilmKind, String) -> Unit = { _, _ -> },
+    onShowAllInProgram: () -> Unit = {},
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(state.message) {
@@ -129,6 +136,9 @@ internal fun CinemaDetailScreen(
                 onOpenHall = onOpenHall,
                 onRenameHall = onRenameHall,
                 onDeleteHall = onDeleteHall,
+                nowShowing = state.nowShowing,
+                onOpenFilm = onOpenFilm,
+                onShowAllInProgram = onShowAllInProgram,
             )
             CinemaDetailContent.Loading -> BackTopBar(onBack)
             CinemaDetailContent.NotFound -> MessageContent("This cinema no longer exists.", onBack)
@@ -162,6 +172,9 @@ private fun LoadedContent(
     onOpenHall: (Long) -> Unit,
     onRenameHall: (HallSummary) -> Unit,
     onDeleteHall: (HallSummary) -> Unit,
+    nowShowing: NowShowing,
+    onOpenFilm: (FilmKind, String) -> Unit,
+    onShowAllInProgram: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -219,6 +232,7 @@ private fun LoadedContent(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
+        nowShowingItems(nowShowing, onOpenFilm, onShowAllInProgram)
     }
 }
 

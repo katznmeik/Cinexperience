@@ -25,6 +25,7 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -41,6 +42,12 @@ import io.github.katznmeik.cinexperience.feature.cinemas.closeDeletedCinema
 import io.github.katznmeik.cinexperience.feature.cinemas.manageCinemasScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.navigateToCinemaDetail
 import io.github.katznmeik.cinexperience.feature.cinemas.navigateToManageCinemas
+import io.github.katznmeik.cinexperience.feature.program.FilmId
+import io.github.katznmeik.cinexperience.feature.program.LogVisitRequest
+import io.github.katznmeik.cinexperience.feature.program.filmScreen
+import io.github.katznmeik.cinexperience.feature.program.navigateToFilm
+import io.github.katznmeik.cinexperience.feature.program.navigateToProgram
+import io.github.katznmeik.cinexperience.feature.program.programScreen
 import io.github.katznmeik.cinexperience.feature.rankings.rankingsScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.hallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.layoutEditorScreen
@@ -49,11 +56,12 @@ import io.github.katznmeik.cinexperience.feature.seatmap.navigateToLayoutEditor
 import io.github.katznmeik.cinexperience.feature.visits.allVisitsScreen
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAddVisit
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAllVisits
+import io.github.katznmeik.cinexperience.feature.visits.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.feature.visits.navigateToEditVisit
 import io.github.katznmeik.cinexperience.feature.visits.visitEditScreens
 
 /**
- * Root composable: bottom navigation (shown on the three tab screens only, as in
+ * Root composable: bottom navigation (shown on the four tab screens only, as in
  * the mockups) and the navigation graph that wires the feature modules together.
  * Feature modules never depend on each other; cross-feature navigation happens here,
  * and the repositories from the manual DI [container] are handed to the features,
@@ -130,9 +138,18 @@ fun CinexApp(
             cinemaDetailScreen(
                 cinemaRepository = container.cinemaRepository,
                 hallRepository = container.hallRepository,
+                programRepository = container.programRepository,
                 onBack = navController::navigateUp,
                 onOpenHall = navController::navigateToHallDetail,
                 onCinemaDeleted = navController::closeDeletedCinema,
+                onOpenFilm = { kind, slug -> navController.navigateToFilm(FilmId(kind, slug)) },
+                // "Show all in Program" switches to the Program tab, filtered to the cinema.
+                onShowAllInProgram = { seedKey ->
+                    if (!importing) {
+                        navController.navigateToProgram(seedKey, navController.tabOptions())
+                        tabSwitch.entryId = navController.currentBackStackEntry?.id
+                    }
+                },
             )
             hallDetailScreen(
                 hallRepository = container.hallRepository,
@@ -154,6 +171,21 @@ fun CinexApp(
                 onClose = navController::navigateUp,
             )
 
+            // Program tab (v1.1)
+            programScreen(
+                programRepository = container.programRepository,
+                cinemaRepository = container.cinemaRepository,
+                filterStore = container.programFilterStore,
+                onOpenFilm = navController::navigateToFilm,
+                onLogVisit = navController::logVisit,
+            )
+            filmScreen(
+                programRepository = container.programRepository,
+                cinemaRepository = container.cinemaRepository,
+                onBack = navController::navigateUp,
+                onLogVisit = navController::logVisit,
+            )
+
             // Rankings tab
             rankingsScreen(
                 rankingsRepository = container.rankingsRepository,
@@ -167,6 +199,7 @@ fun CinexApp(
             settingsScreen(
                 cinemaRepository = container.cinemaRepository,
                 backupRepository = container.backupRepository,
+                programRepository = container.programRepository,
                 appVersion = container.appVersion,
                 buildId = container.buildId,
                 onOpenManage = navController::navigateToManageCinemas,
@@ -192,12 +225,18 @@ private fun <T> barSpec() = tween<T>(CinexTransitions.DURATION_MS, easing = Fast
 private fun NavDestination?.isOn(tab: TopLevelDestination): Boolean =
     this?.hierarchy?.any { it.hasRoute(tab.route::class) } == true
 
+/** Options of a switch between tabs: one back stack per tab, Back returns to the start tab. */
+private fun NavHostController.tabOptions(): NavOptionsBuilder.() -> Unit = {
+    popUpTo(graph.findStartDestination().id) { saveState = true }
+    launchSingleTop = true
+    restoreState = true
+}
+
 private fun NavHostController.navigateToTab(tab: TopLevelDestination, tabSwitch: TabSwitchTracker) {
-    navigate(tab.route) {
-        // Keep one back stack per tab and return to the start tab on Back.
-        popUpTo(graph.findStartDestination().id) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
-    }
+    navigate(tab.route, tabOptions())
     tabSwitch.entryId = currentBackStackEntry?.id
 }
+
+/** "Log visit" on a showing: Add visit pre-filled with cinema, date, film and format (spec §11.1). */
+private fun NavHostController.logVisit(request: LogVisitRequest) =
+    navigateToAddVisit(VisitPrefillArgs(request.cinemaId, request.date, request.filmTitle, request.format))

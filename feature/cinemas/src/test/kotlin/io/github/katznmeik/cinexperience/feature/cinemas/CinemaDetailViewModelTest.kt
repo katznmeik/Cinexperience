@@ -3,6 +3,7 @@ package io.github.katznmeik.cinexperience.feature.cinemas
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
+import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailContent
@@ -28,9 +29,10 @@ class CinemaDetailViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repository = FakeCinexRepository(SampleData.store())
+    private val program = FakeProgramRepository()
 
     private fun TestScope.viewModel(cinemaId: Long = SampleData.DELPHI_LUX): CinemaDetailViewModel {
-        val vm = CinemaDetailViewModel(cinemaId, repository, repository)
+        val vm = CinemaDetailViewModel(cinemaId, repository, repository, program)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         return vm
     }

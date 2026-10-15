@@ -22,6 +22,7 @@ import io.github.katznmeik.cinexperience.core.data.backup.LastExport
 import io.github.katznmeik.cinexperience.core.data.backup.SafetyCopy
 import io.github.katznmeik.cinexperience.core.testing.FakeBackupRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
+import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
@@ -62,9 +63,10 @@ class SettingsViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val backup = FakeBackupRepository()
+    private val program = FakeProgramRepository.withProgram()
 
     private fun TestScope.viewModel(repository: FakeCinexRepository = FakeCinexRepository(SampleData.store())): SettingsViewModel {
-        val vm = SettingsViewModel(repository, backup, "1.2.3", "abc1234", today = { LocalDate.of(2026, 10, 3) })
+        val vm = SettingsViewModel(repository, backup, program, "1.2.3", "abc1234", today = { LocalDate.of(2026, 10, 3) })
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         return vm
     }
