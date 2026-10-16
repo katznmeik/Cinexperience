@@ -226,7 +226,9 @@ Don't duplicate config in module build files.
   reach into row 0 (`hitTest`). Width and distance bounds live in
   `ScreenSizeRules` (core:model: width > 0 and ≤ 120 = 2 × `MAX_COLUMNS`,
   distance 0–15), shared by the editor's `ScreenRules`, the repositories and the
-  backup validator.
+  backup validator. The editor sets distances of at least 0.5
+  (`ScreenRules.MIN_DISTANCE`), so the bar never lies on row 0; a stored 0 stays
+  until the distance is changed.
 - **Schema changes:** the database is at version 2 (`MIGRATION_1_2` added
   `cinema.is_favourite` and `hall.screen_offset`). Bump the `CinexDatabase`
   version, add a migration to `ALL_MIGRATIONS`, commit the exported

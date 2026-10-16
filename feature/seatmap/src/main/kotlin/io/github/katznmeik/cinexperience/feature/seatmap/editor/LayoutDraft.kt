@@ -167,7 +167,8 @@ data class LayoutDraft(
 
     fun withScreenWidth(value: Float): LayoutDraft = copy(screenWidth = ScreenRules.width(value, columnCount))
 
-    fun withScreenDistance(value: Float): LayoutDraft = copy(screenDistance = ScreenRules.distance(value))
+    /** Snapped and limited ([ScreenRules.distance]): at least half a row, unless already nearer. */
+    fun withScreenDistance(value: Float): LayoutDraft = copy(screenDistance = ScreenRules.distance(value, current = screenDistance))
 
     /** Moves the screen sideways: snapped to half seats, its centre within the grid (see [ScreenOffsetRules]). */
     fun withScreenOffset(value: Float): LayoutDraft = copy(screenOffset = ScreenOffsetRules.snap(value, columnCount))
@@ -211,13 +212,22 @@ private fun LayoutEditSession.copyCellType(row: Int, column: Int, template: Layo
 /**
  * Bounds, steps and texts of the screen geometry in the editor (spec §4.2, §6.5).
  * The bounds are [ScreenSizeRules]', which the repositories and the backup
- * validator enforce too.
+ * validator enforce too, except that the editor keeps the screen at least
+ * [MIN_DISTANCE] in front of row 0.
  */
 object ScreenRules {
     /** Step of the steppers and the drag handles: half a seat / half a row. */
     const val STEP = 0.5f
     const val MIN_WIDTH = ScreenSizeRules.MIN_WIDTH
-    const val MIN_DISTANCE = ScreenSizeRules.MIN_DISTANCE
+
+    /**
+     * The nearest screen the editor sets: half a row in front of row 0. At 0 the bar
+     * would lie on row 0, where only its upper part can be touched (the screen
+     * controls never reach into row 0, see [hitTest]). The data rules still allow 0
+     * ([ScreenSizeRules.MIN_DISTANCE], e.g. from an older version or a backup):
+     * [distance] keeps such a distance until the screen is moved away from it.
+     */
+    const val MIN_DISTANCE = 0.5f
     const val MAX_DISTANCE = ScreenSizeRules.MAX_DISTANCE
 
     /** The screen may be up to twice as wide as the grid. */
@@ -227,7 +237,16 @@ object ScreenRules {
 
     fun width(value: Float, columns: Int): Float = snap(value).coerceIn(MIN_WIDTH, maxWidth(columns))
 
-    fun distance(value: Float): Float = snap(value).coerceIn(MIN_DISTANCE, MAX_DISTANCE)
+    /**
+     * [value] snapped to [STEP], within [MIN_DISTANCE]..[MAX_DISTANCE]. Coming from a
+     * [current] distance below [MIN_DISTANCE] (only stored data has one), the lower
+     * limit is [ScreenSizeRules.MIN_DISTANCE] instead, so a step or drag towards row 0
+     * leaves the screen where it is instead of making it jump away.
+     */
+    fun distance(value: Float, current: Float = MIN_DISTANCE): Float {
+        val nearest = if (current < MIN_DISTANCE) ScreenSizeRules.MIN_DISTANCE else MIN_DISTANCE
+        return snap(value).coerceIn(nearest, MAX_DISTANCE)
+    }
 
     /** "14 seats", "14.5 seats", "1 seat". */
     fun widthText(width: Float): String {

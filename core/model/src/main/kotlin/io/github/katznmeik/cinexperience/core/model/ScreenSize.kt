@@ -16,7 +16,10 @@ object ScreenSizeRules {
     /** The editor's narrowest screen. Stored widths only need to be positive ([isValidWidth]). */
     const val MIN_WIDTH: Float = 1f
 
-    /** The screen may stand right in front of row 1. */
+    /**
+     * A stored screen may stand right in front of row 1. The layout editor itself
+     * sets at least half a row, so its screen bar never lies on the first row.
+     */
     const val MIN_DISTANCE: Float = 0f
 
     /** The farthest screen, in row depths (the seed's farthest is 2). */
