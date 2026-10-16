@@ -255,7 +255,7 @@ internal fun VisitEditScreen(
                 when (state.status) {
                     VisitEditStatus.Loading -> Unit
                     VisitEditStatus.NotFound -> Message("This visit no longer exists.")
-                    VisitEditStatus.LoadFailed -> Message("Couldn't load the visit.")
+                    VisitEditStatus.LoadFailed -> Message(VisitEditViewModel.LOAD_FAILED)
                     VisitEditStatus.Ready -> FormContent(state, photo, actions)
                 }
             }
