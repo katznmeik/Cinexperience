@@ -335,7 +335,7 @@ data class SeatLayout(
     ): SeatLayout {
         require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
         require(id !in seatPositions) { "$id is already used in this layout" }
-        require(id.value < MAX_SEAT_ID) { "$id is not below $MAX_SEAT_ID" }
+        if (id.value >= MAX_SEAT_ID) throw SeatIdsExhaustedException("$id is not below $MAX_SEAT_ID")
         return SeatLayout(replaceCell(row, column, LayoutCell.Seat(id, kind, fixedLabel)), maxOf(nextSeatId, id.value + 1))
     }
 
@@ -366,11 +366,11 @@ data class SeatLayout(
     /**
      * The same layout with every seat id (and [nextSeatId]) increased by [delta] ≥ 0.
      * Used to move seed layouts, whose ids start at 1, above a hall's id mark.
-     * @throws IllegalArgumentException if [nextSeatId] would pass [MAX_SEAT_ID].
+     * @throws SeatIdsExhaustedException if [nextSeatId] would pass [MAX_SEAT_ID].
      */
     fun withIdsShiftedBy(delta: Int): SeatLayout {
         require(delta >= 0) { "delta must not be negative" }
-        require(delta <= MAX_SEAT_ID - nextSeatId) { "Shifting seat ids by $delta would pass $MAX_SEAT_ID" }
+        if (delta > MAX_SEAT_ID - nextSeatId) throw SeatIdsExhaustedException("Shifting seat ids by $delta would pass $MAX_SEAT_ID")
         if (delta == 0) return this
         val newRows = rows.map { row ->
             row.copy(cells = row.cells.map { if (it is LayoutCell.Seat) it.copy(id = SeatId(it.id.value + delta)) else it })
@@ -466,8 +466,7 @@ data class SeatLayout(
          */
         fun create(rows: Int, columns: Int, firstSeatId: Int, fill: CellType = CellType.SEAT): SeatLayout {
             require(rows > 0 && columns > 0) { "Layout must be at least 1×1" }
-            require(firstSeatId >= FIRST_SEAT_ID) { "firstSeatId must be positive" }
-            val allocator = IdAllocator(firstSeatId)
+            val allocator = IdAllocator.from(firstSeatId)
             return SeatLayout(List(rows) { LayoutRow(List(columns) { allocator.cell(fill) }) }, allocator.next)
         }
 
@@ -480,8 +479,7 @@ data class SeatLayout(
             fromPatterns(patterns.toList(), firstSeatId)
 
         fun fromPatterns(patterns: List<String>, firstSeatId: Int): SeatLayout {
-            require(firstSeatId >= FIRST_SEAT_ID) { "firstSeatId must be positive" }
-            val allocator = IdAllocator(firstSeatId)
+            val allocator = IdAllocator.from(firstSeatId)
             val rows = patterns.map { pattern ->
                 val ids = List(LayoutPattern.seatCount(pattern)) { allocator.seatId() }
                 LayoutRow(LayoutPattern.decode(pattern, ids))
@@ -508,20 +506,30 @@ data class SeatLayout(
          * new seat and a full new grid uses at most [MAX_ROWS] × [MAX_COLUMNS] =
          * 3,000, so real halls stay far below it; it leaves headroom up to
          * [Int.MAX_VALUE], so id arithmetic never overflows. Handing out an id at or
-         * above it fails with an [IllegalArgumentException].
+         * above it fails with a [SeatIdsExhaustedException].
          */
         const val MAX_SEAT_ID: Int = 1_000_000_000
     }
 }
 
 /**
+ * A layout operation needed a seat id at or above [SeatLayout.MAX_SEAT_ID]: the
+ * hall's ids are used up. Only damaged or crafted data gets there (a real hall
+ * uses a few thousand ids), so the layout editor refuses just that edit; any
+ * other [IllegalArgumentException] from a layout operation is a bug.
+ */
+class SeatIdsExhaustedException(message: String) : IllegalArgumentException(message)
+
+/**
  * Hands out new seat ids from [next] upwards. Never one at or above
- * [SeatLayout.MAX_SEAT_ID]: that fails with an [IllegalArgumentException] instead
+ * [SeatLayout.MAX_SEAT_ID]: that fails with a [SeatIdsExhaustedException] instead
  * of wrapping around to a negative id.
  */
 private class IdAllocator(var next: Int) {
     fun seatId(): SeatId {
-        require(next < SeatLayout.MAX_SEAT_ID) { "No seat id left below ${SeatLayout.MAX_SEAT_ID} (next would be $next)" }
+        if (next >= SeatLayout.MAX_SEAT_ID) {
+            throw SeatIdsExhaustedException("No seat id left below ${SeatLayout.MAX_SEAT_ID} (next would be $next)")
+        }
         return SeatId(next++)
     }
 
@@ -529,6 +537,17 @@ private class IdAllocator(var next: Int) {
         CellType.SEAT -> LayoutCell.Seat(seatId())
         CellType.GAP -> LayoutCell.Gap
         CellType.AISLE -> LayoutCell.Aisle
+    }
+
+    companion object {
+        /** The allocator of a new layout whose ids start at [firstSeatId]. */
+        fun from(firstSeatId: Int): IdAllocator {
+            require(firstSeatId >= SeatLayout.FIRST_SEAT_ID) { "firstSeatId must be positive" }
+            if (firstSeatId > SeatLayout.MAX_SEAT_ID) {
+                throw SeatIdsExhaustedException("firstSeatId $firstSeatId is above ${SeatLayout.MAX_SEAT_ID}")
+            }
+            return IdAllocator(firstSeatId)
+        }
     }
 }
 
