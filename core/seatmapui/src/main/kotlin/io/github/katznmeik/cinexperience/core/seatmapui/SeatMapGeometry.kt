@@ -185,13 +185,16 @@ class SeatMapGeometry(
     }
 
     /**
-     * The row whose label area contains [point]: anything left of the grid (or
-     * right of it, with right labels) within the row's band. `null` otherwise.
+     * The row whose label area contains [point]: the label column left of the grid
+     * (or right of it, with right labels), out to the drawing's padding, within the
+     * row's band. Not the room beyond it that a screen sticking out past the labels
+     * adds to the content: a touch under such a screen is no touch on a row.
+     * `null` otherwise.
      */
     fun rowLabelAt(point: Offset): Int? {
         val row = rowAt(point.y) ?: return null
-        val inLeft = point.x < -metrics.labelGap / 2f && point.x >= contentBounds.left
-        val inRight = metrics.rightLabels && point.x > gridWidth + metrics.labelGap / 2f && point.x <= contentBounds.right
+        val inLeft = point.x < -metrics.labelGap / 2f && point.x >= labelsLeft - metrics.padding
+        val inRight = metrics.rightLabels && point.x > gridWidth + metrics.labelGap / 2f && point.x <= labelsRight + metrics.padding
         return row.takeIf { inLeft || inRight }
     }
 

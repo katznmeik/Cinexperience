@@ -269,7 +269,7 @@ class LayoutEditorViewModelTest {
         vm.changeScreenWidth(-100f)
         assertEquals(1f, vm.draft.screenWidth)
         vm.changeScreenDistance(-100f)
-        assertEquals(0f, vm.draft.screenDistance)
+        assertEquals(0.5f, vm.draft.screenDistance) // ScreenRules.MIN_DISTANCE
     }
 
     @Test
