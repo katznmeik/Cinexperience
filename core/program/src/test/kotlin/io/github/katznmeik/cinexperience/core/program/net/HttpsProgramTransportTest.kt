@@ -162,7 +162,7 @@ class HttpsProgramTransportTest {
             response.close()
             assertEquals(1, opener.opened.size)
             assertFalse("$status: the body was opened", connection.inputStreamOpened)
-            assertFalse(connection.sentOrFail().followsRedirects)
+            assertFalse("The client follows redirects itself", connection.sentOrFail().followsRedirects)
             assertEquals(1, connection.disconnects.get())
         }
     }
@@ -274,7 +274,7 @@ class HttpsProgramTransportTest {
         assertEquals(listOf("https://www.yorck.de/en/films", "https://www.yorck.de/en/films/"), opener.opened)
         for (connection in listOf(redirect, page)) {
             val sent = connection.sentOrFail()
-            assertFalse(sent.followsRedirects)
+            assertFalse("The client follows redirects itself", sent.followsRedirects)
             assertEquals(expectedRequestProperties, sent.requestProperties)
             assertEquals(1, connection.disconnects.get())
         }
