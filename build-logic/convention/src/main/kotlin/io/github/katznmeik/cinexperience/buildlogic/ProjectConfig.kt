@@ -8,6 +8,7 @@ import org.gradle.api.artifacts.VersionCatalog
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.testing.Test
+import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.withType
@@ -43,11 +44,26 @@ internal fun Project.configureAndroidCommon(extension: CommonExtension) {
         compileOptions.targetCompatibility = JAVA_TARGET
     }
     configureKotlinJvmTarget()
+    configureUnitTests()
 }
 
 internal fun Project.configureKotlinJvmTarget() {
     tasks.withType<KotlinJvmCompile>().configureEach {
         compilerOptions.jvmTarget.set(KOTLIN_JVM_TARGET)
+    }
+}
+
+/**
+ * Settings for the unit tests of every module (JVM and Android):
+ * - UTC on every machine (CI runs in UTC too), so texts in the system time zone,
+ *   such as the backup times in Settings, and their screenshots are the same everywhere;
+ * - skipped tests are listed in the build output, so a skip (e.g. RealProgramPageTest
+ *   without `CINEX_PROGRAM_PAGE`) isn't taken for a pass.
+ */
+internal fun Project.configureUnitTests() {
+    tasks.withType<Test>().configureEach {
+        systemProperty("user.timezone", "UTC")
+        testLogging.events(TestLogEvent.FAILED, TestLogEvent.SKIPPED)
     }
 }
 
