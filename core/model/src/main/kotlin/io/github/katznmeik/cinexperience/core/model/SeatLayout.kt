@@ -241,8 +241,9 @@ data class CellPosition(val row: Int, val column: Int)
  * A hall's seat grid of `rowCount × columnCount` cells (spec §4.3). The screen is
  * always at the top, i.e. in front of row 0.
  *
- * Instances are immutable and validated: every row has the same width, seat ids
- * are unique and all smaller than [nextSeatId]. Use the editing functions below
+ * Instances are immutable and validated: at most [MAX_ROWS] × [MAX_COLUMNS]
+ * cells, every row has the same width, seat ids are unique and all smaller than
+ * [nextSeatId], which is at most [MAX_SEAT_ID]. Use the editing functions below
  * (they keep seat ids stable, see [SeatId]) instead of building rows by hand
  * whenever an existing layout is modified.
  */
@@ -259,8 +260,11 @@ data class SeatLayout(
 
     init {
         require(rows.isNotEmpty()) { "A layout needs at least one row" }
+        require(rows.size <= MAX_ROWS) { "A layout has at most $MAX_ROWS rows, not ${rows.size}" }
         val width = rows.first().cells.size
         require(width > 0) { "A layout needs at least one column" }
+        require(width <= MAX_COLUMNS) { "A layout has at most $MAX_COLUMNS columns, not $width" }
+        require(nextSeatId in FIRST_SEAT_ID..MAX_SEAT_ID) { "nextSeatId $nextSeatId is outside $FIRST_SEAT_ID..$MAX_SEAT_ID" }
         val positions = LinkedHashMap<SeatId, CellPosition>()
         rows.forEachIndexed { r, row ->
             require(row.cells.size == width) { "Row $r has ${row.cells.size} cells, expected $width" }
@@ -331,6 +335,7 @@ data class SeatLayout(
     ): SeatLayout {
         require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
         require(id !in seatPositions) { "$id is already used in this layout" }
+        require(id.value < MAX_SEAT_ID) { "$id is not below $MAX_SEAT_ID" }
         return SeatLayout(replaceCell(row, column, LayoutCell.Seat(id, kind, fixedLabel)), maxOf(nextSeatId, id.value + 1))
     }
 
@@ -361,9 +366,11 @@ data class SeatLayout(
     /**
      * The same layout with every seat id (and [nextSeatId]) increased by [delta] ≥ 0.
      * Used to move seed layouts, whose ids start at 1, above a hall's id mark.
+     * @throws IllegalArgumentException if [nextSeatId] would pass [MAX_SEAT_ID].
      */
     fun withIdsShiftedBy(delta: Int): SeatLayout {
         require(delta >= 0) { "delta must not be negative" }
+        require(delta <= MAX_SEAT_ID - nextSeatId) { "Shifting seat ids by $delta would pass $MAX_SEAT_ID" }
         if (delta == 0) return this
         val newRows = rows.map { row ->
             row.copy(cells = row.cells.map { if (it is LayoutCell.Seat) it.copy(id = SeatId(it.id.value + delta)) else it })
@@ -474,22 +481,52 @@ data class SeatLayout(
 
         fun fromPatterns(patterns: List<String>, firstSeatId: Int): SeatLayout {
             require(firstSeatId >= FIRST_SEAT_ID) { "firstSeatId must be positive" }
-            var id = firstSeatId
+            val allocator = IdAllocator(firstSeatId)
             val rows = patterns.map { pattern ->
-                val ids = List(LayoutPattern.seatCount(pattern)) { SeatId(id++) }
+                val ids = List(LayoutPattern.seatCount(pattern)) { allocator.seatId() }
                 LayoutRow(LayoutPattern.decode(pattern, ids))
             }
-            return SeatLayout(rows, id)
+            return SeatLayout(rows, allocator.next)
         }
 
         /** First seat id of a hall that never had seats. */
         const val FIRST_SEAT_ID: Int = 1
+
+        /**
+         * Most rows a layout can have: the layout editor's limit (the seed's tallest
+         * hall, delphi Filmpalast, has 40). Like [MAX_COLUMNS], it keeps a layout
+         * from a damaged or crafted backup small enough to decode, draw and store
+         * quickly.
+         */
+        const val MAX_ROWS: Int = 50
+
+        /** Most columns a layout can have: the layout editor's limit (the seed's widest hall, International, has 34). */
+        const val MAX_COLUMNS: Int = 60
+
+        /**
+         * Upper bound of [nextSeatId], so seat ids stay below it. Ids rise by one per
+         * new seat and a full new grid uses at most [MAX_ROWS] × [MAX_COLUMNS] =
+         * 3,000, so real halls stay far below it; it leaves headroom up to
+         * [Int.MAX_VALUE], so id arithmetic never overflows. Handing out an id at or
+         * above it fails with an [IllegalArgumentException].
+         */
+        const val MAX_SEAT_ID: Int = 1_000_000_000
     }
 }
 
+/**
+ * Hands out new seat ids from [next] upwards. Never one at or above
+ * [SeatLayout.MAX_SEAT_ID]: that fails with an [IllegalArgumentException] instead
+ * of wrapping around to a negative id.
+ */
 private class IdAllocator(var next: Int) {
+    fun seatId(): SeatId {
+        require(next < SeatLayout.MAX_SEAT_ID) { "No seat id left below ${SeatLayout.MAX_SEAT_ID} (next would be $next)" }
+        return SeatId(next++)
+    }
+
     fun cell(type: CellType): LayoutCell = when (type) {
-        CellType.SEAT -> LayoutCell.Seat(SeatId(next++))
+        CellType.SEAT -> LayoutCell.Seat(seatId())
         CellType.GAP -> LayoutCell.Gap
         CellType.AISLE -> LayoutCell.Aisle
     }

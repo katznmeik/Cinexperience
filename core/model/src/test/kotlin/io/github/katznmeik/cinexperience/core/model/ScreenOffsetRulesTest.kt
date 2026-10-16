@@ -19,7 +19,7 @@ class ScreenOffsetRulesTest {
 
     @Test
     fun maximumIsHalfTheWidestEditorGrid() {
-        // LayoutDraft.MAX_COLUMNS is 60: the centre can reach the edge of the widest grid.
+        // SeatLayout.MAX_COLUMNS is 60: the centre can reach the edge of the widest grid.
         assertEquals(30f, ScreenOffsetRules.MAX_MAGNITUDE)
         assertEquals(30f, ScreenOffsetRules.maxMagnitude(60))
         assertEquals(30f, ScreenOffsetRules.maxMagnitude(500))

@@ -18,8 +18,8 @@ object ScreenOffsetRules {
     const val STEP: Float = 0.5f
 
     /**
-     * Largest valid magnitude, independent of the grid: half of the layout
-     * editor's widest grid (`LayoutDraft.MAX_COLUMNS` = 60), so the screen centre
+     * Largest valid magnitude, independent of the grid: half of the widest grid
+     * ([SeatLayout.MAX_COLUMNS] = 60), so the screen centre
      * can reach the side edge of any grid but never lies far outside it.
      */
     const val MAX_MAGNITUDE: Float = 30f
