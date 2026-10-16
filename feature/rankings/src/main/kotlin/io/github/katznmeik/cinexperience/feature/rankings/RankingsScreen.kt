@@ -43,6 +43,7 @@ import io.github.katznmeik.cinexperience.core.model.NO_SCORE_TEXT
 import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChipRow
+import io.github.katznmeik.cinexperience.core.ui.component.InfoText
 import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
@@ -245,14 +246,4 @@ internal fun RankedItem.accessibilityText(): String = if (position == null || sc
     "$title, ${subtitle.replace(" · ", ", ")}, not rated"
 } else {
     "Rank $position, $title, ${subtitle.replace(" · ", ", ")}, score ${formatScore(score)}"
-}
-
-@Composable
-private fun InfoText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = CinexTheme.colors.textMuted,
-        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-    )
 }

@@ -72,6 +72,7 @@ import io.github.katznmeik.cinexperience.core.seatmapui.seatMapDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.seatStatesDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.viewingAngleText
 import io.github.katznmeik.cinexperience.core.seatmapui.windowSeatMapMaxHeight
+import io.github.katznmeik.cinexperience.core.ui.component.BackMessageContent
 import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
@@ -178,8 +179,8 @@ internal fun HallDetailScreen(
                     onToggleFavourite = onToggleFavourite,
                 )
                 HallDetailUiState.Loading -> BackTopBar(onBack)
-                HallDetailUiState.NotFound -> MessageContent("This hall no longer exists.", onBack)
-                is HallDetailUiState.Error -> MessageContent(state.message, onBack)
+                HallDetailUiState.NotFound -> BackMessageContent("This hall no longer exists.", onBack)
+                is HallDetailUiState.Error -> BackMessageContent(state.message, onBack)
             }
         }
         MessageSnackbarHost(snackbarHostState)
@@ -702,15 +703,4 @@ private fun EmptyLayout(title: String, text: String, button: String, onClick: ()
             Text(button, style = MaterialTheme.typography.labelLarge)
         }
     }
-}
-
-@Composable
-private fun MessageContent(text: String, onBack: () -> Unit) {
-    BackTopBar(onBack)
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = CinexTheme.colors.textMuted,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-    )
 }

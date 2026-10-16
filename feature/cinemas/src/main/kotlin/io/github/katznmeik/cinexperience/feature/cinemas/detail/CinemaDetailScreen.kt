@@ -46,6 +46,7 @@ import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.core.model.NO_SCORE_TEXT
 import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.program.FilmKind
+import io.github.katznmeik.cinexperience.core.ui.component.BackMessageContent
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
@@ -140,25 +141,12 @@ internal fun CinemaDetailScreen(
                 onOpenProgram = onOpenProgram,
             )
             CinemaDetailContent.Loading -> BackTopBar(onBack)
-            CinemaDetailContent.NotFound -> MessageContent("This cinema no longer exists.", onBack)
-            is CinemaDetailContent.Error -> MessageContent(content.message, onBack)
+            CinemaDetailContent.NotFound -> BackMessageContent("This cinema no longer exists.", onBack)
+            is CinemaDetailContent.Error -> BackMessageContent(content.message, onBack)
         }
         MessageSnackbarHost(snackbarHostState)
     }
     EditDialogHost(state.dialog, dialogActions)
-}
-
-@Composable
-private fun MessageContent(text: String, onBack: () -> Unit) {
-    Column {
-        BackTopBar(onBack)
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = CinexTheme.colors.textMuted,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-        )
-    }
 }
 
 @Composable

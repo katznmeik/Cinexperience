@@ -90,7 +90,9 @@ import io.github.katznmeik.cinexperience.core.model.HallCategory
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
+import io.github.katznmeik.cinexperience.core.ui.component.FormMessage
 import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
+import io.github.katznmeik.cinexperience.core.ui.component.MutedText
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
@@ -248,8 +250,8 @@ internal fun VisitEditScreen(
                 )
                 when (state.status) {
                     VisitEditStatus.Loading -> Unit
-                    VisitEditStatus.NotFound -> Message("This visit no longer exists.")
-                    VisitEditStatus.LoadFailed -> Message("Couldn't load the visit.")
+                    VisitEditStatus.NotFound -> FormMessage("This visit no longer exists.")
+                    VisitEditStatus.LoadFailed -> FormMessage("Couldn't load the visit.")
                     VisitEditStatus.Ready -> FormContent(state, photo, actions)
                 }
             }
@@ -877,31 +879,16 @@ private fun DialogHost(dialog: VisitEditDialog?, actions: VisitEditActions) {
         VisitEditDialog.ConfirmDiscard -> AlertDialog(
             onDismissRequest = actions::onDismissDialog,
             title = { Text("Discard this visit?") },
-            text = { DialogText("Your changes will be lost.") },
+            text = { MutedText("Your changes will be lost.") },
             confirmButton = { TextButton(onClick = actions::onConfirmDiscard) { Text("Discard") } },
             dismissButton = { TextButton(onClick = actions::onDismissDialog) { Text("Keep editing") } },
         )
         VisitEditDialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = actions::onDismissDialog,
             title = { Text("Delete this visit?") },
-            text = { DialogText("The visit, its ratings and its photo are deleted. This can't be undone.") },
+            text = { MutedText("The visit, its ratings and its photo are deleted. This can't be undone.") },
             confirmButton = { TextButton(onClick = actions::onConfirmDelete) { Text("Delete") } },
             dismissButton = { TextButton(onClick = actions::onDismissDialog) { Text("Cancel") } },
         )
     }
-}
-
-@Composable
-private fun DialogText(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.textMuted)
-}
-
-@Composable
-private fun Message(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = CinexTheme.colors.textMuted,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-    )
 }

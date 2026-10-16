@@ -88,7 +88,9 @@ import io.github.katznmeik.cinexperience.core.seatmapui.blockName
 import io.github.katznmeik.cinexperience.core.seatmapui.icon
 import io.github.katznmeik.cinexperience.core.seatmapui.rememberSeatMapViewState
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
+import io.github.katznmeik.cinexperience.core.ui.component.FormMessage
 import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
+import io.github.katznmeik.cinexperience.core.ui.component.MutedText
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.SegmentChipShape
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
@@ -252,9 +254,9 @@ internal fun LayoutEditorScreen(
             )
             when (state.status) {
                 EditorStatus.Loading -> Unit
-                EditorStatus.NotFound -> Message("This hall no longer exists.")
+                EditorStatus.NotFound -> FormMessage("This hall no longer exists.")
                 EditorStatus.LoadFailed -> {
-                    Message("Couldn't load this hall.")
+                    FormMessage("Couldn't load this hall.")
                     TextButton(onClick = actions::onReload, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Try again") }
                 }
                 EditorStatus.Ready -> ReadyContent(state, referenceImage, actions, viewState)
@@ -988,16 +990,6 @@ private fun StepButton(symbol: String, description: String, enabled: Boolean, on
     }
 }
 
-@Composable
-private fun Message(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = CinexTheme.colors.textMuted,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-    )
-}
-
 /** Confirmation and error dialogs (no text fields, so they also work in UI tests). */
 @Composable
 private fun EditorDialogHost(dialog: EditorDialog?, actions: LayoutEditorActions) {
@@ -1006,21 +998,21 @@ private fun EditorDialogHost(dialog: EditorDialog?, actions: LayoutEditorActions
         EditorDialog.ConfirmDiscard -> AlertDialog(
             onDismissRequest = actions::onDismissDialog,
             title = { Text("Discard changes?") },
-            text = { DialogText("Your changes to this layout will be lost.") },
+            text = { MutedText("Your changes to this layout will be lost.") },
             confirmButton = { TextButton(onClick = actions::onConfirmDiscard) { Text("Discard") } },
             dismissButton = { TextButton(onClick = actions::onDismissDialog) { Text("Keep editing") } },
         )
         is EditorDialog.ConfirmSave -> AlertDialog(
             onDismissRequest = actions::onDismissDialog,
             title = { Text(if (dialog.removedSeats.isEmpty()) "Replace the saved layout?" else "Remove seats with visits?") },
-            text = { DialogText(confirmSaveText(dialog)) },
+            text = { MutedText(confirmSaveText(dialog)) },
             confirmButton = { TextButton(onClick = actions::onConfirmSave) { Text("Save anyway") } },
             dismissButton = { TextButton(onClick = actions::onDismissDialog) { Text("Keep editing") } },
         )
         is EditorDialog.SaveFailed -> AlertDialog(
             onDismissRequest = actions::onDismissDialog,
             title = { Text("Couldn't save") },
-            text = { DialogText(dialog.message) },
+            text = { MutedText(dialog.message) },
             confirmButton = {
                 if (dialog.canReload) {
                     TextButton(onClick = actions::onReload) { Text("Reload") }
@@ -1035,11 +1027,6 @@ private fun EditorDialogHost(dialog: EditorDialog?, actions: LayoutEditorActions
             },
         )
     }
-}
-
-@Composable
-private fun DialogText(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.textMuted)
 }
 
 /** Body of the §6.5 warning: which seats with data would disappear. */

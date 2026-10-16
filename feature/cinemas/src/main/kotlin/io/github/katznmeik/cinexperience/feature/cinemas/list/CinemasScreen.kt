@@ -35,6 +35,7 @@ import io.github.katznmeik.cinexperience.core.model.CinemaSummary
 import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChipRow
+import io.github.katznmeik.cinexperience.core.ui.component.InfoText
 import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.PrimaryActionButton
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
@@ -198,14 +199,4 @@ private fun CinemaCard(summary: CinemaSummary, onClick: () -> Unit) {
             )
         }
     }
-}
-
-@Composable
-private fun InfoText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = CinexTheme.colors.textMuted,
-        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-    )
 }
