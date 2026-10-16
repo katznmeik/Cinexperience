@@ -40,7 +40,7 @@ class AppClockTest {
         waitForText(FILM) // "Now showing" on the cinema's page
 
         composeRule.onNodeWithText("Show all in Program").performScrollTo().performClick()
-        waitForText("⁨Kant Kino⁩ · Any time · All versions")
+        waitForText("\u2068Kant Kino\u2069 · Any time · All versions")
         composeRule.waitUntil(timeoutMillis = TIMEOUT_MS) { textNodes("Show all in Program").isEmpty() } // the cinema's page is gone
         waitForText(FILM) // a result of the Program tab
     }
