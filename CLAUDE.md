@@ -226,7 +226,13 @@ Don't duplicate config in module build files.
   reach into row 0 (`hitTest`). Width and distance bounds live in
   `ScreenSizeRules` (core:model: width > 0 and ≤ 120 = 2 × `MAX_COLUMNS`,
   distance 0–15), shared by the editor's `ScreenRules`, the repositories and the
-  backup validator.
+  backup validator. The editor sets distances of at least 0.5
+  (`ScreenRules.MIN_DISTANCE`), so the bar's line stays half a row in front of
+  row 0, whose touches `hitTest` keeps for painting; a stored 0 stays until the
+  distance is changed. `LayoutDraft.start` snaps a stored width within the
+  editor's range and a stored distance up to 15 to the 0.5 steps (a distance
+  under 0.5 to 0 or 0.5); other widths and farther distances are kept, like an
+  offset beyond the grid.
 - **Schema changes:** the database is at version 2 (`MIGRATION_1_2` added
   `cinema.is_favourite` and `hall.screen_offset`). Bump the `CinexDatabase`
   version, add a migration to `ALL_MIGRATIONS`, commit the exported
@@ -437,7 +443,9 @@ Don't duplicate config in module build files.
   <seed> <fixture>` rewrites the seed's layouts (labels, numbers and kinds from
   the plan; columns, spacer rows and aisles from the drawn seats; a balcony
   keeps the gap yorck.de draws above it; existing gaps/aisles kept where the seats are
-  unchanged; halls without a screen get columns × 1.5) and
+  unchanged; halls without a screen get columns × 1.5, a screen as wide as the
+  old grid follows the new one unless it was measured (delphi LUX),
+  `test_screen_width.py`) and
   `core/data/src/test/resources/seed/yorck-seat-numbers.json` (Yorck's row
   label, seat text and kind of every seat). Where Yorck's kinds are wrong, the
   tool's `KIND_OVERRIDES` (seedKey → kind of every place, with the reason) sets
