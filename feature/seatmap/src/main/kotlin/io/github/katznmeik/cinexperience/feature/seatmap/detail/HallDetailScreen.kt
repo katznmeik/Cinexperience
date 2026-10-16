@@ -661,6 +661,8 @@ internal fun HallVisitRow.detailText(): String = listOfNotNull(
 
 @Composable
 private fun VisitHistoryRow(visit: HallVisitRow, onClick: () -> Unit) {
+    // The stars grow with the text: with large text they go under it, so the texts keep the width.
+    val starsBelow = isLargeText()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -685,8 +687,9 @@ private fun VisitHistoryRow(visit: HallVisitRow, onClick: () -> Unit) {
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (starsBelow) visit.seatRating?.let { StarRatingDisplay(it.value, Modifier.padding(top = 2.dp)) }
         }
-        visit.seatRating?.let { StarRatingDisplay(it.value) }
+        if (!starsBelow) visit.seatRating?.let { StarRatingDisplay(it.value) }
     }
 }
 
