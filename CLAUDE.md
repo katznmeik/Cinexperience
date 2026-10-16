@@ -14,7 +14,10 @@ The script is idempotent. It installs the SDK into `$HOME/android-sdk`, writes
 `local.properties`, and installs a Gradle init script into `~/.gradle/init.d`
 that routes Maven Central through Google's mirror, because Maven Central often
 answers HTTP 429 there. Set `CINEX_NO_MAVEN_MIRROR=1` to skip the mirror. JDK 21
-is required.
+is required. Downloads are checked against the published checksums: the
+command-line tools zip in the script (`CMDLINE_TOOLS_SHA1`, Google publishes only
+SHA-1) and the Gradle distribution (`distributionSha256Sum` in
+`gradle-wrapper.properties`); a version update changes the checksum too.
 
 ## Commands
 

@@ -9,8 +9,13 @@
 set -euo pipefail
 
 SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/android-sdk}}"
-# Command-line tools 23.0 (stable channel).
+# Command-line tools 23.0 (stable channel) and the checksum Google publishes for exactly
+# this zip: the SHA-1 in its SDK repository manifest
+# (https://dl.google.com/android/repository/repository2-3.xml, the list sdkmanager
+# verifies its own downloads against; Google publishes no SHA-256 for this build).
+# A different build needs its own checksum.
 CMDLINE_TOOLS_BUILD="${CMDLINE_TOOLS_BUILD:-16111833}"
+CMDLINE_TOOLS_SHA1="${CMDLINE_TOOLS_SHA1:-e025545c62a8e64c7559119566a569fb1dec5f60}"
 PACKAGES=(
   "platform-tools"
   "platforms;android-37.0"   # compileSdk (see gradle/libs.versions.toml)
@@ -36,8 +41,15 @@ if [[ ! -x "$SDKMANAGER" ]]; then
   echo "Installing Android command-line tools ($CMDLINE_TOOLS_BUILD) into $SDK_ROOT"
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
-  retry curl -fsSL -o "$tmp/cmdline-tools.zip" \
-    "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_BUILD}_latest.zip"
+  zip_name="commandlinetools-linux-${CMDLINE_TOOLS_BUILD}_latest.zip"
+  retry curl -fsSL -o "$tmp/cmdline-tools.zip" "https://dl.google.com/android/repository/$zip_name"
+  actual_sha1="$(sha1sum "$tmp/cmdline-tools.zip" | cut -d ' ' -f 1)"
+  if [[ "$actual_sha1" != "$CMDLINE_TOOLS_SHA1" ]]; then
+    echo "ERROR: checksum mismatch for $zip_name: SHA-1 $actual_sha1, expected $CMDLINE_TOOLS_SHA1." >&2
+    echo "The download is not the file Google published, so nothing was installed." >&2
+    echo "If you changed CMDLINE_TOOLS_BUILD, also set CMDLINE_TOOLS_SHA1 to the SHA-1 Google publishes for that zip." >&2
+    exit 1
+  fi
   mkdir -p "$tmp/unzipped"
   unzip -q "$tmp/cmdline-tools.zip" -d "$tmp/unzipped"
   mkdir -p "$SDK_ROOT/cmdline-tools"
