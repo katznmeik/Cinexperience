@@ -87,9 +87,9 @@ internal class ValidationProblem(val detail: String, val missingFile: Boolean = 
  * has a safe name in its folder and is in [files].
  *
  * Size limits, so no imported row is too large for Android to read (2 MB per
- * row) or slows every list down: at most [DataLimits.MAX_HALLS] halls; names, addresses and keys at most
- * [TextLimits.MAX_NAME_LENGTH] code points, notes and film titles at most
- * [TextLimits.MAX_LONG_TEXT_LENGTH], row labels at most
+ * row) or slows every list down: at most [DataLimits.MAX_HALLS] halls; names,
+ * addresses and keys at most [TextLimits.MAX_NAME_LENGTH] code points, notes
+ * and film titles at most [TextLimits.MAX_LONG_TEXT_LENGTH], row labels at most
  * [TextLimits.MAX_ROW_LABEL_LENGTH]; layouts within [SeatLayout.MAX_ROWS] ×
  * [SeatLayout.MAX_COLUMNS], their JSON at most [LayoutJson.MAX_JSON_LENGTH]
  * chars and not much longer than this app's own encoding of the layout

@@ -262,7 +262,8 @@ Don't duplicate config in module build files.
   has, and removed again if the transaction fails). While
   `BackupRepository.isImporting` is true the UI blocks every other write
   (tabs, Back, Settings rows); Back is also blocked while an export runs (it
-  runs in the Settings ViewModel, which Back would clear). Once the transaction has committed, nothing
+  runs in the Settings ViewModel, which Back would clear). Once the
+  transaction has committed, nothing
   (progress callbacks, file clean-up, pruning, seeding, even Errors) can turn
   the import into a failure or delete its safety copy (`onCommitted`). Failures
   are `BackupException`s with user-facing messages. The layout JSON inside is
