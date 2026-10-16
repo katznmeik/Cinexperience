@@ -45,7 +45,9 @@ class AppAccessibilityTest(private val fontScale: Float) {
         composeRule.onNodeWithTag(tab.testTag).performClick()
         composeRule.waitForIdle()
         if (readyText != null) {
-            composeRule.waitUntil(timeoutMillis = 5_000) { composeRule.onAllNodesWithText(readyText).fetchSemanticsNodes().isNotEmpty() }
+            composeRule.waitUntil(conditionDescription = "\"$readyText\" is shown", timeoutMillis = 5_000) {
+                composeRule.onAllNodesWithText(readyText).fetchSemanticsNodes().isNotEmpty()
+            }
             composeRule.waitForIdle()
         }
         if (fontScale != 1f) composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/tab_${tab.name.lowercase()}_${fontScaleSuffix(fontScale)}.png")
