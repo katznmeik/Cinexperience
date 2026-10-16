@@ -44,8 +44,9 @@ if [[ ! -x "$SDKMANAGER" ]]; then
   zip_name="commandlinetools-linux-${CMDLINE_TOOLS_BUILD}_latest.zip"
   retry curl -fsSL -o "$tmp/cmdline-tools.zip" "https://dl.google.com/android/repository/$zip_name"
   actual_sha1="$(sha1sum "$tmp/cmdline-tools.zip" | cut -d ' ' -f 1)"
-  if [[ "$actual_sha1" != "$CMDLINE_TOOLS_SHA1" ]]; then
-    echo "ERROR: checksum mismatch for $zip_name: SHA-1 $actual_sha1, expected $CMDLINE_TOOLS_SHA1." >&2
+  expected_sha1="${CMDLINE_TOOLS_SHA1,,}" # sha1sum prints lowercase hex
+  if [[ "$actual_sha1" != "$expected_sha1" ]]; then
+    echo "ERROR: checksum mismatch for $zip_name: SHA-1 $actual_sha1, expected $expected_sha1." >&2
     echo "The download is not the file Google published, so nothing was installed." >&2
     echo "If you changed CMDLINE_TOOLS_BUILD, also set CMDLINE_TOOLS_SHA1 to the SHA-1 Google publishes for that zip." >&2
     exit 1
