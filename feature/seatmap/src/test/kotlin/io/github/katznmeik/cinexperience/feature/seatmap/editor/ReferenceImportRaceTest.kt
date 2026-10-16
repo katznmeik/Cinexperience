@@ -1,9 +1,12 @@
 package io.github.katznmeik.cinexperience.feature.seatmap.editor
 
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
+import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.Cinema
 import io.github.katznmeik.cinexperience.core.model.Hall
+import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
+import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.FakeStore
@@ -14,11 +17,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.time.LocalDate
 
 /**
  * A reference screenshot that is still being copied when the editor saves or
- * discards (spec §6.5): a save waits for it and saves it, a discard deletes it
- * once it lands. Imports are held at a gate, so the order is fixed.
+ * discards (spec §6.5): saving is refused until it has landed (so it is never
+ * missing from a save, and the user is never stuck on "Saving"), and a discard
+ * deletes it once it lands. Imports are held at a gate, so the order is fixed.
  */
 class ReferenceImportRaceTest {
 
@@ -53,15 +58,19 @@ class ReferenceImportRaceTest {
     private fun landed(n: Int) = "${ReferenceImageStore.FOLDER}/hall-$HALL-$n.jpg"
 
     @Test
-    fun aSaveWaitsForTheScreenshotStillBeingImportedAndSavesIt() {
+    fun saveIsRefusedWhileAScreenshotIsBeingImportedAndSavesItOnceItLanded() {
         vm.onReferenceImagePicked("content://picker/1")
         assertTrue(state.isImportingReference)
 
+        // Refused, not waiting: nothing is "Saving", so Discard and Back stay available.
         vm.save()
-        assertTrue(state.isSaving)
+        assertFalse(state.isSaving)
         assertFalse(state.isClosed)
+        assertEquals(OLD_IMAGE, storedHall().referenceImagePath)
 
         images.open(0)
+        assertFalse(state.isImportingReference)
+        vm.save()
         assertTrue(state.isClosed)
         assertEquals(landed(1), storedHall().referenceImagePath)
         assertEquals(setOf(landed(1)), files.files) // the replaced screenshot is gone, nothing left over
@@ -69,22 +78,46 @@ class ReferenceImportRaceTest {
     }
 
     @Test
-    fun aSaveWaitsForEveryRunningImport() {
-        // "Replace" can start a second import while the first one runs.
+    fun saveStaysRefusedUntilEveryRunningImportHasLanded() {
+        // The screen starts one import at a time; the ViewModel copes with two anyway.
         vm.onReferenceImagePicked("content://picker/1")
         vm.onReferenceImagePicked("content://picker/2")
-        vm.save()
 
         images.open(1) // the second pick lands first
-        assertTrue(state.isSaving)
+        vm.save()
         assertTrue(state.isImportingReference)
-        assertFalse(state.isClosed)
+        assertFalse(state.isSaving)
 
-        images.open(0) // the last one to land is the draft's, like without a save
+        images.open(0) // the last one to land is the draft's
+        vm.save()
         assertTrue(state.isClosed)
         assertEquals(landed(2), storedHall().referenceImagePath)
         assertEquals(setOf(landed(2)), files.files)
         assertEquals(setOf(landed(1), OLD_IMAGE), files.deleted.toSet())
+    }
+
+    @Test
+    fun theSaveConfirmationIsRefusedWhileAScreenshotIsBeingImported() {
+        // Removing seat 8, which has a visit, asks before saving.
+        repository.store.value = repository.store.value.copy(
+            visits = listOf(Visit(id = 1, hallId = HALL, date = LocalDate.of(2026, 10, 1), seatId = SeatId(8))),
+        )
+        vm.selectTool(CellType.GAP)
+        vm.tapCell(1, 3)
+        vm.save()
+        assertTrue(state.dialog is EditorDialog.ConfirmSave)
+
+        // (The dialog covers the screen; the ViewModel refuses the confirmation anyway.)
+        vm.onReferenceImagePicked("content://picker/1")
+        vm.confirmSave()
+        assertTrue(state.dialog is EditorDialog.ConfirmSave)
+        assertFalse(state.isSaving)
+
+        images.open(0)
+        vm.confirmSave()
+        assertTrue(state.isClosed)
+        assertEquals(landed(1), storedHall().referenceImagePath)
+        assertFalse(SeatId(8) in storedHall().layout!!.seatIds)
     }
 
     @Test
