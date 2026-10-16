@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.core.program
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -12,24 +13,35 @@ import java.io.File
  * code, and only its `net/` package (the HTTPS transport and the download policy).
  * Fails the build if
  *
- * - any non-test source (`src/<set>/…` except test source sets) of any module,
- *   outside `core/program/src/…/core/program/net/`, uses a network or remote-media
- *   API: `java.net` (except `URI`), `javax.net`, `URLConnection`, `openConnection`,
- *   `openStream`, `.toURL(`, `android.net.http`, `android.webkit` / WebView,
- *   `DownloadManager`, MediaPlayer, VideoView, ExoPlayer / media3, socket channels,
- *   OkHttp, Retrofit, Ktor, Volley, Cronet, …;
+ * - any non-test source (`src/<set>/…` except the test sets `test`, `androidTest`
+ *   and `test<Variant>` / `androidTest<Variant>`; `testFixtures` and a set such as
+ *   `testing` are scanned) of any module, outside `core/program/src/…/core/program/net/`,
+ *   uses a network or remote-media API: `java.net` (except `URI`), `javax.net`,
+ *   `URLConnection`, `openConnection`, `openStream`, `.toURL(`, `android.net.http`,
+ *   `android.webkit` / WebView, `DownloadManager`, MediaPlayer, VideoView, ExoPlayer /
+ *   media3, socket channels, OkHttp, Retrofit, Ktor, Volley, Cronet, …, or native or
+ *   other code from outside the sources: `System.loadLibrary` / `System.load`,
+ *   `exec(` / `ProcessBuilder`, `dalvik.system` (dex class loaders);
  * - any manifest of any source set other than core:program's declares the
  *   INTERNET permission, or any manifest allows cleartext traffic;
  * - a resource (any source set) is a network security config outside
  *   `app/src/main/res/xml/`, trusts user certificates, allows cleartext or has
  *   `debug-overrides`, or a layout uses a WebView;
- * - a build file or the version catalog pulls in a network, image-loading,
- *   media, WebView, Firebase, Sentry or Play services library.
+ * - a build file (`*.gradle.kts`, Groovy `*.gradle`, the convention plugins in
+ *   `build-logic/`) or a version catalog (`*.toml`) pulls in a network,
+ *   image-loading, media, WebView, Firebase, Sentry or Play services library, a
+ *   file dependency (`implementation(files(…))`, `fileTree(…)`) or a native build
+ *   (`externalNativeBuild`);
+ * - a compiled library or code file (`.jar`, `.aar`, `.so`, `.dex`, `.class`) is
+ *   anywhere in the tree, in any module or source set, except the Gradle wrapper's
+ *   `gradle/wrapper/gradle-wrapper.jar`: such a file has no Maven group, so
+ *   `:app:checkReleaseDependencyGroups` can't see it.
  *
  * The scan is a plain text search, so a mention in a comment counts too. Its
  * inputs are declared in core/program's build file, so it reruns when any
- * module changes. The merged manifest's permissions are checked in app
- * (`AppPermissionsTest`), the release dependencies by `:app:checkReleaseDependencyGroups`.
+ * module changes. The merged manifests' permissions are checked in app
+ * (`AppPermissionsTest`, debug and release), the release dependencies by
+ * `:app:checkReleaseDependencyGroups`.
  */
 class NetworkConfinementTest {
 
@@ -50,6 +62,9 @@ class NetworkConfinementTest {
         assertTrue(scan.scannedFiles.any { it.path.endsWith("net/HttpsProgramTransport.kt") })
         assertTrue(scan.scannedFiles.any { it.path.endsWith("res/xml/network_security_config.xml") })
         assertTrue(scan.scannedFiles.any { it.path.endsWith("libs.versions.toml") })
+        assertTrue(scan.scannedFiles.any { it.path.endsWith("scripts/maven-central-mirror.init.gradle") }) // Groovy
+        assertTrue(scan.scannedFiles.any { it.path.endsWith("build-logic/convention/src/main/kotlin/AndroidApplicationConventionPlugin.kt") })
+        assertTrue(scan.scannedFiles.any { it.path.endsWith("gradle/wrapper/gradle-wrapper.jar") }) // the one allowed binary
 
         assertEquals("Network code outside core:program/net:\n" + scan.violations.joinToString("\n"), emptyList<String>(), scan.violations)
     }
@@ -121,6 +136,40 @@ class NetworkConfinementTest {
     }
 
     @Test
+    fun sourceRulesCatchNativeCodeProcessesAndDexLoading() {
+        val caught = listOf(
+            "System.loadLibrary(\"vendor\")",
+            "init { System.loadLibrary(\"vendor\") }",
+            "System.load(\"/data/local/tmp/libvendor.so\")",
+            "java.lang.System.load(path)",
+            "listOf(\"vendor\").forEach(System::loadLibrary)",
+            "Runtime.getRuntime().loadLibrary(\"vendor\")",
+            "Runtime.getRuntime().load(path)",
+            "Runtime.getRuntime().exec(\"ping example.com\")",
+            "val process = runtime.exec(arrayOf(\"sh\", \"-c\", command))",
+            "ProcessBuilder(\"sh\", \"-c\", command).start()",
+            "new ProcessBuilder(command).start();",
+            "import dalvik.system.DexClassLoader",
+            "val loader = dalvik.system.InMemoryDexClassLoader(buffer, parent)",
+            "Class.forName(\"dalvik.system.PathClassLoader\")",
+        )
+        for (line in caught) {
+            assertTrue(line, NetworkScan.sourceViolations(line).isNotEmpty())
+        }
+        val allowed = listOf(
+            "executor.execute(task)",
+            "db.execSQL(\"DELETE FROM visit\")",
+            "ServiceLoader.load(Plugin::class.java)",
+            "val loaded = repository.load()",
+            "ProcessLifecycleOwner.get()",
+            "// The photo is loaded on a background thread.",
+        )
+        for (line in allowed) {
+            assertEquals(line, emptyList<String>(), NetworkScan.sourceViolations(line))
+        }
+    }
+
+    @Test
     fun manifestRulesCatchTheInternetPermissionAndCleartext() {
         assertTrue(NetworkScan.manifestViolations("<uses-permission android:name=\"android.permission.INTERNET\" />", networkModule = false).isNotEmpty())
         assertEquals(emptyList<String>(), NetworkScan.manifestViolations("<uses-permission android:name=\"android.permission.INTERNET\" />", networkModule = true))
@@ -164,6 +213,115 @@ class NetworkConfinementTest {
         assertEquals(emptyList<String>(), NetworkScan.buildViolations("forbidden.set(setOf(\"androidx.webkit\")) // network-scan: denylist"))
         assertTrue(NetworkScan.buildViolations("// network-scan: denylist\nimplementation(\"androidx.webkit:webkit:1.12.0\")").isNotEmpty())
         assertTrue(NetworkScan.buildViolations("implementation(\"androidx.webkit:webkit:1.12.0\") // network-scan: denylist and more").isNotEmpty())
+    }
+
+    @Test
+    fun buildRulesCatchFileDependenciesAndNativeBuilds() {
+        val caught = listOf(
+            // Kotlin DSL
+            "implementation(files(\"libs/vendor.aar\"))",
+            "implementation(fileTree(mapOf(\"dir\" to \"libs\", \"include\" to listOf(\"*.jar\"))))",
+            "releaseImplementation(project.files(\"/opt/vendor/vendor.jar\"))",
+            "api(rootProject.layout.files(\"../vendor.jar\"))",
+            "runtimeOnly(files(downloadVendor))",
+            "\"implementation\"(files(\"libs/vendor.jar\"))",
+            "dependencies.add(\"implementation\", files(\"libs/vendor.jar\"))",
+            // Groovy
+            "implementation files('libs/vendor.aar')",
+            "implementation fileTree(dir: 'libs', include: ['*.jar'])",
+            "compileOnly files(\"libs/vendor.jar\")",
+            // Native code built by the module
+            "externalNativeBuild { cmake { path(\"src/main/cpp/CMakeLists.txt\") } }",
+            "android.externalNativeBuild.ndkBuild.path = file(\"Android.mk\")",
+        )
+        for (line in caught) assertTrue(line, NetworkScan.buildViolations(line).isNotEmpty())
+        val allowed = listOf(
+            "implementation(projects.core.model)",
+            "api(libs.kotlinx.coroutines.core)",
+            "testImplementation(libs.kotlinx.coroutines.test)",
+            "val sources = fileTree(rootDir) { include(\"**/*.kt\") }",
+            "inputs.files(sources, resources)",
+            "from(files(\"../gradle/libs.versions.toml\"))",
+            "storeFile = file(releaseKeystorePath!!)",
+        )
+        for (line in allowed) assertEquals(line, emptyList<String>(), NetworkScan.buildViolations(line))
+    }
+
+    @Test
+    fun binaryRulesCatchVendoredLibrariesAnywhere() {
+        val caught = listOf(
+            "feature/x/libs/vendor.aar",
+            "feature/x/libs/vendor.jar",
+            "app/src/main/jniLibs/arm64-v8a/libvendor.so",
+            "app/src/main/assets/plugin.dex",
+            "app/src/main/assets/plugin.jar",
+            "core/data/src/test/resources/fixture.jar",
+            "classes/a/A.class",
+            "gradle/wrapper/other.jar",
+        )
+        for (path in caught) assertTrue(path, NetworkScan.binaryViolations(path).isNotEmpty())
+        // An APK isn't a dependency (and an IDE may save one next to the sources); loading code from one needs dalvik.system.
+        val allowed = listOf(
+            "gradle/wrapper/gradle-wrapper.jar",
+            "core/data/src/test/resources/backup/v1/manifest.json",
+            "app/src/main/res/drawable/photo.png",
+            "app/release/app-release.apk",
+            "jar",
+        )
+        for (path in allowed) {
+            assertEquals(path, emptyList<String>(), NetworkScan.binaryViolations(path))
+        }
+    }
+
+    @Test
+    fun onlyRealTestSetsAreSkipped() {
+        for (set in listOf("test", "testDebug", "testRelease", "testFreeDebug", "androidTest", "androidTestDebug")) {
+            assertTrue(set, NetworkScan.isTestSet(set))
+        }
+        // Sets that only look like tests are compiled into the app (or can be: testFixtures).
+        for (set in listOf("main", "debug", "release", "testing", "tests", "testable", "test-debug", "testFixtures", "testFixturesDebug", "androidTesting", "screenshotTest")) {
+            assertFalse(set, NetworkScan.isTestSet(set))
+        }
+    }
+
+    @Test
+    fun theScanFindsBinariesOtherBuildFilesAndSetsThatOnlyLookLikeTests() {
+        val root = temp.root
+        fun write(path: String, text: String) = File(root, path).apply { parentFile!!.mkdirs() }.writeText(text)
+        write("settings.gradle.kts", "rootProject.name = \"Cinexperience\"")
+        write("gradle/wrapper/gradle-wrapper.jar", "PK") // allowed
+        write("feature/x/libs/vendor.aar", "PK")
+        write("feature/x/src/main/jniLibs/arm64-v8a/libvendor.so", "ELF")
+        write("feature/x/src/test/resources/fixture.jar", "PK") // in a test set too
+        write("feature/x/build/intermediates/compiled.jar", "PK") // build output is skipped
+        write("feature/x/build.gradle", "dependencies { implementation 'com.squareup.okhttp3:okhttp:4.12.0' }") // Groovy
+        write("feature/y/build.gradle.kts", "dependencies { implementation(fileTree(mapOf(\"dir\" to \"libs\"))) }")
+        write("gradle/vendor.versions.toml", "okhttp = \"com.squareup.okhttp3:okhttp:4.12.0\"") // a second catalog
+        write("build-logic/convention/src/main/kotlin/VendorPlugin.kt", "\"implementation\"(\"com.github.bumptech.glide:glide:4.16.0\")")
+        write("feature/x/src/testing/kotlin/a/A.kt", "import java.net.URL") // not a test set
+        write("feature/x/src/testFixtures/kotlin/a/B.kt", "Runtime.getRuntime().exec(\"sh\")")
+        write("feature/x/src/main/kotlin/a/C.kt", "init { System.loadLibrary(\"vendor\") }")
+        write("feature/x/src/testDebug/kotlin/a/DTest.kt", "import java.net.URL") // a test set: may
+        write("feature/x/src/androidTestDebug/kotlin/a/ETest.kt", "ProcessBuilder(\"sh\")") // a test set: may
+
+        val scan = NetworkScan.scan(root)
+        assertEquals(
+            scan.violations.joinToString("\n"),
+            setOf(
+                "build-logic/convention/src/main/kotlin/VendorPlugin.kt",
+                "feature/x/build.gradle",
+                "feature/x/libs/vendor.aar",
+                "feature/x/src/main/jniLibs/arm64-v8a/libvendor.so",
+                "feature/x/src/main/kotlin/a/C.kt",
+                "feature/x/src/test/resources/fixture.jar",
+                "feature/x/src/testFixtures/kotlin/a/B.kt",
+                "feature/x/src/testing/kotlin/a/A.kt",
+                "feature/y/build.gradle.kts",
+                "gradle/vendor.versions.toml",
+            ),
+            scan.violations.map { it.substringBefore(':') }.toSet(),
+        )
+        assertTrue(scan.scannedFiles.any { it.path.endsWith("gradle/wrapper/gradle-wrapper.jar") })
     }
 
     @Test
@@ -211,6 +369,7 @@ internal object NetworkScan {
     private const val NETWORK_MODULE = "core/program"
     private const val NETWORK_PACKAGE_DIR = "/io/github/katznmeik/cinexperience/core/program/net/"
     private const val ALLOWED_NETWORK_CONFIG_DIR = "app/src/main/res/xml/"
+    private const val BUILD_LOGIC_DIR = "build-logic/"
 
     private val SOURCE_RULES: List<Pair<String, Regex>> = listOf(
         "java.net (only URI is allowed)" to Regex("""\bjava\.net\.(?!(?:URI|URISyntaxException)\b)"""),
@@ -231,12 +390,32 @@ internal object NetworkScan {
         "Cronet" to Regex("""(?i)\bcronet|\borg\.chromium\.net\b"""),
         "Apache HTTP" to Regex("""\borg\.apache\.http\b"""),
         "Netty" to Regex("""\bio\.netty\b"""),
+        // Native code (whose sockets need no Java API), other programs and dex code loaded at runtime.
+        "native libraries" to Regex("""\bloadLibrary\b|\bSystem\s*(?:\.|::)\s*load\b|\bgetRuntime\s*\(\s*\)\s*\.\s*load\b"""),
+        "processes" to Regex("""\bProcessBuilder\b|\.\s*exec\s*\(|::\s*exec\b"""),
+        "dex class loaders" to Regex("""\bdalvik\.system\b"""),
     )
 
     private val BUILD_RULE = Regex(
         """(?i)\b(?:okhttp3?|retrofit2?|ktor|volley|cronet|netty|glide|picasso|fresco|exoplayer|media3|firebase|sentry|play-services)\b""" +
             """|\bcoil\b|coil-|coil3|io\.coil-kt|androidx\.webkit|com\.google\.android\.gms""",
     )
+
+    /** Ways around the release dependency check: a dependency on files has no Maven group; native code is built here. */
+    private val BUILD_CODE_RULES: List<Pair<String, Regex>> = listOf(
+        "file dependency" to Regex(
+            """\b(?:\w*[Ii]mplementation|api|\w*Api|\w*[Rr]untimeOnly|\w*[Cc]ompileOnly)["']?\s*\(?\s*(?:\w+\s*\.\s*)*(?:files|fileTree)\s*\(""" +
+                """|\badd\s*\(\s*["'][^"']*["']\s*,\s*(?:\w+\s*\.\s*)*(?:files|fileTree)\s*\(""",
+        ),
+        "native build" to Regex("""\bexternalNativeBuild\b"""),
+    )
+
+    /** Compiled libraries and code; [ALLOWED_BINARY] is the only one the repository may contain. */
+    private val BINARY_EXTENSIONS = setOf("jar", "aar", "so", "dex", "class")
+    private const val ALLOWED_BINARY = "gradle/wrapper/gradle-wrapper.jar"
+
+    /** `test`, `test<Variant>`, `androidTest`, `androidTest<Variant>`; not `testFixtures` (it can be put on the release classpath). */
+    private val TEST_SET = Regex("""(?:test(?!Fixtures)|androidTest)(?:[A-Z].*)?""")
     private val INTERNET = Regex("""android\.permission\.INTERNET\b""")
     private val CLEARTEXT_MANIFEST = Regex("""usesCleartextTraffic\s*=\s*["']true["']""")
     private val XML_RULES: List<Pair<String, Regex>> = listOf(
@@ -290,14 +469,25 @@ internal object NetworkScan {
     }
 
     /**
-     * Network libraries named in a build file. A line ending with [DENYLIST_MARKER]
-     * is a list of forbidden groups (`:app:checkReleaseDependencyGroups`) and is skipped.
+     * Network libraries, file dependencies and native builds in a build file. For the
+     * libraries, a line ending with [DENYLIST_MARKER] is a list of forbidden groups
+     * (`:app:checkReleaseDependencyGroups`) and is skipped.
      */
     fun buildViolations(text: String): List<String> =
         BUILD_RULE.findAll(text)
             .filterNot { match -> lineAt(text, match.range.first).trimEnd().endsWith(DENYLIST_MARKER) }
             .map { "${lineOf(text, it.range.first)}: network or media library '${it.value}'" }
-            .toList()
+            .toList() + matches(text, BUILD_CODE_RULES)
+
+    /** A compiled library or code file at [relative] (the repository-relative path), other than [ALLOWED_BINARY]. */
+    fun binaryViolations(relative: String): List<String> {
+        val extension = relative.substringAfterLast('/').substringAfterLast('.', "")
+        if (extension !in BINARY_EXTENSIONS || relative == ALLOWED_BINARY) return emptyList()
+        return listOf("1: compiled library or code (.$extension); vendored binaries bypass the dependency check")
+    }
+
+    /** True for a test source set, whose sources may use anything (they never reach the app). */
+    fun isTestSet(set: String): Boolean = TEST_SET.matches(set)
 
     private const val DENYLIST_MARKER = "// network-scan: denylist"
 
@@ -314,6 +504,7 @@ internal object NetworkScan {
             val name = file.name
             val sourceSet = sourceSetOf(relative)
             val found: List<String> = when {
+                file.extension in BINARY_EXTENSIONS -> binaryViolations(relative)
                 name == "AndroidManifest.xml" && sourceSet != null ->
                     manifestViolations(file.readText(), moduleOf(root, file) == NETWORK_MODULE)
                 sourceSet != null && file.extension == "xml" && relative.contains("/src/$sourceSet/res/") -> buildList {
@@ -322,10 +513,13 @@ internal object NetworkScan {
                     }
                     addAll(resourceViolations(file.parentFile.name, file.readText()))
                 }
-                name.endsWith(".gradle.kts") || name == "libs.versions.toml" -> buildViolations(file.readText())
+                name.endsWith(".gradle.kts") || name.endsWith(".gradle") || file.extension == "toml" -> buildViolations(file.readText())
                 sourceSet != null && !isTestSet(sourceSet) && file.extension in SOURCE_EXTENSIONS -> {
+                    val text = file.readText()
                     val allowed = moduleOf(root, file) == NETWORK_MODULE && relative.contains(NETWORK_PACKAGE_DIR)
-                    if (allowed) emptyList() else sourceViolations(file.readText())
+                    // The convention plugins are build files too.
+                    (if (allowed) emptyList() else sourceViolations(text)) +
+                        (if (relative.startsWith(BUILD_LOGIC_DIR)) buildViolations(text) else emptyList())
                 }
                 else -> return@walk
             }
@@ -340,8 +534,6 @@ internal object NetworkScan {
         val src = if (relative.startsWith("src/")) 0 else relative.indexOf("/src/").takeIf { it >= 0 }?.plus(1) ?: return null
         return relative.substring(src + 4).substringBefore('/').takeIf { it.isNotEmpty() && relative.length > src + 4 + it.length }
     }
-
-    private fun isTestSet(set: String): Boolean = set.startsWith("test") || set.startsWith("androidTest")
 
     private fun walk(root: File, dir: File, visit: (File, String) -> Unit) {
         for (child in dir.listFiles().orEmpty().sortedBy { it.name }) {
