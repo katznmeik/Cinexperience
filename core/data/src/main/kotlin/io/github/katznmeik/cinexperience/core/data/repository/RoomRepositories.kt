@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.core.data.repository
 
 import androidx.room.withTransaction
+import io.github.katznmeik.cinexperience.core.data.DataRules
 import io.github.katznmeik.cinexperience.core.data.db.CinemaEntity
 import io.github.katznmeik.cinexperience.core.data.db.CinemaWithHalls
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
@@ -22,6 +23,9 @@ import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatOverride
 import io.github.katznmeik.cinexperience.core.model.SeatOverrides
+import io.github.katznmeik.cinexperience.core.model.TextLimits
+import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_LONG_TEXT_LENGTH
+import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_NAME_LENGTH
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
 import io.github.katznmeik.cinexperience.core.model.cinemaScores
@@ -42,9 +46,21 @@ internal typealias AwaitReady = suspend () -> Unit
 /** Newest first: by date, then by insertion order. */
 private val NEWEST_FIRST = compareByDescending<Visit> { it.date }.thenByDescending { it.id }
 
-private fun String.requireName(): String = trim().also { require(it.isNotEmpty()) { "Name must not be blank" } }
+/**
+ * Trimmed, non-blank and at most [MAX_NAME_LENGTH] code points. Every text saved
+ * here must fit [TextLimits], the backup validator's limits, so whatever is saved
+ * can be exported (IllegalArgumentException otherwise; the forms cap their
+ * fields, so this is only a defence).
+ */
+private fun String.requireName(): String = trim().also {
+    require(it.isNotEmpty()) { "Name must not be blank" }
+    require(TextLimits.fits(it, MAX_NAME_LENGTH)) { "Name is too long (at most $MAX_NAME_LENGTH code points)" }
+}
 
-private fun String?.cleanText(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
+/** Trimmed, blank → `null`; more than [max] code points → IllegalArgumentException naming [what]. */
+private fun String?.cleanText(max: Int, what: String): String? = this?.trim()?.takeIf { it.isNotEmpty() }?.also {
+    require(TextLimits.fits(it, max)) { "$what is too long (at most $max code points)" }
+}
 
 private fun <T> Flow<T>.prepared(awaitReady: AwaitReady, dispatcher: CoroutineDispatcher): Flow<T> {
     val source = this
@@ -80,8 +96,8 @@ internal class RoomCinemaRepository(
         dao.insert(
             CinemaEntity(
                 name = name.requireName(),
-                address = address.cleanText(),
-                notes = notes.cleanText(),
+                address = address.cleanText(MAX_NAME_LENGTH, "Address"),
+                notes = notes.cleanText(MAX_LONG_TEXT_LENGTH, "Notes"),
                 isPreloaded = false,
                 seedKey = null,
             ),
@@ -89,9 +105,11 @@ internal class RoomCinemaRepository(
 
     override suspend fun updateCinema(cinemaId: Long, name: String, address: String?, notes: String?): Boolean {
         val cleanName = name.requireName()
+        val cleanAddress = address.cleanText(MAX_NAME_LENGTH, "Address")
+        val cleanNotes = notes.cleanText(MAX_LONG_TEXT_LENGTH, "Notes")
         return db.withTransaction {
             val existing = dao.get(cinemaId) ?: return@withTransaction false
-            dao.update(existing.copy(name = cleanName, address = address.cleanText(), notes = notes.cleanText())) > 0
+            dao.update(existing.copy(name = cleanName, address = cleanAddress, notes = cleanNotes)) > 0
         }
     }
 
@@ -186,8 +204,15 @@ internal class RoomHallRepository(
 
     override suspend fun updateHall(hall: Hall): Boolean {
         val cleanName = hall.name.requireName()
+        val cleanNotes = hall.notes.cleanText(MAX_LONG_TEXT_LENGTH, "Notes")
+        val cleanReference = hall.referenceImagePath.cleanText(MAX_NAME_LENGTH, "Reference image path")
         require(ScreenOffsetRules.isValid(hall.screenOffset)) { "Invalid screen offset ${hall.screenOffset}" }
+        require(DataRules.isValidScreenWidth(hall.screenWidth)) { "Invalid screen width ${hall.screenWidth}" }
+        require(DataRules.isValidScreenDistance(hall.screenDistance)) { "Invalid screen distance ${hall.screenDistance}" }
         val layoutJson = hall.layout?.let(LayoutJson::encode)
+        require(layoutJson == null || layoutJson.length <= LayoutJson.MAX_JSON_LENGTH) {
+            "Layout of hall ${hall.id} is too large (${layoutJson?.length} chars of JSON)"
+        }
         return db.withTransaction {
             val existing = hallDao.get(hall.id) ?: return@withTransaction false
             require(existing.cinemaId == hall.cinemaId) { "Moving a hall to another cinema is not supported" }
@@ -221,8 +246,8 @@ internal class RoomHallRepository(
                 screenDistance = hall.screenDistance,
                 // + 0f stores -0.0 as 0.0, so an unchanged offset always compares equal.
                 screenOffset = hall.screenOffset + 0f,
-                referenceImagePath = hall.referenceImagePath.cleanText(),
-                notes = hall.notes.cleanText(),
+                referenceImagePath = cleanReference,
+                notes = cleanNotes,
                 nextSeatId = maxOf(mark, hall.layout?.nextSeatId ?: 0),
             )
             hallDao.update(updated)
@@ -313,9 +338,9 @@ internal class RoomVisitRepository(
         val seatValid = visit.seatId == null || unchangedSeat ||
             hall.layoutJson?.let(LayoutJson::decodeOrNull)?.seatIds?.contains(visit.seatId) == true
         val entity = visit.copy(
-            filmTitle = visit.filmTitle.cleanText(),
-            note = visit.note.cleanText(),
-            photoPath = visit.photoPath.cleanText(),
+            filmTitle = visit.filmTitle.cleanText(MAX_LONG_TEXT_LENGTH, "Film title"),
+            note = visit.note.cleanText(MAX_LONG_TEXT_LENGTH, "Note"),
+            photoPath = visit.photoPath.cleanText(MAX_NAME_LENGTH, "Photo path"),
             seatId = if (seatValid) visit.seatId else null,
         ).toEntity()
         val id = if (stored == null) {

@@ -1,14 +1,19 @@
 package io.github.katznmeik.cinexperience.core.data.backup
 
+import io.github.katznmeik.cinexperience.core.data.DataRules
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
+import io.github.katznmeik.cinexperience.core.data.json.LayoutTooLargeException
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
+import io.github.katznmeik.cinexperience.core.model.TextLimits
+import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_LONG_TEXT_LENGTH
+import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_NAME_LENGTH
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -71,11 +76,21 @@ internal class ValidationProblem(val detail: String, val missingFile: Boolean = 
  * visits → halls, overrides → halls and a seat of that hall's layout; at most
  * one favourite per hall; every layout decodes with this app's layout reader (a
  * layout it can't read is rejected, never carried along silently); known enum
- * keys; ratings 1–5; valid dates; a seat id mark ≥ 1; finite screen geometry;
- * a screen offset that [ScreenOffsetRules.isValid] accepts (finite, 0.5 steps,
- * within ±[ScreenOffsetRules.MAX_MAGNITUDE]), the same rule the repositories
- * enforce, so data saved by the app always exports; every referenced photo / reference image has a safe name in its folder and is
- * in [files].
+ * keys; ratings 1–5; valid dates; a seat id mark in 1..[SeatLayout.MAX_SEAT_ID]
+ * and visit seat ids below it; a finite, positive screen width and a finite,
+ * non-negative screen distance ([DataRules]); a screen offset that
+ * [ScreenOffsetRules.isValid] accepts (finite, 0.5 steps, within
+ * ±[ScreenOffsetRules.MAX_MAGNITUDE]); every referenced photo / reference image
+ * has a safe name in its folder and is in [files].
+ *
+ * Size limits, so no imported row is too large for Android to read (2 MB per
+ * row) or slows every list down: names, addresses and keys at most
+ * [TextLimits.MAX_NAME_LENGTH] code points, notes and film titles at most
+ * [TextLimits.MAX_LONG_TEXT_LENGTH]; layouts within [SeatLayout.MAX_ROWS] ×
+ * [SeatLayout.MAX_COLUMNS] and their JSON, seed record and metadata values at
+ * most [LayoutJson.MAX_JSON_LENGTH] chars; file names are bounded by their
+ * pattern. The repositories enforce the same rules (texts, screen geometry,
+ * offset), so data saved by the app always exports.
  */
 internal object BackupValidator {
 
@@ -86,7 +101,14 @@ internal object BackupValidator {
         for (cinema in data.cinemas) {
             if (cinema.id <= 0 || !cinemaIds.add(cinema.id)) problem("cinema id ${cinema.id} is invalid or used twice.")
             if (cinema.name.isBlank()) problem("cinema ${cinema.id} has no name.")
-            cinema.seedKey?.let { if (it.isBlank() || !cinemaKeys.add(it)) problem("cinema key “$it” is invalid or used twice.") }
+            if (!fitsName(cinema.name)) problem("the name of cinema ${cinema.id} is too long.")
+            val label = "cinema “${cinema.name}”"
+            if (!fitsName(cinema.address)) problem("the address of $label is too long.")
+            if (!fitsLongText(cinema.notes)) problem("the notes of $label are too long.")
+            cinema.seedKey?.let {
+                if (!fitsName(it)) problem("a cinema key is too long.")
+                if (it.isBlank() || !cinemaKeys.add(it)) problem("cinema key “$it” is invalid or used twice.")
+            }
         }
 
         val layouts = HashMap<Long, SeatLayout?>()
@@ -94,17 +116,24 @@ internal object BackupValidator {
         for (hall in data.halls) {
             if (hall.id <= 0 || hall.id in layouts) problem("hall id ${hall.id} is invalid or used twice.")
             if (hall.name.isBlank()) problem("hall ${hall.id} has no name.")
+            if (!fitsName(hall.name)) problem("the name of hall ${hall.id} is too long.")
             val label = "hall “${hall.name}”"
             if (hall.cinemaId !in cinemaIds) problem("$label belongs to a cinema that isn't there.")
-            hall.seedKey?.let { if (it.isBlank() || !hallKeys.add(it)) problem("hall key “$it” is invalid or used twice.") }
-            if (hall.nextSeatId < SeatLayout.FIRST_SEAT_ID) problem("$label has an invalid seat id mark.")
-            if (hall.screenWidth?.isFinite() == false || hall.screenDistance?.isFinite() == false) {
+            hall.seedKey?.let {
+                if (!fitsName(it)) problem("a hall key is too long.")
+                if (it.isBlank() || !hallKeys.add(it)) problem("hall key “$it” is invalid or used twice.")
+            }
+            if (!fitsLongText(hall.notes)) problem("the notes of $label are too long.")
+            if (hall.nextSeatId !in SeatLayout.FIRST_SEAT_ID..SeatLayout.MAX_SEAT_ID) problem("$label has an invalid seat id mark.")
+            if (!DataRules.isValidScreenWidth(hall.screenWidth) || !DataRules.isValidScreenDistance(hall.screenDistance)) {
                 problem("$label has an invalid screen size.")
             }
             if (!ScreenOffsetRules.isValid(hall.screenOffset)) problem("$label has an invalid screen position.")
             layouts[hall.id] = hall.layoutJson?.let { json ->
                 try {
                     LayoutJson.decode(json)
+                } catch (e: LayoutTooLargeException) { // JSON, grid or seat ids beyond the limits
+                    problem("the seat layout of $label is too large.", e)
                 } catch (e: IllegalArgumentException) { // includes SerializationException
                     problem("the seat layout of $label can't be read by this app version.", e)
                 } catch (e: StackOverflowError) {
@@ -124,7 +153,12 @@ internal object BackupValidator {
             } catch (e: DateTimeParseException) {
                 problem("$label has an invalid date.", e)
             }
-            if (visit.seatId != null && visit.seatId < SeatLayout.FIRST_SEAT_ID) problem("$label has an invalid seat.")
+            // A seat id is always below its layout's nextSeatId, so below MAX_SEAT_ID.
+            if (visit.seatId != null && visit.seatId !in SeatLayout.FIRST_SEAT_ID until SeatLayout.MAX_SEAT_ID) {
+                problem("$label has an invalid seat.")
+            }
+            if (!fitsLongText(visit.filmTitle)) problem("the film title of $label is too long.")
+            if (!fitsLongText(visit.note)) problem("the note of $label is too long.")
             val ratings = visit.hallRatings.all + visit.cinemaRatings.all + visit.seatRating
             if (ratings.any { it != null && it !in RATING_RANGE }) problem("$label has a rating outside 1–5.")
             visit.screeningFormat?.let { key ->
@@ -153,6 +187,8 @@ internal object BackupValidator {
         val snapshotKeys = HashSet<Triple<String, String, String>>()
         for (snapshot in data.seedSnapshots) {
             if (snapshot.kind.isBlank() || snapshot.seedKey.isBlank() || snapshot.field.isBlank() ||
+                !fitsName(snapshot.kind) || !fitsName(snapshot.seedKey) || !fitsName(snapshot.field) ||
+                (snapshot.value?.length ?: 0) > LayoutJson.MAX_JSON_LENGTH ||
                 !snapshotKeys.add(Triple(snapshot.kind, snapshot.seedKey, snapshot.field))
             ) {
                 problem("its seed records are invalid.")
@@ -160,7 +196,11 @@ internal object BackupValidator {
         }
         val metadataKeys = HashSet<String>()
         for (entry in data.metadata) {
-            if (entry.key.isBlank() || !metadataKeys.add(entry.key)) problem("its metadata is invalid.")
+            if (entry.key.isBlank() || !fitsName(entry.key) || entry.value.length > LayoutJson.MAX_JSON_LENGTH ||
+                !metadataKeys.add(entry.key)
+            ) {
+                problem("its metadata is invalid.")
+            }
         }
         data.metadata.firstOrNull { it.key == Seeder.KEY_SEED_VERSION }?.let {
             if ((it.value.toIntOrNull() ?: -1) < 0) problem("its seed version is invalid.")
@@ -173,6 +213,10 @@ internal object BackupValidator {
     }
 
     private fun problem(detail: String, cause: Throwable? = null): Nothing = throw ValidationProblem(detail, cause = cause)
+
+    private fun fitsName(text: String?): Boolean = TextLimits.fits(text, MAX_NAME_LENGTH)
+
+    private fun fitsLongText(text: String?): Boolean = TextLimits.fits(text, MAX_LONG_TEXT_LENGTH)
 
     private val RATING_RANGE = 1..5
 }
