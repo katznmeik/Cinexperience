@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -148,7 +149,9 @@ private fun FilmContentList(content: FilmContent.Loaded, state: FilmUiState, act
                         dayHeaderText(day.date, state.today),
                         style = MaterialTheme.typography.labelMedium,
                         color = CinexTheme.colors.textMuted,
-                        modifier = Modifier.padding(horizontal = 20.dp),
+                        modifier = Modifier
+                            .padding(horizontal = 20.dp)
+                            .semantics { heading() },
                     )
                 }
                 items(day.showings, key = { it.showingId }) { item ->
