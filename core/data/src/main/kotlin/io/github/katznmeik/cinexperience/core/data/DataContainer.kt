@@ -34,17 +34,31 @@ import kotlinx.coroutines.withContext
  * Everything is created lazily: the database is opened on first use of a
  * repository, and at that moment seeding (spec §9) starts in [scope]. Repository
  * flows wait for seeding before their first emission, so the cinema list never
- * flashes empty on the very first start. Seeding errors are logged, not thrown.
+ * flashes empty on the very first start. Seeding failures are logged, not thrown:
+ * also an `Error` such as `OutOfMemoryError` (the seeding transaction is rolled
+ * back, and the next start tries again), which would otherwise fail every flow
+ * until the app restarts.
  */
-class DataContainer(
+class DataContainer internal constructor(
     context: Context,
     private val scope: CoroutineScope,
-    private val computeDispatcher: CoroutineDispatcher = Dispatchers.Default,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val computeDispatcher: CoroutineDispatcher,
+    private val ioDispatcher: CoroutineDispatcher,
+    /** Reads the seed JSON; `null` = the shipped asset. Replaceable for tests. */
+    seedSource: (() -> String)?,
 ) {
+    constructor(
+        context: Context,
+        scope: CoroutineScope,
+        computeDispatcher: CoroutineDispatcher = Dispatchers.Default,
+        ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    ) : this(context, scope, computeDispatcher, ioDispatcher, seedSource = null)
+
     private val appContext = context.applicationContext
 
     private val database: CinexDatabase by lazy { CinexDatabase.build(appContext) }
+
+    private val readSeed: () -> String = seedSource ?: ::readSeedAsset
 
     private fun readSeedAsset(): String =
         appContext.assets.open(DatabaseConfig.SEED_ASSET_PATH).bufferedReader().use { it.readText() }
@@ -52,10 +66,12 @@ class DataContainer(
     private val seeding: Deferred<Unit> by lazy {
         scope.async(ioDispatcher) {
             try {
-                Seeder(database, ::readSeedAsset).seedIfNeeded()
+                Seeder(database, readSeed).seedIfNeeded()
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // Even an Error: failing this Deferred would fail every repository flow
+                // ("Couldn't load" on every screen) until the app restarts.
                 Log.e(TAG, "Seeding the database failed", e)
             }
             Unit
@@ -101,7 +117,7 @@ class DataContainer(
             appVersion = {
                 appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName.orEmpty()
             },
-            readSeed = ::readSeedAsset,
+            readSeed = readSeed,
             ioDispatcher = ioDispatcher,
             awaitReady = awaitReady,
         ).also { seeding.start() }
