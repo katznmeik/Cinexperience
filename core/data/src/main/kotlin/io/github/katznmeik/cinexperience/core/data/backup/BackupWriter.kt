@@ -5,7 +5,9 @@ import androidx.room.withTransaction
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
 import java.io.BufferedOutputStream
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.FilterOutputStream
+import java.io.IOException
 import java.io.OutputStream
 import java.time.Instant
 import java.util.zip.Deflater
@@ -28,6 +30,14 @@ internal suspend fun CinexDatabase.readBackupDataInTransaction(): BackupData {
         metadata = dao.metadata().map { it.toBackup() },
     )
 }
+
+/**
+ * A file that [BackupWriter.prepare] found was deleted before [BackupWriter.write]
+ * got to it (e.g. a visit saved with another photo while an export runs). The
+ * backup can't be completed: an import refuses one that lacks a referenced file.
+ */
+internal class FileDeletedDuringBackupException(path: String, cause: Throwable) :
+    IOException("$path was deleted while the backup was being written", cause)
 
 /** Data ready to be written: missing files left out, validated like an import. */
 internal class PreparedBackup(val data: BackupData) {
@@ -60,9 +70,26 @@ internal class BackupWriter(private val filesDir: File) {
     }
 
     /**
+     * At most how many bytes [write] produces for [prepared], for a free-space check
+     * before it is written: data.json and the files at their current sizes, plus an
+     * allowance for the manifest and the zip's own records. Deflate adds a few bytes
+     * per block, whether it compresses or (for the files) only stores: about
+     * n / 4096 at most for n bytes, so n / 2048 covers it.
+     */
+    fun maxSize(prepared: PreparedBackup): Long {
+        val data = BackupFormat.writeJson.encodeToString(BackupData.serializer(), prepared.data)
+            .encodeToByteArray().size.toLong()
+        val paths = prepared.data.filePaths
+        val content = data + paths.sumOf { File(filesDir, it).length() }
+        return content + content / 2048 + MANIFEST_ALLOWANCE + (paths.size + 2) * ENTRY_ALLOWANCE
+    }
+
+    /**
      * Writes [prepared] and the files it refers to as a backup zip to [out], which
      * is flushed but not closed. Files are streamed, never loaded into memory.
      * Returns the counts that were written.
+     * @throws FileDeletedDuringBackupException if a file is gone by the time its
+     *   entry is written: data.json, which comes first, already refers to it.
      */
     fun write(
         prepared: PreparedBackup,
@@ -103,7 +130,14 @@ internal class BackupWriter(private val filesDir: File) {
             // Photos are JPEGs and don't compress; store them quickly.
             zip.setLevel(Deflater.NO_COMPRESSION)
             for (path in files) {
-                entry(path) { File(filesDir, path).inputStream().use { it.copyTo(zip, BUFFER_SIZE) } }
+                val file = File(filesDir, path)
+                // Once open, a file is read to its end even if it is deleted meanwhile.
+                val input = try {
+                    file.inputStream()
+                } catch (e: FileNotFoundException) {
+                    throw if (file.exists()) e else FileDeletedDuringBackupException(path, e)
+                }
+                input.use { stream -> entry(path) { stream.copyTo(zip, BUFFER_SIZE) } }
             }
         }
         return counts
@@ -119,5 +153,11 @@ internal class BackupWriter(private val filesDir: File) {
     private companion object {
         const val TAG = "CinexBackup"
         const val BUFFER_SIZE = 64 * 1024
+
+        /** The manifest is a few hundred bytes; this also covers the zip's end records. */
+        const val MANIFEST_ALLOWANCE = 4096L
+
+        /** An entry's header, data descriptor and central directory record, each with its name. */
+        const val ENTRY_ALLOWANCE = 1024L
     }
 }

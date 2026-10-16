@@ -128,7 +128,7 @@ class LayoutDraftTest {
         assertEquals(14.5f, ScreenRules.width(14.4f, columns = 16))
         assertEquals(32f, ScreenRules.width(50f, columns = 16))
         assertEquals(1f, ScreenRules.width(0.2f, columns = 16))
-        assertEquals(0f, ScreenRules.distance(-3f))
+        assertEquals(0.5f, ScreenRules.distance(-3f)) // half a row in front of row 0, see ScreenDistanceMinimumTest
         assertEquals(15f, ScreenRules.distance(40f))
         assertEquals(2.5f, ScreenRules.distance(2.7f))
         assertEquals("14 seats", ScreenRules.widthText(14f))

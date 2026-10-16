@@ -68,6 +68,21 @@ data class FakeStore(
             ?: return own
         return SeatOverrides.withFavourite(own, hallId, favourite)
     }
+
+    /**
+     * [hall] as the Room repository reads it: [Hall.nextSeatId] is the hall's full
+     * seat id mark, raised to cover its layout and every seat id that its visits and
+     * overrides use (core:data's `seatIdMark`), so a new grid never takes one of them.
+     * (A [favourites] shortcut always names a seat of the layout, which is covered.)
+     */
+    fun withSeatIdMark(hall: Hall): Hall {
+        val highestUsed = maxOf(
+            visits.filter { it.hallId == hall.id }.maxOfOrNull { it.seatId?.value ?: 0 } ?: 0,
+            overrides.filter { it.hallId == hall.id }.maxOfOrNull { it.seatId.value } ?: 0,
+        )
+        val mark = maxOf(hall.nextSeatId, hall.layout?.nextSeatId ?: SeatLayout.FIRST_SEAT_ID, highestUsed + 1)
+        return if (mark == hall.nextSeatId) hall else hall.copy(nextSeatId = mark)
+    }
 }
 
 /**
@@ -111,7 +126,12 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         val hallSummaries = cinemaHalls.map { hall ->
             val hallScores = scores.halls.getValue(hall.id)
             val favourite = SeatOverrides.favourite(overridesOf(hall.id))
-            HallSummary(hall, hallScores.overall, hallScores.visitCount, favourite?.let { hall.layout?.labels()?.labelOf(it) })
+            HallSummary(
+                withSeatIdMark(hall),
+                hallScores.overall,
+                hallScores.visitCount,
+                favourite?.let { hall.layout?.labels()?.labelOf(it) },
+            )
         }.sortedWith(compareBy(NameOrder) { it.hall.name })
         return CinemaDetail(cinema, scores, hallSummaries)
     }
@@ -197,10 +217,11 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         val labels = hall.layout?.labels()
         val overrides = s.overridesOf(hallId).sortedBy { it.seatId.value }
         val seats = hall.layout?.let { seatStates(it, visits, overrides) }.orEmpty()
-        HallDetail(hall, cinema, hallScores(visits), visits, labels, seats, overrides)
+        HallDetail(s.withSeatIdMark(hall), cinema, hallScores(visits), visits, labels, seats, overrides)
     }.distinctUntilChanged()
 
-    override suspend fun getHall(hallId: Long): Hall? = store.value.halls.firstOrNull { it.id == hallId }
+    override suspend fun getHall(hallId: Long): Hall? =
+        store.value.let { s -> s.halls.firstOrNull { it.id == hallId }?.let(s::withSeatIdMark) }
 
     override suspend fun createHall(cinemaId: Long, name: String): Long {
         write()
@@ -220,7 +241,9 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
 
     /**
      * Like the Room repository: only the editable fields change, seat ids must not
-     * be reused (IllegalArgumentException) and the hall's id mark is raised.
+     * be reused (IllegalArgumentException; the mark also covers the seat ids of the
+     * hall's visits and overrides, see [FakeStore.withSeatIdMark]) and the hall's id
+     * mark is raised.
      */
     override suspend fun updateHall(hall: Hall): Boolean {
         write()
@@ -246,7 +269,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
             }
         }
         val stored = existing.layout
-        val mark = maxOf(existing.nextSeatId, stored?.nextSeatId ?: SeatLayout.FIRST_SEAT_ID)
+        val mark = store.value.withSeatIdMark(existing).nextSeatId
         val newLayout = hall.layout
         if (newLayout != null) {
             val storedIds = stored?.seatIds.orEmpty()
@@ -295,7 +318,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         if (hall.isPreloaded) return DeleteResult.PRELOADED
         store.update { s ->
             s.copy(
-                halls = s.halls - hall,
+                halls = s.halls.filter { it.id != hallId },
                 visits = s.visits.filter { it.hallId != hallId },
                 favourites = s.favourites - hallId,
                 overrides = s.overrides.filter { it.hallId != hallId },

@@ -33,8 +33,10 @@ fun fontScaleSuffix(fontScale: Float): String = "font_${(fontScale * 100).roundT
 
 /**
  * A screen under test: the app theme on the background colour, optionally with
- * text scaled by [fontScale] (linear scaling, so a bit harsher than Android's
- * non-linear large-font curve: the worst case).
+ * text scaled by [fontScale]. On API 34+ (the tests run on 36) `Density(density,
+ * fontScale)` converts sp like a phone set to that font size: non-linearly, so
+ * sp sizes grow a little less than [fontScale], large ones more so (13 sp at 2
+ * is 25 dp, not 26).
  */
 @Composable
 fun ScreenshotSurface(fontScale: Float? = null, content: @Composable () -> Unit) {

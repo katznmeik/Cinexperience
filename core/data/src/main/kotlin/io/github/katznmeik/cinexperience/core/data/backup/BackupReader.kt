@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.core.data.backup
 
+import android.annotation.SuppressLint
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
@@ -235,6 +236,15 @@ internal object BackupValidator {
 }
 
 /**
+ * The free storage of [dir]'s file system, for the import's free-space checks.
+ * Deliberately not StorageManager's allocatable bytes (lint's UsableSpace hint):
+ * those count cached files the system may delete as free, and staged files are
+ * such cache files themselves.
+ */
+@SuppressLint("UsableSpace")
+internal fun freeBytes(dir: File): Long = dir.usableSpace
+
+/**
  * Unpacks and validates a backup zip (see BackupFormat.kt), streaming entries
  * into a staging directory. Throws [BackupException] for anything unexpected:
  *
@@ -244,14 +254,22 @@ internal object BackupValidator {
  *   rejected. `manifest.json` and `data.json` must come before any file entry, so
  *   only files the data refers to are staged; other entries are read and
  *   discarded. Entry count and sizes are capped by [BackupLimits] while reading
- *   (the sizes a zip declares are not trusted), for skipped entries too.
+ *   (the sizes a zip declares are not trusted), for skipped entries too; a folder
+ *   entry may hold no data at all.
+ * - **Free storage:** a file is staged only while the staging folder has room for
+ *   [BackupLimits.maxFileBytes] plus [BackupLimits.minFreeBytes]; otherwise the
+ *   import stops with a message before the device's storage runs full.
  * - **Manifest:** `format` must match; a newer `backupVersion` is reported as such;
  *   older versions go through [BackupMigrations].
  * - **Data:** strict JSON, decoded straight into the DTOs (no generic JSON tree,
  *   so deeply nested input can't exhaust the stack); then [BackupValidator]; the
  *   manifest's counts must match.
  */
-internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
+internal class BackupReader(
+    private val limits: BackupLimits = BackupLimits(),
+    /** Free storage of a folder ([freeBytes]; tests pass their own). */
+    private val freeSpace: (File) -> Long = ::freeBytes,
+) {
 
     /** Unpacks [input] into [dir] (created; the caller deletes it on failure) and validates it. */
     fun read(input: InputStream, dir: File): StagedBackup {
@@ -319,6 +337,8 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
         var manifest: BackupManifest? = null
         var dataFile: File? = null
         var data: BackupData? = null
+        // data.filePaths, computed once: it walks every visit and hall.
+        var referenced: Set<String>? = null
         var entries = 0
         val budget = Budget(limits.maxTotalBytes)
         val zip = ZipInputStream(BufferedInputStream(input, BUFFER_SIZE))
@@ -330,6 +350,9 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
             when {
                 entry.isDirectory -> {
                     if (name.removeSuffix("/") !in BackupFormat.FILE_FOLDERS) throw unsafe("It contains an unexpected folder.")
+                    // A folder holds no data: read it here under a limit of 0, or the next entry
+                    // would inflate and discard whatever it carries outside every limit.
+                    drainEntry(zip, 0, budget)
                 }
                 name == BackupFormat.MANIFEST -> {
                     val target = File(dir, MANIFEST_FILE)
@@ -343,18 +366,23 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
                     dataFile = target
                 }
                 BackupFormat.isFilePath(name) -> {
-                    val current = data ?: run {
+                    val paths = referenced ?: run {
                         // The data must be known first, so only referenced files are staged.
                         val m = manifest ?: throw notABackup()
                         val file = dataFile ?: throw damaged("data.json must come before the photos.")
-                        parseData(file, m.backupVersion).also { data = it }
+                        val parsed = parseData(file, m.backupVersion)
+                        data = parsed
+                        parsed.filePaths.also { referenced = it }
                     }
-                    if (name in current.filePaths) {
+                    if (name in paths) {
                         val target = File(File(dir, FILES_DIR), name)
                         // Defence in depth: isFilePath already rules out anything that could escape.
                         if (!target.canonicalPath.startsWith(File(dir, FILES_DIR).canonicalPath + File.separator)) {
                             throw unsafe("It contains an unsafe file name.")
                         }
+                        // A zip doesn't reliably say how large an entry is (and may lie), so there must be
+                        // room for the largest allowed file, and the reserve stays free whatever it holds.
+                        if (freeSpace(dir) < limits.maxFileBytes + limits.minFreeBytes) throw noRoom()
                         files[name] = StagedFile(target, copyEntry(zip, target, limits.maxFileBytes, budget))
                     } else {
                         drainEntry(zip, limits.maxFileBytes, budget)
@@ -523,6 +551,11 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
 
     private fun writeFailed(cause: Throwable?) =
         BackupException(BackupError.WRITE_FAILED, "Couldn't unpack the backup. Is there enough free storage?", cause)
+
+    private fun noRoom() = BackupException(
+        BackupError.WRITE_FAILED,
+        "There isn't enough free storage to unpack this backup. Free up some space and try again.",
+    )
 
     private companion object {
         const val BUFFER_SIZE = 64 * 1024

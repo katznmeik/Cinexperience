@@ -128,7 +128,11 @@ Then:
 Lint reports no errors. It reports 16 warnings that are kept on purpose: the
 portrait lock (2) and targetSdk 36 (1), both set by the spec; 2 dependency-update
 hints; the framework `ExifInterface` (2, fine on minSdk 34); and 9 "use the KTX
-extension" style hints. There is no lint baseline.
+extension" style hints. There is no lint baseline. The only suppressed check is
+`UsableSpace`, on `freeBytes` in `BackupReader.kt`: the import's free-space checks
+use the file system's free space on purpose, because `StorageManager`'s
+"allocatable bytes" count cached files as free, and staged backup files are cache
+files themselves.
 
 R8 / minification is off in v1 (the APK is small and only sideloaded); turning it
 on later needs keep rules for kotlinx.serialization and Room checked on a device.

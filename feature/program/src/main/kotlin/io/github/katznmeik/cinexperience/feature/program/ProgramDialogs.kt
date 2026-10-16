@@ -69,7 +69,7 @@ internal fun SavedFiltersDialog(saved: List<SavedFilter>, actions: ProgramAction
                                     modifier = Modifier
                                         .weight(1f)
                                         .heightIn(min = 48.dp)
-                                        .clickable(role = Role.Button) { actions.onApplySavedFilter(entry.name) }
+                                        .clickable(role = Role.Button, onClickLabel = "Apply filter") { actions.onApplySavedFilter(entry.name) }
                                         .padding(horizontal = 14.dp, vertical = 14.dp),
                                 )
                                 TopBarIconButton(CinexIcons.Delete, "Delete ${isolate(entry.name)}", { actions.onDeleteSavedFilter(entry.name) })

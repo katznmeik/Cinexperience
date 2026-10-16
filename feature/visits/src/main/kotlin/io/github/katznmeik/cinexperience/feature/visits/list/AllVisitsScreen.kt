@@ -30,6 +30,7 @@ import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.component.StarRatingDisplay
+import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
@@ -94,6 +95,8 @@ internal fun AllVisitsScreen(
 @Composable
 private fun VisitRow(item: VisitListItem, onClick: () -> Unit) {
     val visit = item.visit
+    // The stars grow with the text: with large text they go under it, so the texts keep the width.
+    val starsBelow = isLargeText()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -115,8 +118,9 @@ private fun VisitRow(item: VisitListItem, onClick: () -> Unit) {
             )
             Text(item.placeText(), style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(item.detailText(), style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (starsBelow && visit.seatRating != null) StarRatingDisplay(visit.seatRating?.value, Modifier.padding(top = 2.dp))
         }
-        if (visit.seatRating != null) StarRatingDisplay(visit.seatRating?.value)
+        if (!starsBelow && visit.seatRating != null) StarRatingDisplay(visit.seatRating?.value)
     }
 }
 

@@ -100,6 +100,15 @@ internal data class BackupLimits(
     /** Per photo or reference image; stored images are at most 2048 px JPEGs. */
     val maxFileBytes: Long = 64L * 1024 * 1024,
     val maxTotalBytes: Long = 8L * 1024 * 1024 * 1024,
+    /**
+     * Free storage an import keeps when it writes its large files: a photo or
+     * reference image is staged only while the staging folder has room for
+     * [maxFileBytes] plus this, and a safety copy is written only if all of it fits
+     * with this to spare; otherwise the import stops with a message. The small
+     * writes are not checked: manifest.json and data.json (at most [maxDataBytes])
+     * while staging, and the database rows.
+     */
+    val minFreeBytes: Long = 64L * 1024 * 1024,
 )
 
 @Serializable

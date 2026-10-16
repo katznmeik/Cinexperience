@@ -10,4 +10,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     // FileProvider for camera captures of visit photos.
     implementation(libs.androidx.core.ktx)
+
+    // The repository contract test also runs against core:testing's fake repositories.
+    testImplementation(projects.core.testing)
 }
