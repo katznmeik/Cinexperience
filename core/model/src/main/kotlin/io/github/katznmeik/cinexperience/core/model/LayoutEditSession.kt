@@ -15,10 +15,18 @@ package io.github.katznmeik.cinexperience.core.model
  *   columns), it gets its original id back, so its visits stay attached, and its
  *   [LayoutCell.Seat.fixedLabel] (e.g. "R") with it: the editor can't create
  *   fixed labels, so a label lost this way could never be set again. It gets the
- *   painted kind.
+ *   painted kind. The block start number keyed on it (the seat was its block's
+ *   first numbered seat) comes back with it as well, see below.
  * - **Row settings stay with their rows.** Inserting or removing rows and
- *   columns keeps every row's label, numbering, numbering direction, block starts
- *   and offset, and every seat's kind and fixed label.
+ *   columns keeps every row's label, numbering, numbering direction and offset,
+ *   and every seat's kind and fixed label; block starts follow the rule below.
+ * - **Block starts stay with their blocks** ([LayoutRow.withCells]): when a
+ *   change of cell types splits, merges or shortens a row's blocks, a start stays
+ *   with the block that holds the seat it was set on (its first numbered seat);
+ *   a split-off part counts on (or restarts, per the row's numbering); when that
+ *   seat is removed, the start moves on to the block's next numbered seat with
+ *   the number that seat had, and an original seat painted back gets its own
+ *   start back.
  * - [removedSeatsWithData] gives the §6.5 warning for the current state.
  *
  * Start with [Hall.startLayoutEdit] (or [start]) on the hall as currently stored,
@@ -55,13 +63,15 @@ class LayoutEditSession private constructor(
             type == CellType.SEAT -> {
                 val ghost = ghosts.remove(position)
                 if (ghost != null && ghost.id !in current.seatIds) {
-                    current.withSeat(row, column, ghost.id, fixedLabel = ghost.fixedLabel)
+                    current.withSeat(row, column, ghost.id, fixedLabel = ghost.fixedLabel, blockStart = ghost.blockStart)
                 } else {
                     current.withCellType(row, column, type)
                 }
             }
             cell is LayoutCell.Seat -> {
-                if (cell.id in originalIds) ghosts[position] = Ghost(cell.id, cell.fixedLabel)
+                if (cell.id in originalIds) {
+                    ghosts[position] = Ghost(cell.id, cell.fixedLabel, current.rows[row].blockStartAnchors()[cell.id])
+                }
                 current.withCellType(row, column, type)
             }
             else -> current.withCellType(row, column, type) // gap <-> aisle keeps a ghost
@@ -142,8 +152,11 @@ class LayoutEditSession private constructor(
             ghosts = newGhosts,
         )
 
-    /** An original seat painted over: its id and fixed label, restored when the cell becomes a seat again. */
-    private data class Ghost(val id: SeatId, val fixedLabel: String?)
+    /**
+     * An original seat painted over: its id, fixed label and the block start keyed
+     * on it (`null` = none), restored when the cell becomes a seat again.
+     */
+    private data class Ghost(val id: SeatId, val fixedLabel: String?, val blockStart: Int?)
 
     companion object {
         /**

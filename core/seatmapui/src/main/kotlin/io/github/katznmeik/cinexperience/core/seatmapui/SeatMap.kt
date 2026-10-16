@@ -66,10 +66,13 @@ class SeatMapViewState {
     /**
      * The view held still during a drag that changes the content's size (e.g. the
      * layout editor's screen handles), so the dragged thing stays under the finger.
-     * It is not a zoom by the user: [isAdjusted] stays false, and after [release]
-     * the map follows its fitted view again.
+     * It is not a zoom by the user: [isAdjusted] doesn't change, and after [release]
+     * the map follows its fitted view (or the user's zoom) again.
      */
     private var heldTransform: ViewTransform? by mutableStateOf(null)
+
+    /** The content's bounds when the view was held (see [hold]). */
+    private var heldContent: Rect? = null
 
     val isAdjusted: Boolean get() = userTransform != null
 
@@ -78,16 +81,49 @@ class SeatMapViewState {
         userTransform = null
     }
 
-    /** Holds [transform] (the view as drawn) until [release], unless the user has zoomed anyway. */
-    fun hold(transform: ViewTransform) {
-        if (userTransform == null) heldTransform = transform
+    /**
+     * Holds [transform] (the view as drawn, from [transformFor] with [bounds]) until
+     * [release]. Meanwhile the view may pan sideways over the content as it was in
+     * [bounds] as well as over the content as it is now.
+     */
+    fun hold(transform: ViewTransform, bounds: ViewBounds) {
+        heldContent = bounds.content
+        heldTransform = transform
     }
 
+    /**
+     * Ends [hold]. A view the user zoomed stays where it was held (within the
+     * limits of the content as it is now); a fitted view is fitted again.
+     */
     fun release() {
+        val held = heldTransform ?: return
+        if (userTransform != null) userTransform = held
         heldTransform = null
+        heldContent = null
     }
 
-    fun transformFor(bounds: ViewBounds): ViewTransform = (userTransform ?: heldTransform)?.let(bounds::clamp) ?: bounds.fitted()
+    /**
+     * The view to draw within [bounds]: the held view, else the user's zoom, else
+     * the fitted view. The zoom limits follow the content, so a held view's scale
+     * is allowed whatever the limits are now (the content changes under it): it
+     * keeps its zoom exactly. Sideways it is kept within the content's edges at
+     * [hold] or now, whichever reach further (a screen dragged past the row labels
+     * moves one edge out and the other in, and the view mustn't follow either);
+     * vertically within the content as it is now.
+     */
+    fun transformFor(bounds: ViewBounds): ViewTransform {
+        heldTransform?.let { held ->
+            val content = bounds.content
+            val start = heldContent ?: content
+            val limits = bounds.copy(
+                content = Rect(min(start.left, content.left), content.top, max(start.right, content.right), content.bottom),
+                minScale = min(bounds.minScale, held.scale),
+                maxScale = max(bounds.maxScale, held.scale),
+            )
+            return limits.clamp(held)
+        }
+        return userTransform?.let(bounds::clamp) ?: bounds.fitted()
+    }
 }
 
 @Composable

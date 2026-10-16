@@ -53,7 +53,8 @@ sealed interface VisitEditMode {
  *
  * The form, the photos added in this session and a pending camera capture are kept
  * in [savedState], so the edit also survives process death (e.g. while the camera
- * app is in front).
+ * app is in front). A restored form first drops the session photos whose files are
+ * gone (see [checkRestoredPhotos]); the visit's saved photo is never touched.
  */
 class VisitEditViewModel(
     private val mode: VisitEditMode,
@@ -117,10 +118,34 @@ class VisitEditViewModel(
         visitId = draft.visitId
         sessionPhotos += draft.sessionPhotos
         pendingCapture = draft.pendingCapture
-        visitLoaded = true
         _uiState.update {
             it.copy(form = draft.form.toForm(), isEdit = draft.isEdit, isPhotoBusy = draft.pendingCapture != null).derived()
         }
+        // The form stays loading (and is not written back) until its photos are checked.
+        viewModelScope.launch { checkRestoredPhotos() }
+    }
+
+    /**
+     * Drops the restored session photos whose files no longer exist (e.g. removed
+     * while the app was gone), so save and discard leave them alone. If the form's
+     * photo is one of them, the form loses it and says so. Only session photos are
+     * checked: the photo of the stored visit belongs to the database.
+     */
+    private suspend fun checkRestoredPhotos() {
+        val missing = try {
+            sessionPhotos.toList().filterNot { photoStore.exists(it) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList() // can't tell: keep them, as before the check
+        }
+        sessionPhotos -= missing.toSet()
+        val lost = state.form.photoPath?.takeIf { it in missing } != null
+        visitLoaded = true
+        _uiState.update {
+            if (lost) it.copy(form = it.form.copy(photoPath = null), message = PHOTO_GONE).derived() else it.derived()
+        }
+        persist()
     }
 
     /** Keeps the edit in [savedState] (see the class comment). */
@@ -537,6 +562,7 @@ class VisitEditViewModel(
         const val SEAT_CLEARED_ON_SAVE =
             "Saved without the seat: it is no longer in this hall's layout."
         const val PHOTO_FAILED = "Couldn't add that photo."
+        const val PHOTO_GONE = "The photo is no longer available."
         const val CAMERA_FAILED = "Couldn't prepare the camera."
         const val NO_CAMERA = "No camera app found."
         const val NO_HALL_FOR_SEAT = "Choose a hall to pick your seat."
