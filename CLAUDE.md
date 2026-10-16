@@ -135,8 +135,8 @@ Don't duplicate config in module build files.
   fade-through; pushes and pops take 300 ms. The bottom bar slides and resizes
   with them. Every destination draws an opaque background (`ScreenBackground`
   in core:ui around the entry composable). `TransitionFramesTest` (app) captures
-  frames at 0/25/50/75/100 % into `app/build/outputs/transitions`; look at them
-  after changing transitions.
+  frames at 0/25/50/75/100 % into `app/build/outputs/transitions` (CI uploads
+  them); look at them after changing transitions.
 - **DI:** manual (`app/.../di/AppContainer.kt`), no Hilt. `CinexApp` hands the
   repositories to the features' `xxxScreen(...)` functions; each ViewModel has a
   `factory(...)` and exposes a `StateFlow` UI state. Repository failures become
