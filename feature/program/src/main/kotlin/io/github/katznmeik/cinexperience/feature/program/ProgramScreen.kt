@@ -29,8 +29,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -57,10 +55,12 @@ import io.github.katznmeik.cinexperience.core.ui.component.ActionPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChipRow
 import io.github.katznmeik.cinexperience.core.ui.component.CinexScreen
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.ToggleChip
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.dayHeaderText
 import io.github.katznmeik.cinexperience.core.ui.text.shortDayText
@@ -157,13 +157,7 @@ internal fun ProgramEntry(
 /** The Program tab (spec §6.9). */
 @Composable
 internal fun ProgramScreen(state: ProgramUiState, actions: ProgramActions, modifier: Modifier = Modifier) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(state.message) {
-        state.message?.let {
-            snackbarHostState.showSnackbar(it)
-            actions.onMessageShown()
-        }
-    }
+    val snackbarHostState = rememberMessageSnackbarState(state.message, actions::onMessageShown)
     Box(modifier.fillMaxSize()) {
         when (state.mode) {
             ProgramMode.LOADING -> CinexScreen(title = "Program")
@@ -187,7 +181,7 @@ internal fun ProgramScreen(state: ProgramUiState, actions: ProgramActions, modif
                 ProgramList(state, actions)
             }
         }
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+        MessageSnackbarHost(snackbarHostState)
     }
     ProgramDialogs(state, actions)
 }

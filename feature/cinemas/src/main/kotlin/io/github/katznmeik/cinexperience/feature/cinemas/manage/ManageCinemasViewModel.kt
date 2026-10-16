@@ -9,13 +9,12 @@ import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
+import io.github.katznmeik.cinexperience.core.ui.flow.asResult
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaEditor
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialog
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 data class ManageCinemasUiState(
@@ -37,9 +36,7 @@ class ManageCinemasViewModel(
 
     private val editor = CinemaEditor(viewModelScope, cinemaRepository, hallRepository)
 
-    private val cinemas = cinemaRepository.observeCinemaDetails()
-        .map { Result.success(it) }
-        .catch { emit(Result.failure(it)) }
+    private val cinemas = cinemaRepository.observeCinemaDetails().asResult()
 
     val uiState: StateFlow<ManageCinemasUiState> =
         combine(cinemas, editor.dialog, editor.message) { result, dialog, message ->

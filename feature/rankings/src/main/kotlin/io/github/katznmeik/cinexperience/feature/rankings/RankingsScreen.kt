@@ -21,11 +21,8 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -46,7 +43,9 @@ import io.github.katznmeik.cinexperience.core.model.NO_SCORE_TEXT
 import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChipRow
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 @Composable
@@ -79,16 +78,10 @@ internal fun RankingsScreen(
     message: String? = null,
     onMessageShown: () -> Unit = {},
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(message) {
-        message?.let {
-            snackbarHostState.showSnackbar(it)
-            onMessageShown()
-        }
-    }
+    val snackbarHostState = rememberMessageSnackbarState(message, onMessageShown)
     Box(modifier.fillMaxSize()) {
         RankingsList(state, onScopeChange, onCategoryChange, onOpenItem)
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+        MessageSnackbarHost(snackbarHostState)
     }
 }
 

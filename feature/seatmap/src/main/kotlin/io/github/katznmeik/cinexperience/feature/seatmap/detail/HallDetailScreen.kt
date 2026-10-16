@@ -32,12 +32,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,6 +72,8 @@ import io.github.katznmeik.cinexperience.core.seatmapui.seatMapDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.seatStatesDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.viewingAngleText
 import io.github.katznmeik.cinexperience.core.seatmapui.windowSeatMapMaxHeight
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
@@ -158,14 +157,8 @@ internal fun HallDetailScreen(
     onToggleFavourite: (SeatId) -> Unit = {},
     onMessageShown: () -> Unit = {},
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
     val message = (state as? HallDetailUiState.Loaded)?.message
-    LaunchedEffect(message) {
-        message?.let {
-            snackbarHostState.showSnackbar(it)
-            onMessageShown()
-        }
-    }
+    val snackbarHostState = rememberMessageSnackbarState(message, onMessageShown)
     Box(modifier.fillMaxSize()) {
         Column(
             Modifier
@@ -189,7 +182,7 @@ internal fun HallDetailScreen(
                 is HallDetailUiState.Error -> MessageContent(state.message, onBack)
             }
         }
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+        MessageSnackbarHost(snackbarHostState)
     }
 }
 

@@ -23,8 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -49,11 +47,13 @@ import io.github.katznmeik.cinexperience.core.model.NO_SCORE_TEXT
 import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialogActions
@@ -122,13 +122,7 @@ internal fun CinemaDetailScreen(
     onShowAllInProgram: () -> Unit = {},
     onOpenProgram: () -> Unit = {},
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(state.message) {
-        state.message?.let {
-            snackbarHostState.showSnackbar(it)
-            onMessageShown()
-        }
-    }
+    val snackbarHostState = rememberMessageSnackbarState(state.message, onMessageShown)
     Box(modifier.fillMaxSize()) {
         when (val content = state.content) {
             is CinemaDetailContent.Loaded -> LoadedContent(
@@ -149,7 +143,7 @@ internal fun CinemaDetailScreen(
             CinemaDetailContent.NotFound -> MessageContent("This cinema no longer exists.", onBack)
             is CinemaDetailContent.Error -> MessageContent(content.message, onBack)
         }
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+        MessageSnackbarHost(snackbarHostState)
     }
     EditDialogHost(state.dialog, dialogActions)
 }

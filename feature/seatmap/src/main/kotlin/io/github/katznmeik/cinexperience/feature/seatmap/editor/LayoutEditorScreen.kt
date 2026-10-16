@@ -37,8 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -90,9 +88,11 @@ import io.github.katznmeik.cinexperience.core.seatmapui.blockName
 import io.github.katznmeik.cinexperience.core.seatmapui.icon
 import io.github.katznmeik.cinexperience.core.seatmapui.rememberSeatMapViewState
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.SegmentChipShape
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import kotlinx.coroutines.CancellationException
@@ -240,13 +240,7 @@ internal fun LayoutEditorScreen(
     modifier: Modifier = Modifier,
     viewState: SeatMapViewState = rememberSeatMapViewState(),
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(state.message) {
-        state.message?.let {
-            snackbarHostState.showSnackbar(it)
-            actions.onMessageShown()
-        }
-    }
+    val snackbarHostState = rememberMessageSnackbarState(state.message, actions::onMessageShown)
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             EditorTopBar(
@@ -266,7 +260,7 @@ internal fun LayoutEditorScreen(
                 EditorStatus.Ready -> ReadyContent(state, referenceImage, actions, viewState)
             }
         }
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+        MessageSnackbarHost(snackbarHostState)
     }
     EditorDialogHost(state.dialog, actions)
 }

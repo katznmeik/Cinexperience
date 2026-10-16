@@ -19,14 +19,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -46,9 +43,11 @@ import io.github.katznmeik.cinexperience.core.data.backup.ImportSource
 import io.github.katznmeik.cinexperience.core.data.backup.SafetyCopy
 import io.github.katznmeik.cinexperience.core.program.ProgramTime
 import io.github.katznmeik.cinexperience.core.ui.component.CinexScreen
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateTimeText
@@ -144,13 +143,7 @@ internal fun SettingsScreen(
     // export without a word, so Back waits for it too (switching tabs keeps it).
     val exporting = backup.task is BackupTask.Exporting
     BackHandler(enabled = importing || exporting) {}
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(backup.message) {
-        backup.message?.let {
-            snackbarHostState.showSnackbar(it)
-            actions.onMessageShown()
-        }
-    }
+    val snackbarHostState = rememberMessageSnackbarState(backup.message, actions::onMessageShown)
     Box(modifier.fillMaxSize()) {
         CinexScreen(title = "Settings") {
             Section("Backup") { BackupRows(backup, actions) }
@@ -202,7 +195,7 @@ internal fun SettingsScreen(
                 }
             }
         }
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+        MessageSnackbarHost(snackbarHostState)
     }
     backup.preview?.let { ImportPreviewDialog(it, actions) }
     if (backup.choosingSafetyCopy) SafetyCopyChooser(backup.safetyCopies, actions)
