@@ -225,7 +225,7 @@ internal class ProgramCache(private val folder: File) {
     companion object {
         /**
          * Version of the cache file format; a file with another version is ignored
-         * (and replaced on the next download). 1 (first M9 draft) keyed films by slug
+         * (and replaced on the next download). 1 (a first draft) keyed films by slug
          * only; 2 keys them by kind and slug and links specials to showings.
          */
         const val FORMAT_VERSION: Int = 2
