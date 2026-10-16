@@ -131,7 +131,9 @@ class BlockStartEditorTest {
         val wider = narrower.withColumnCount(10) // new seat columns copy the last column: they extend the last block
         assertEquals(listOf(null, null, 12), wider.layout.rows[1].blockStartNumbers)
         assertEquals(listOf("1", "2", "3", "12", "13", "14", "15", "16"), wider.texts(1))
-        assertEquals(listOf("12", "11", "10", "9", "8", "7", "6", "5", "4", "3"), wider.texts(0))
+        // Row 0 runs right to left: its new seats come first and count back from the 3, the others keep theirs.
+        assertEquals(listOf(1), wider.layout.rows[0].blockStartNumbers)
+        assertEquals(listOf("10", "9", "8", "7", "6", "5", "4", "3", "2", "1"), wider.texts(0))
 
         val back = history.undo(wider)!!.let { history.undo(it)!! }.let { history.undo(it)!! }
         assertEquals(draft.layout.rows, back.layout.rows)

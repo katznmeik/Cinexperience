@@ -166,8 +166,10 @@ Don't duplicate config in module build files.
   none, merged blocks keep the start of the one numbered first, and when that
   seat is removed the start moves on to the next numbered seat with the number
   it had, so the remaining seats keep theirs (`LayoutEditSession` gives the
-  original start back with the seat). A row whose starts don't change keeps
-  its stored list.
+  original start back with the seat). A seat added in front of a block with an
+  explicit start takes the number before it (start − 1, when that is at least
+  1), so the existing seats keep their numbers. A row whose starts don't change
+  keeps its stored list.
   A seat can have a `fixedLabel` (1–4 characters, no surrounding spaces, no
   control or format characters, e.g. "R"): it is shown instead of a number and
   uses up no number. It moves with its seat and survives a change of kind; a

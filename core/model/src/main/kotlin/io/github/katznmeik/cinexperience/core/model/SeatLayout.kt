@@ -174,7 +174,9 @@ enum class NumberingDirection {
  *   splits, merges or shortens blocks, a start stays with the block that holds
  *   the seat it was set on and numbers that block's current first numbered seat;
  *   when that seat is removed, it moves on to the next numbered seat, with the
- *   number that seat had ([withBlockStartsKeyedOn], [withCells]).
+ *   number that seat had; a numbered seat added in front of that seat takes the
+ *   number before it (start − 1, when that is at least 1), so the existing seats
+ *   keep their numbers ([withBlockStartsKeyedOn], [withCells]).
  * @property halfSeatOffset the whole row is drawn shifted half a seat to the right
  *   (staggered rows). Alternating rows with and without the offset model staggering.
  * @property numberingDirection which way the row's seats are numbered.
@@ -292,6 +294,14 @@ data class LayoutRow(
      * the number that seat had, so every remaining seat keeps its number. A block
      * left without numbered seats keeps nothing; an automatic block stays automatic.
      *
+     * Likewise, new numbered seats added in front of the seat a block's explicit
+     * start `s` is keyed on (before it in numbering order) count back from it: with
+     * `k` of them, the first takes `s − k`, so the seat with the start and every
+     * seat after it keep their numbers. Where `s − k` would be below 1 (Yorck has
+     * no seat 0), the first new seat takes `s` and the others move up. A restored
+     * seat with its own start ([restored]) is not new; seats with a fixed label
+     * use no number and don't count.
+     *
      * When the change leaves the number of blocks and every block's start as they
      * were, the stored list is kept as it is (even with trailing `null`s or entries
      * beyond the blocks, as older data may hold), so an edit that doesn't touch the
@@ -299,7 +309,8 @@ data class LayoutRow(
      */
     internal fun withCells(newCells: List<LayoutCell>, restored: Map<SeatId, Int?> = emptyMap()): LayoutRow {
         val changed = copy(cells = newCells)
-        val reKeyed = changed.withBlockStartsKeyedOn(blockStartAnchors() + movedStarts(changed) + restored)
+        val anchors = blockStartAnchors() + movedStarts(changed) + restored
+        val reKeyed = changed.withBlockStartsKeyedOn(anchors + frontStarts(changed, anchors))
         val blockCount = changed.blocks.size
         val sameStarts = blockCount == blocks.size &&
             (0 until blockCount).all { reKeyed.blockStartNumbers.getOrNull(it) == blockStartNumbers.getOrNull(it) }
@@ -326,6 +337,28 @@ data class LayoutRow(
             moved[(cells[next] as LayoutCell.Seat).id] = checkNotNull(numbers[next])
         }
         return moved
+    }
+
+    /**
+     * For each block of [changed] whose first numbered seats in numbering order are
+     * new (not in this row) and followed by a seat that carries an explicit start
+     * `s` in [anchors] (the start [withBlockStartsKeyedOn] would give the block):
+     * the first new seat, keyed on `s − k` for `k` new numbered seats, when that is
+     * at least 1 (see [withCells]).
+     */
+    private fun frontStarts(changed: LayoutRow, anchors: Map<SeatId, Int?>): Map<SeatId, Int> {
+        val existing = seatIds.toSet()
+        val front = HashMap<SeatId, Int>()
+        changed.blockSeatsInNumberingOrder.forEach { seats ->
+            val numbered = seats.filter { it.fixedLabel == null }
+            val keyed = numbered.indexOfFirst { it.id in anchors }
+            if (keyed <= 0) return@forEach
+            val start = anchors[numbered[keyed].id] ?: return@forEach
+            if (numbered.subList(0, keyed).any { it.id in existing }) return@forEach
+            if (start - keyed < 1) return@forEach
+            front[numbered.first().id] = start - keyed
+        }
+        return front
     }
 
     companion object {
@@ -429,7 +462,8 @@ data class SeatLayout(
      * on when it was painted away (see [LayoutRow.blockStartNumbers]). Its block
      * takes it unless a numbered seat that carries a start comes before the
      * restored seat in the block's numbering order; then that seat's start wins
-     * and [blockStart] is dropped.
+     * and [blockStart] is dropped. Without a [blockStart], the seat counts as new
+     * (see [LayoutRow.withCells]).
      */
     fun withSeat(
         row: Int,

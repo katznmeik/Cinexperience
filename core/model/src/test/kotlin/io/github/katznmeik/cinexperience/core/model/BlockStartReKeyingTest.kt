@@ -100,10 +100,10 @@ class BlockStartReKeyingTest {
         assertEquals(listOf("1", "2", "5", "6", "12", "13"), split.texts())
 
         // A seat column inserted at the front of a block joins it in front of its first seat:
-        // the start stays with the block.
+        // it takes the number before the start, so the block's seats keep theirs.
         val extended = row.insertColumn(3, CellType.SEAT) // SS|SSS|SS
-        assertEquals(listOf(null, 5, 12), extended.starts())
-        assertEquals(listOf("1", "2", "5", "6", "7", "12", "13"), extended.texts())
+        assertEquals(listOf(null, 4, 12), extended.starts())
+        assertEquals(listOf("1", "2", "4", "5", "6", "12", "13"), extended.texts())
 
         // Resize shrinks through the same path.
         val shrunk = row.resize(1, 4) // SS|S
@@ -119,10 +119,10 @@ class BlockStartReKeyingTest {
         assertEquals(listOf(5, 11), gone.starts())
         assertEquals(listOf("5", "6", "7", "11", "12"), gone.texts())
 
-        // A seat painted in front of the block's first seat joins the block; the start stays.
+        // A seat painted in front of the block's first seat joins the block with the number before it.
         val front = layoutOf("SSS|.SS").withStarts(5, 10).withCellType(0, 4, CellType.SEAT)
-        assertEquals(listOf(5, 10), front.starts())
-        assertEquals(listOf("5", "6", "7", "10", "11", "12"), front.texts())
+        assertEquals(listOf(5, 9), front.starts())
+        assertEquals(listOf("5", "6", "7", "9", "10", "11"), front.texts())
 
         // Right to left: the first seat is the rightmost one.
         val rtl = layoutOf("SSS|SSS").rightToLeft().withStarts(10, 5).withCellType(0, 6, CellType.GAP)
@@ -247,13 +247,13 @@ class BlockStartReKeyingTest {
         assertEquals(listOf(3), replaced.layout!!.starts())
 
         // A new seat (not an original one) gets no start back: its start moved on to the
-        // next seat (6), and the seat painted in front of the block takes it.
+        // next seat (6), and the new seat painted in front of the block takes the number before it.
         val fresh = LayoutEditSession.start(layoutOf(".SS"), hallNextSeatId = 3)
             .setCellType(0, 0, CellType.SEAT)
             .updateRow(0) { it.copy(blockStartNumbers = listOf(5)) }
             .setCellType(0, 0, CellType.GAP)
             .setCellType(0, 0, CellType.SEAT)
-        assertEquals(listOf(6), fresh.layout!!.starts())
-        assertEquals(listOf("6", "7", "8"), fresh.texts())
+        assertEquals(listOf(5), fresh.layout!!.starts())
+        assertEquals(listOf("5", "6", "7"), fresh.texts())
     }
 }

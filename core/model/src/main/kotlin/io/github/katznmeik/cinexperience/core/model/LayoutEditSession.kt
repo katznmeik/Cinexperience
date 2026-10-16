@@ -25,8 +25,9 @@ package io.github.katznmeik.cinexperience.core.model
  *   with the block that holds the seat it was set on (its first numbered seat);
  *   a split-off part counts on (or restarts, per the row's numbering); when that
  *   seat is removed, the start moves on to the block's next numbered seat with
- *   the number that seat had, and an original seat painted back gets its own
- *   start back.
+ *   the number that seat had; a new seat painted in front of it takes the number
+ *   before it (start − 1, when that is at least 1); and an original seat painted
+ *   back gets its own start back.
  * - [removedSeatsWithData] gives the §6.5 warning for the current state.
  *
  * Start with [Hall.startLayoutEdit] (or [start]) on the hall as currently stored,
