@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -79,6 +80,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -752,12 +754,13 @@ private fun PhotoField(photo: ImageBitmap?, hasPhoto: Boolean, busy: Boolean, ac
     var menuOpen by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Box {
-            val tileModifier = Modifier
-                .size(96.dp)
-                .clip(RoundedCornerShape(14.dp))
+            val tileShape = RoundedCornerShape(14.dp)
             if (hasPhoto) {
+                // A picture without text: a fixed size is fine.
                 Box(
-                    tileModifier
+                    Modifier
+                        .size(96.dp)
+                        .clip(tileShape)
                         .background(CinexTheme.colors.surface)
                         .semantics { contentDescription = "Visit photo" },
                     contentAlignment = Alignment.Center,
@@ -769,8 +772,12 @@ private fun PhotoField(photo: ImageBitmap?, hasPhoto: Boolean, busy: Boolean, ac
                     }
                 }
             } else {
+                // At least 96 dp; wider and taller when "Add photo" needs it (large text).
                 DashedTile(
-                    modifier = tileModifier.clickable(enabled = !busy, role = Role.Button) { menuOpen = true },
+                    modifier = Modifier
+                        .sizeIn(minWidth = 96.dp, minHeight = 96.dp)
+                        .clip(tileShape)
+                        .clickable(enabled = !busy, role = Role.Button) { menuOpen = true },
                 )
             }
             PhotoSourceMenu(
@@ -824,13 +831,14 @@ private fun DashedTile(modifier: Modifier) {
                     cornerRadius = CornerRadius(14.dp.toPx()),
                     style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx()))),
                 )
-            },
+            }
+            .padding(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(CinexIcons.Camera, contentDescription = null, tint = CinexTheme.colors.textMuted, modifier = Modifier.size(24.dp))
         Spacer(Modifier.size(6.dp))
-        Text("Add photo", style = MaterialTheme.typography.labelSmall, color = CinexTheme.colors.textMuted)
+        Text("Add photo", style = MaterialTheme.typography.labelSmall, color = CinexTheme.colors.textMuted, textAlign = TextAlign.Center)
     }
 }
 
