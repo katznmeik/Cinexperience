@@ -2,7 +2,7 @@
 
 **Status:** v1.1.0 released (2026-10-15)
 **Owner:** katznmeik
-**Last updated:** 2026-10-15 (rev. 24)
+**Last updated:** 2026-10-16 (rev. 25)
 
 ---
 
@@ -112,8 +112,13 @@ double sofa is its own unnamed row): its seats are then shown by seat alone
 **Split rows:** a row interrupted by an aisle forms separate *blocks*
 (e.g. left / centre / right). Per row, the user chooses whether seat numbering
 runs continuously across blocks or restarts in each block, and can set the
-starting number of each block. A row can also be shifted by half a seat
-(staggered rows), as seen in some halls.
+starting number of each block. When aisles are painted or removed or columns
+are removed, a block's start number stays with the block that holds the seat
+it was set on. When that seat is removed, the start moves on to the next seat
+with that seat's number, so the remaining seats keep their numbers. A seat
+added in front of a block with an explicit start takes the number before it
+(start − 1, when that is at least 1), so the existing seats keep theirs. A row
+can also be shifted by half a seat (staggered rows), as seen in some halls.
 
 The screen is drawn at the top as a straight bar, with the width, distance and
 horizontal offset from §4.2.
@@ -121,7 +126,9 @@ horizontal offset from §4.2.
 **Seat identity:** every seat cell carries a stable `seatId` that is never
 reused. Visits and overrides refer to seats by this id, so they survive
 relabelling, renumbering and inserting rows; labels ("G 10") are derived from
-the layout when displayed. A seat that is deleted and redrawn gets a new id.
+the layout when displayed. A seat that is deleted and redrawn gets a new id
+once the layout is saved: within one editing session, a seat painted away and
+back as a seat keeps its id and its fixed label.
 
 ### 4.4 Visit
 | Field | Type | Notes |
@@ -402,8 +409,10 @@ Verified in M8 against yorck.de (14 cinemas, 38 halls; where yorck.de names a ha
 stable `seedKey`. When a newer seed version ships, missing cinemas/halls are
 added and still-empty fields (address, layout, screen geometry) are filled in;
 names, notes and anything the user has set are never overwritten, and nothing
-is deleted. One exception: a layout that is still exactly the one an older seed
-supplied (the user never edited it) is replaced by the newer seed's layout,
+is deleted. A cinema or hall the user deleted stays deleted: a later seed
+version doesn't bring it back. Halls the seed adds to a cinema the user created
+stay deletable. One exception: a layout that is still exactly the one an older
+seed supplied (the user never edited it) is replaced by the newer seed's layout,
 together with its screen width and distance, if the hall has no visits and no
 seat colour overrides or favourite; otherwise it is kept, and the user can
 redraw it.
@@ -421,7 +430,7 @@ can be renamed but not deleted).
 | Persistence | Room + Kotlin Flow |
 | DI | Manual DI (small app container) |
 | Navigation | Navigation Compose |
-| Images | Coil; photos copied into app-private storage |
+| Images | Decoded by the app's own file stores, no image library (§11.1 forbids image libraries); photos copied into app-private storage |
 | Serialization | kotlinx.serialization (backup JSON; v1.1 also the program data) |
 | Network (v1.1) | Android's built-in HTTPS client, only in `core:program`; no third-party network or HTML library (§11.1) |
 | Seat map | Custom Compose `Canvas` with zoom/pan |
@@ -611,7 +620,7 @@ complexity:
 | `feature:cinemas` | Cinema list & detail | Low–medium |
 | `feature:visits` | Add/edit visit form, photo handling | Medium |
 | `feature:rankings` | Rankings screen | Low |
-| `feature:backup` | Export / import, schema migration | Medium |
+| `feature:backup` | The Settings tab (§6.7): backup export / import with preview, restore safety copy, Settings → Program, About, entries to Manage cinemas & halls and All visits | Medium |
 | `core:program` | v1.1: downloading, checking and caching Yorck's program; the only module with network code (§11.1) | High |
 | `feature:program` | v1.1: Program tab, filters, saved filters, film page (§6.9) | Medium |
 | `feature:ticketimport` | Share-intent parser (v1.2) | High |
