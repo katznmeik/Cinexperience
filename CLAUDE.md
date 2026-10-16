@@ -147,7 +147,8 @@ Don't duplicate config in module build files.
   `layout.labels()`. A layout has at most `SeatLayout.MAX_ROWS` ×
   `MAX_COLUMNS` cells (50 × 60, the editor's limits) and `nextSeatId` ≤
   `MAX_SEAT_ID` (1,000,000,000), checked in `SeatLayout.init`; handing out an id at the
-  limit throws `IllegalArgumentException`, it never wraps.
+  limit throws `SeatIdsExhaustedException`, it never wraps. The editor catches only
+  that one (message, edit refused); any other model exception is a bug.
 - **Seat numbering** (`SeatLabels.kt`, spec §4.3) must match Yorck's booking.
   Every seat place is numbered, wheelchair spaces, companion seats and sofa
   places included. Each row has a `numberingDirection`: `LEFT_TO_RIGHT`
@@ -204,7 +205,10 @@ Don't duplicate config in module build files.
   to `SeatMap` / `SeatMapGeometry`. In the editor (`LayoutDraft.screenOffset`)
   the selected screen's bar is dragged sideways (the drag locks to the axis it
   starts in) or set with the "Screen position" stepper; screen controls never
-  reach into row 0 (`hitTest`).
+  reach into row 0 (`hitTest`). Width and distance bounds live in
+  `ScreenSizeRules` (core:model: width > 0 and ≤ 120 = 2 × `MAX_COLUMNS`,
+  distance 0–15), shared by the editor's `ScreenRules`, the repositories and the
+  backup validator.
 - **Favourite cinemas:** `Cinema.isFavourite`, written only through
   `CinemaRepository.setFavourite`; every cinema flow carries it.
 - **Schema changes:** the database is at version 2 (`MIGRATION_1_2` added
@@ -221,11 +225,17 @@ Don't duplicate config in module build files.
   straight into the DTOs; new DTO fields get no default value). The v1
   fixture in `core/data/src/test/resources/backup/v1` is never changed. `BackupValidator` holds the data rules; export and
   safety copies run it too, so no backup is written that can't be imported.
-  Its size limits (texts within `TextLimits`, layouts within the `SeatLayout`
-  limits and their JSON ≤ `LayoutJson.MAX_JSON_LENGTH`, seat ids below
-  `MAX_SEAT_ID`, screen width > 0, distance ≥ 0) keep every row far below
-  Android's 2 MB per row; the repositories' writers enforce the same, so
-  whatever the app saves exports, and the forms cap their fields at or below them.
+  Its size limits (texts and row labels within `TextLimits`, layouts within the
+  `SeatLayout` limits and their JSON ≤ `LayoutJson.MAX_JSON_LENGTH` and not
+  padded beyond twice their own encoding (`LayoutJson.isPadded`), seat ids below
+  `MAX_SEAT_ID`, the screen within `ScreenSizeRules`) keep every row far below
+  Android's 2 MB per row. The repositories' writers enforce the same limits on
+  every value they change (`updateHall` keeps a value the hall already has, e.g.
+  one an older build stored, so it can't block a save), so nothing this version
+  writes fails an export; for file paths they only cap the length, the stores create
+  names that match the validator's file-name pattern. The forms cap their
+  fields at or below the limits. All visits reads each hall's layout once
+  (`VisitWithContext.hallLayout`), not once per visit.
   Imports validate everything before touching data (`BackupReader`; manifest
   and data must precede the files, unreferenced entries are skipped), make
   sure a safety copy exists (`filesDir/backups/pre-import-<seq>-<time>.zip`,
@@ -353,7 +363,11 @@ Don't duplicate config in module build files.
   kept. The screen offset is touched only when the new layout is narrower:
   it is then snapped with `ScreenOffsetRules.snap(offset, newColumns)`, so the
   screen stays over the grid. Names, notes and the reference screenshot are
-  never touched.
+  never touched. A hall whose seat id mark leaves no room below `MAX_SEAT_ID`
+  for the seed layout's ids (only damaged or crafted data) keeps its layout
+  (or stays without one) and its `appliedLayout` stays as it was, so later seed
+  versions try again (an empty layout, like any fill, only with a changed seed
+  layout).
 - **Seed layouts** (`"layout"` of a seed hall, see `LayoutJson`): one object per
   grid row, closest to the screen first, e.g.
   `{ "label": "1", "cells": "W.W|SSSSSSSSS|W.W" }` (generated, see the next
