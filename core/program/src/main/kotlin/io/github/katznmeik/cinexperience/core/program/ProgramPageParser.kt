@@ -62,7 +62,7 @@ sealed interface ProgramParseResult {
  * `<script id="__NEXT_DATA__"` element (no HTML parsing, no regex over the page).
  * A linear pre-scan bounds its size ([withinJsonLimits]); then it is decoded
  * into the parser's own small types with unknown keys skipped, so the page's
- * many other parts (images, banners, "coming soon") are never built in memory:
+ * many other parts (images, banners, "coming soon") are not built in memory:
  *
  * - `props.pageProps.films[]` and `props.pageProps.specials[]`, each with `fields`:
  *   `title`, `slug`, `tagline` (specials: `specialSubline`), `mainLabel` (genre),
@@ -75,9 +75,10 @@ sealed interface ProgramParseResult {
  * runtime of 0) is dropped; a film or showing with an invalid required value
  * (title, slug, ID, start, cinema) or of the wrong type is skipped, also an entry
  * or its `fields` that isn't an object. Such an entry fails the typed decoding;
- * only then are the two lists read as JSON trees, within the same limits, and
- * decoded entry by entry. Only where the structure around the entries breaks
- * (e.g. a list of films that isn't a list) is the whole page rejected.
+ * only then are the two lists read as JSON trees (their unused parts too, within
+ * the same limits) and decoded entry by entry. Only where the structure around
+ * the entries breaks (e.g. a list of films that isn't a list) is the whole page
+ * rejected.
  *
  * Films and specials are keyed by [FilmKey] (kind + slug). Films come first: a
  * showing that Yorck lists under a film and under specials belongs to the film
