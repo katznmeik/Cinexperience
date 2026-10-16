@@ -15,7 +15,7 @@ import java.io.File
 /**
  * Spec §11.1, Network & security rule 5: HTTPS only (cleartext blocked) and only
  * the phone's system certificate authorities, no user-installed ones and no
- * pinning, also in debug builds.
+ * pinning, in debug and release builds.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -52,5 +52,17 @@ class NetworkSecurityConfigTest {
         assertFalse(manifest.contains("usesCleartextTraffic"))
         // The INTERNET permission comes from core:program only (NetworkConfinementTest).
         assertFalse(manifest.contains("android.permission.INTERNET"))
+    }
+
+    @Test
+    fun theDebugAndReleaseManifestsUseIt() {
+        // As merged with every library's manifest; CI runs only the debug unit tests.
+        // (NetworkConfinementTest allows this config file only in app/src/main/res/xml/.)
+        for (buildType in MergedManifest.BUILD_TYPES) {
+            val manifest = MergedManifest.of(buildType)
+            assertEquals(buildType, "@xml/network_security_config", manifest.applicationAttribute("networkSecurityConfig"))
+            val cleartext = manifest.applicationAttribute("usesCleartextTraffic")
+            assertTrue("$buildType: usesCleartextTraffic=$cleartext", cleartext == null || cleartext == "false")
+        }
     }
 }
