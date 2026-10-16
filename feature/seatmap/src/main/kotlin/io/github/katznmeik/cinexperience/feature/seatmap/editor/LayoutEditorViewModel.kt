@@ -151,19 +151,21 @@ class LayoutEditorViewModel(
 
     private suspend fun load() {
         _uiState.update { it.copy(status = EditorStatus.Loading) }
-        val detail = try {
-            hallRepository.observeHallDetail(hallId).first()
+        val loaded = try {
+            hallRepository.observeHallDetail(hallId).first()?.let { detail -> detail to LayoutDraft.start(detail.hall) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            // Also a hall the model can't start editing, e.g. one whose seat id mark
+            // (from a damaged backup) leaves no room for a new grid below SeatLayout.MAX_SEAT_ID.
             _uiState.update { it.copy(status = EditorStatus.LoadFailed) }
             return
         }
-        if (detail == null) {
+        if (loaded == null) {
             _uiState.update { it.copy(status = EditorStatus.NotFound) }
             return
         }
-        val start = LayoutDraft.start(detail.hall)
+        val (detail, start) = loaded
         baseline = start
         gestureBase = null
         pendingSave = null
@@ -557,6 +559,9 @@ class LayoutEditorViewModel(
     /**
      * Applies an edit. Inside a gesture it only updates the draft (the gesture is
      * one step); otherwise it records an undo step (coalesced by [coalesceKey]).
+     * An edit the model refuses changes nothing and shows [EDIT_FAILED]: only
+     * damaged data gets there, e.g. a hall whose seat ids are used up
+     * (`SeatLayout.MAX_SEAT_ID`), and it must not crash the app.
      */
     private fun edit(
         coalesceKey: String? = null,
@@ -565,7 +570,12 @@ class LayoutEditorViewModel(
         transform: (LayoutDraft) -> LayoutDraft,
     ) {
         val current = draft ?: return
-        val edited = transform(current)
+        val edited = try {
+            transform(current)
+        } catch (e: IllegalArgumentException) {
+            _uiState.update { it.copy(message = EDIT_FAILED) }
+            return
+        }
         if (edited.hasSameContentAs(current)) return
         if (gestureBase == null) history.record(current, coalesceKey)
         _uiState.update { it.copy(selectedRow = newSelection).withDraft(edited, syncInputs) }
@@ -606,6 +616,7 @@ class LayoutEditorViewModel(
         const val MAX_START_DIGITS = 4
 
         const val IMPORT_FAILED = "Couldn't load that image."
+        const val EDIT_FAILED = "Couldn't make this change to the layout."
         const val SAVE_FAILED = "Couldn't save the layout. Please try again."
         const val HALL_GONE = "This hall no longer exists."
         const val STALE_EDIT = "The saved layout of this hall changed while you were editing, " +
