@@ -256,7 +256,9 @@ Don't duplicate config in module build files.
   fields at or below the limits. All visits reads each hall's layout once
   (`VisitWithContext.hallLayout`), not once per visit.
   Imports validate everything before touching data (`BackupReader`; manifest
-  and data must precede the files, unreferenced entries are skipped), make
+  and data must precede the files, unreferenced entries are skipped), check
+  free space before staging each file and before writing the safety copy
+  (`BackupLimits.minFreeBytes` stays free), make
   sure a safety copy exists (`filesDir/backups/pre-import-<seq>-<time>.zip`,
   ordered by sequence, not clock; reused if the newest already holds the
   current data; a failed import deletes the copy it wrote; pruned to the newest
