@@ -40,7 +40,10 @@ import kotlin.coroutines.coroutineContext
  *   closed without error is the export recorded as [lastExport]; on any failure
  *   the document is deleted (best effort) and an error is reported. Process death
  *   mid-export can leave an incomplete file at the destination: it lacks the
- *   zip's directory or entries, so an import rejects it.
+ *   zip's directory or entries, so an import rejects it. Other screens stay
+ *   usable meanwhile: a photo or reference image they delete before its entry is
+ *   written fails the export with [BackupError.DATA_CHANGED] (data.json, written
+ *   first, already refers to it), and trying again reads the new data.
  * - **Import** is two-step: [prepareImport] unpacks into `cacheDir/backup-import/`
  *   and validates everything ([BackupReader]) without touching the data;
  *   [commitImport] makes sure a safety copy of the current data exists
@@ -134,6 +137,15 @@ internal class RoomBackupRepository(
                 // Never leave a partial file that looks like a backup.
                 documents.delete(destinationUri)
                 if (e is CancellationException || e is BackupException || e !is Exception) throw e
+                if (e is FileDeletedDuringBackupException) {
+                    // Another screen deleted it after the data was read; the next try reads the new data.
+                    throw BackupException(
+                        BackupError.DATA_CHANGED,
+                        "A photo or reference image was changed while the backup was being written. " +
+                            "Nothing was exported; please try again.",
+                        e,
+                    )
+                }
                 throw BackupException(BackupError.WRITE_FAILED, "Couldn't write the backup file. Nothing was exported.", e)
             }
             if (!lastExportStore.write(LastExport(exportedAt, counts))) Log.w(TAG, "Couldn't record the last export")
