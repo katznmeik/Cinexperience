@@ -99,6 +99,9 @@ internal interface HallDao {
     @Query("SELECT * FROM hall")
     suspend fun getAll(): List<HallEntity>
 
+    @Query("SELECT COUNT(*) FROM hall")
+    suspend fun count(): Int
+
     @Query("DELETE FROM hall WHERE id = :id")
     suspend fun delete(id: Long): Int
 

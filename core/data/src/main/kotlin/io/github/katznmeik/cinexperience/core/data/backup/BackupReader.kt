@@ -5,6 +5,7 @@ import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.data.json.LayoutTooLargeException
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
+import io.github.katznmeik.cinexperience.core.model.DataLimits
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.ScreenSizeRules
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
@@ -86,16 +87,17 @@ internal class ValidationProblem(val detail: String, val missingFile: Boolean = 
  * has a safe name in its folder and is in [files].
  *
  * Size limits, so no imported row is too large for Android to read (2 MB per
- * row) or slows every list down: names, addresses and keys at most
- * [TextLimits.MAX_NAME_LENGTH] code points, notes and film titles at most
- * [TextLimits.MAX_LONG_TEXT_LENGTH], row labels at most
+ * row) or slows every list down: at most [DataLimits.MAX_HALLS] halls; names,
+ * addresses and keys at most [TextLimits.MAX_NAME_LENGTH] code points, notes
+ * and film titles at most [TextLimits.MAX_LONG_TEXT_LENGTH], row labels at most
  * [TextLimits.MAX_ROW_LABEL_LENGTH]; layouts within [SeatLayout.MAX_ROWS] ×
  * [SeatLayout.MAX_COLUMNS], their JSON at most [LayoutJson.MAX_JSON_LENGTH]
  * chars and not much longer than this app's own encoding of the layout
  * ([LayoutJson.isPadded]); seed record and metadata values at most
  * [LayoutJson.MAX_JSON_LENGTH] chars; file names are bounded by their pattern.
  * The repositories enforce the same rules for every value they write (texts,
- * row labels, screen size and offset), so data saved by the app always exports.
+ * row labels, screen size and offset, the number of halls; the seeder stops at
+ * that number too), so data saved by the app always exports.
  */
 internal object BackupValidator {
 
@@ -116,6 +118,7 @@ internal object BackupValidator {
             }
         }
 
+        if (data.halls.size > DataLimits.MAX_HALLS) problem("it has more than ${DataLimits.MAX_HALLS_TEXT} halls.")
         val layouts = HashMap<Long, SeatLayout?>()
         val hallKeys = HashSet<String>()
         for (hall in data.halls) {
