@@ -342,11 +342,14 @@ class LayoutEditorViewModel(
         edit { it.updateRow(row) { r -> r.copy(halfSeatOffset = enabled) } }
     }
 
-    /** Types into a block's start number field (digits only); empty = automatic. */
+    /**
+     * Types into a block's start number field (digits only, leading zeros dropped);
+     * empty = automatic. So 0 is automatic too: Yorck has no seat 0.
+     */
     fun setBlockStart(block: Int, text: String) {
         val row = state.selectedRow ?: return
-        val input = text.filter { it.isDigit() }.take(MAX_START_DIGITS)
-        val start = input.toIntOrNull()
+        val input = text.filter { it.isDigit() }.trimStart('0').take(MAX_START_DIGITS)
+        val start = input.toIntOrNull()?.takeIf { it > 0 }
         _uiState.update { s ->
             val inputs = s.blockStartInputs.toMutableList()
             if (block in inputs.indices) inputs[block] = input
