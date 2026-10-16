@@ -26,7 +26,7 @@ class HeldViewTest {
     fun aHeldViewKeepsItsScaleWhenTheContentShrinksBelowIt() {
         val state = SeatMapViewState()
         val asDrawn = state.transformFor(bounds)
-        state.hold(asDrawn)
+        state.hold(asDrawn, bounds)
 
         // The screen's handle is dragged inward: the content narrows to 150, so the
         // fitted (and minimum) scale rises to 2.67, above the held scale 2.
@@ -53,7 +53,7 @@ class HeldViewTest {
         state.userTransform = bounds.clamp(ViewTransform(8f, Offset(-5000f, 0f)))
         val asDrawn = state.transformFor(bounds)
         assertEquals(8f, asDrawn.scale, 0f)
-        state.hold(asDrawn)
+        state.hold(asDrawn, bounds)
         assertTrue(state.isAdjusted) // still the user's zoom
 
         // The screen is widened past the grid: the content grows to 300, so the
@@ -76,26 +76,37 @@ class HeldViewTest {
         val state = SeatMapViewState()
         state.userTransform = ViewTransform(4f, Offset(-100f, -100f))
         val asDrawn = state.transformFor(bounds)
-        state.hold(asDrawn)
+        state.hold(asDrawn, bounds)
         // While held, the content changes (the user's zoom isn't re-clamped meanwhile) ...
         val grown = boundsOf(Rect(-120f, -40f, 180f, 60f))
         assertEquals(asDrawn, state.transformFor(grown))
-        // ... and the user's zoom survives the hold untouched.
+        // ... and when it is released, the user's view stays where it was held.
         state.release()
-        assertEquals(ViewTransform(4f, Offset(-100f, -100f)), state.userTransform)
-        assertEquals(grown.clamp(ViewTransform(4f, Offset(-100f, -100f))), state.transformFor(grown))
+        assertTrue(state.isAdjusted)
+        assertEquals(asDrawn, state.userTransform)
+        assertEquals(asDrawn, state.transformFor(grown))
     }
 
     @Test
-    fun aHeldViewStillKeepsTheContentInView() {
+    fun aHeldViewPansSidewaysOverTheContentAsItWasWhenHeld() {
         val state = SeatMapViewState()
-        val asDrawn = bounds.clamp(ViewTransform(4f, Offset(-5000f, 0f))) // zoomed, at the right edge
+        // Zoomed in, at the content's right and bottom edges.
+        val asDrawn = bounds.clamp(ViewTransform(4f, Offset(-5000f, -5000f)))
         state.userTransform = asDrawn
-        state.hold(asDrawn)
-        // The content's right edge moves left: the view follows it, so no empty space shows.
+        state.hold(asDrawn, bounds)
+        // The content's right edge moves left (the screen dragged left past the row
+        // labels moves its left edge out and its right edge in): the view stays still,
+        // and the right edge of the content as it was when held is still at the viewport's edge.
         val narrower = boundsOf(Rect(-20f, -40f, 100f, 60f))
-        val held = state.transformFor(narrower)
+        assertTrue(narrower.clamp(asDrawn) != asDrawn) // the plain clamp would pan the view
+        assertEquals(asDrawn, state.transformFor(narrower))
+        assertEquals(viewport.width, state.transformFor(narrower).toScreen(Offset(180f, 0f)).x, 0.001f)
+
+        // Vertically the view keeps to the content as it is now: its bottom edge moves up, the view follows.
+        val shorter = boundsOf(Rect(-20f, -40f, 100f, 50f))
+        val held = state.transformFor(shorter)
         assertEquals(asDrawn.scale, held.scale, 0f)
-        assertEquals(viewport.width, held.toScreen(Offset(100f, 0f)).x, 0.001f)
+        assertEquals(asDrawn.offset.x, held.offset.x, 0f)
+        assertEquals(viewport.height, held.toScreen(Offset(0f, 50f)).y, 0.001f)
     }
 }

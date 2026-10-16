@@ -71,6 +71,9 @@ class SeatMapViewState {
      */
     private var heldTransform: ViewTransform? by mutableStateOf(null)
 
+    /** The content's bounds when the view was held (see [hold]). */
+    private var heldContent: Rect? = null
+
     val isAdjusted: Boolean get() = userTransform != null
 
     /** Back to the fitted view. */
@@ -78,24 +81,45 @@ class SeatMapViewState {
         userTransform = null
     }
 
-    /** Holds [transform] (the view as drawn, from [transformFor]) until [release]. */
-    fun hold(transform: ViewTransform) {
+    /**
+     * Holds [transform] (the view as drawn, from [transformFor] with [bounds]) until
+     * [release]. Meanwhile the view may pan sideways over the content as it was in
+     * [bounds] as well as over the content as it is now.
+     */
+    fun hold(transform: ViewTransform, bounds: ViewBounds) {
+        heldContent = bounds.content
         heldTransform = transform
     }
 
+    /**
+     * Ends [hold]. A view the user zoomed stays where it was held (within the
+     * limits of the content as it is now); a fitted view is fitted again.
+     */
     fun release() {
+        val held = heldTransform ?: return
+        if (userTransform != null) userTransform = held
         heldTransform = null
+        heldContent = null
     }
 
     /**
      * The view to draw within [bounds]: the held view, else the user's zoom, else
      * the fitted view. The zoom limits follow the content, so a held view's scale
      * is allowed whatever the limits are now (the content changes under it): it
-     * keeps its zoom exactly, only its offset is kept within the content's edges.
+     * keeps its zoom exactly. Sideways it is kept within the content's edges at
+     * [hold] or now, whichever reach further (a screen dragged past the row labels
+     * moves one edge out and the other in, and the view mustn't follow either);
+     * vertically within the content as it is now.
      */
     fun transformFor(bounds: ViewBounds): ViewTransform {
         heldTransform?.let { held ->
-            val limits = bounds.copy(minScale = min(bounds.minScale, held.scale), maxScale = max(bounds.maxScale, held.scale))
+            val content = bounds.content
+            val start = heldContent ?: content
+            val limits = bounds.copy(
+                content = Rect(min(start.left, content.left), content.top, max(start.right, content.right), content.bottom),
+                minScale = min(bounds.minScale, held.scale),
+                maxScale = max(bounds.maxScale, held.scale),
+            )
             return limits.clamp(held)
         }
         return userTransform?.let(bounds::clamp) ?: bounds.fitted()
