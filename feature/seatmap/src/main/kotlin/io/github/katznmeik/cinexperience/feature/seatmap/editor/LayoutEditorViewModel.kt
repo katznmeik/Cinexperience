@@ -118,7 +118,9 @@ data class LayoutEditorUiState(
  * or column is deleted (undo brings them back).
  *
  * Reference screenshots are copied into app storage when picked; on save the
- * replaced one is deleted, on discard the ones picked in this session are.
+ * replaced one is deleted, on discard the ones picked in this session are. A save
+ * waits for screenshots still being copied and saves the last one, and one that
+ * lands after a discard is deleted, so none is left behind.
  */
 class LayoutEditorViewModel(
     private val hallId: Long,
@@ -142,6 +144,12 @@ class LayoutEditorViewModel(
 
     /** Screenshots imported in this session; they're deleted unless saved. */
     private val sessionImports = LinkedHashSet<String>()
+
+    /** Screenshot imports still running ("Replace" can start one while another runs). */
+    private var runningImports = 0
+
+    /** [discard] was called: the editor closes without saving, so an import landing now is deleted. */
+    private var discarding = false
 
     /** The hall for a save waiting for the user's confirmation. */
     private var pendingSave: Hall? = null
@@ -182,6 +190,7 @@ class LayoutEditorViewModel(
                 tool = it.tool,
                 seatKind = it.seatKind,
                 referenceOpacity = it.referenceOpacity,
+                isImportingReference = runningImports > 0,
                 replacesUnreadableLayout = detail.hall.layoutUnreadable,
             ).withDraft(start, syncInputs = true)
         }
@@ -385,13 +394,23 @@ class LayoutEditorViewModel(
         _uiState.update { it.copy(referenceMode = !it.referenceMode, screenSelected = false) }
     }
 
-    /** Result of the photo picker; `null` if the user cancelled. */
+    /**
+     * Result of the photo picker; `null` if the user cancelled. Ignored while saving
+     * and once the editor is closing. The copy runs in the background: a save waits
+     * for it ([write]), and a copy that lands after a discard is deleted.
+     */
     fun onReferenceImagePicked(uri: String?) {
-        if (uri == null || state.status != EditorStatus.Ready || state.isSaving) return
+        if (uri == null || state.status != EditorStatus.Ready || state.isSaving || state.isClosed || discarding) return
+        runningImports++
         _uiState.update { it.copy(isImportingReference = true) }
         viewModelScope.launch {
             try {
                 val path = referenceImages.importImage(hallId, uri)
+                if (discarding || state.isClosed) {
+                    // Nothing will ever point to it: the session's screenshots are already gone.
+                    deleteQuietly(path)
+                    return@launch
+                }
                 sessionImports += path
                 edit { it.withReferenceImage(path) }
                 _uiState.update { it.copy(referenceMode = true, screenSelected = false) }
@@ -400,7 +419,8 @@ class LayoutEditorViewModel(
             } catch (e: IOException) {
                 _uiState.update { it.copy(message = IMPORT_FAILED) }
             } finally {
-                _uiState.update { it.copy(isImportingReference = false) }
+                runningImports--
+                _uiState.update { it.copy(isImportingReference = runningImports > 0) }
             }
         }
     }
@@ -472,6 +492,8 @@ class LayoutEditorViewModel(
     }
 
     private suspend fun write(stored: Hall) {
+        // A screenshot picked before saving may still be being copied: wait, so the save includes it.
+        _uiState.first { !it.isImportingReference }
         val current = draft ?: return
         // The draft's offset is always valid; snapping again guards the repository's check.
         val screenOffset = ScreenOffsetRules.snap(current.screenOffset)
@@ -529,12 +551,13 @@ class LayoutEditorViewModel(
     }
 
     /**
-     * Leaves without saving; screenshots picked in this session are deleted.
-     * Ignored while a save is running: deleting a just-saved screenshot would leave
-     * the hall pointing at a missing file.
+     * Leaves without saving; screenshots picked in this session are deleted, also
+     * one still being copied (when it lands). Ignored while a save is running:
+     * deleting a just-saved screenshot would leave the hall pointing at a missing file.
      */
     fun discard() {
         if (state.isSaving || state.isClosed) return
+        discarding = true
         _uiState.update { it.copy(dialog = null) }
         viewModelScope.launch {
             deleteImports(keep = null)
