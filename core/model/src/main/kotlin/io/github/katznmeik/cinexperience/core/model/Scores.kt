@@ -91,15 +91,33 @@ private fun meanOrNull(values: List<Double>): Double? = if (values.isEmpty()) nu
 const val NO_SCORE_TEXT: String = "–"
 
 /**
+ * [score] without floating-point noise: scores are means of means, so equal ones
+ * can differ in their last bits (mean[2.2] is 2.2, mean[2.0, 2.0, 2.6] is
+ * 2.1999999999999997, and 3.95 can be computed as 3.9499999999999997). Rounded to
+ * 9 decimals, far below anything a mean of 1–5 ratings can tell apart.
+ */
+private fun withoutNoise(score: Double): BigDecimal = BigDecimal.valueOf(score).setScale(9, RoundingMode.HALF_EVEN)
+
+/**
  * Formats a score with one decimal (half up, e.g. 4.25 → "4.3"), or [NO_SCORE_TEXT]
- * for `null`. Scores are means of means, so floating-point noise can put an exact
- * x.x5 just below the boundary (3.95 is computed as 3.9499999999999997); the value
- * is first rounded to 9 decimals to remove that noise, then to one decimal.
+ * for `null`. The noise is removed first ([withoutNoise]), so an exact x.x5 never
+ * lands just below the boundary.
  */
 fun formatScore(score: Double?): String =
-    score?.let {
-        BigDecimal.valueOf(it)
-            .setScale(9, RoundingMode.HALF_EVEN)
-            .setScale(1, RoundingMode.HALF_UP)
-            .toPlainString()
-    } ?: NO_SCORE_TEXT
+    score?.let { withoutNoise(it).setScale(1, RoundingMode.HALF_UP).toPlainString() } ?: NO_SCORE_TEXT
+
+/**
+ * The order of every score-sorted list (the cinema list's score sort, spec §6.1, and
+ * the Rankings, spec §6.6): highest score first, unrated (`null`) last. Scores that
+ * are mathematically equal compare as equal, whatever their floating-point noise
+ * ([withoutNoise]), so each list's own tie-break decides between them, and a stable
+ * sort keeps their input order.
+ */
+object ScoreOrder : Comparator<Double?> {
+    override fun compare(a: Double?, b: Double?): Int = when {
+        a == null && b == null -> 0
+        a == null -> 1
+        b == null -> -1
+        else -> withoutNoise(b).compareTo(withoutNoise(a))
+    }
+}

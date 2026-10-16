@@ -10,6 +10,7 @@ import io.github.katznmeik.cinexperience.core.data.repository.Rankings
 import io.github.katznmeik.cinexperience.core.data.repository.RankingsRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaCategory
 import io.github.katznmeik.cinexperience.core.model.HallCategory
+import io.github.katznmeik.cinexperience.core.model.ScoreOrder
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,8 +19,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import java.math.BigDecimal
-import java.math.RoundingMode
 
 /** What the Rankings tab ranks (spec §6.6). */
 enum class RankingScope(val label: String) {
@@ -96,11 +95,9 @@ data class RankingsUiState(
         }
 }
 
-/** Removes floating-point noise so means of means that are equal compare as equal. */
-private fun Double.tieKey(): BigDecimal = BigDecimal.valueOf(this).setScale(9, RoundingMode.HALF_EVEN)
-
 /**
- * Ranks [this]: highest score first; ties → more ratings first, then natural name
+ * Ranks [this]: highest score first ([ScoreOrder], like the cinema list:
+ * mathematically equal scores tie); ties → more ratings first, then natural name
  * order ([NameOrder] on title, then subtitle); unrated items last in name order.
  * Rated items get positions 1..n, unrated ones none.
  */
@@ -108,7 +105,7 @@ fun List<RankedItem>.ranked(): List<RankedItem> {
     val byName = compareBy(NameOrder) { it: RankedItem -> it.title }.thenBy(NameOrder) { it.subtitle }
     val (rated, unrated) = partition { it.score != null }
     val sortedRated = rated.sortedWith(
-        compareByDescending<RankedItem> { it.score!!.tieKey() }
+        compareBy<RankedItem, Double?>(ScoreOrder) { it.score }
             .thenByDescending { it.ratingCount }
             .then(byName),
     )
