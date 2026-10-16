@@ -254,7 +254,7 @@ class ProgramDownloaderTest {
     }
 
     @Test
-    fun cancellingTheDownloadAbortsTheBlockedCallAtOnce() = onRealThreads {
+    fun cancellingTheDownloadEndsTheBlockedCallByAbortingIt() = onRealThreads {
         val transport = FakeTransport().then { abort -> blockUntilAborted(abort) }
         val download = async { downloader(transport).get() } // 90 s timeout: only the cancel can end it
         assertTrue(transport.blocking.await(FakeTransport.STALL_LIMIT_SECONDS, TimeUnit.SECONDS))

@@ -399,7 +399,7 @@ class DefaultProgramRepositoryTest {
     }
 
     @Test
-    fun switchingOffAbortsARunningDownloadAtOnceAndKeepsNothing() = withThreads { scope, dispatcher ->
+    fun switchingOffEndsARunningDownloadByAbortingItAndKeepsNothing() = withThreads { scope, dispatcher ->
         settings.permission = DownloadPermission.ALLOWED
         stallEveryRequest()
         val repository = blockingRepository(scope, dispatcher)
