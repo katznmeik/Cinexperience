@@ -15,7 +15,7 @@ import java.time.LocalTime
 class ProgramTextsIsolationTest {
 
     /** A Hebrew name: right-to-left text, as Yorck's page could carry it. */
-    private val hebrew = "קולנוע"
+    private val hebrew = "\u05E7\u05D5\u05DC\u05E0\u05D5\u05E2"
 
     @Test
     fun filterSummaryIsolatesASingleCinemaName() {
@@ -26,7 +26,7 @@ class ProgramTextsIsolationTest {
             versions = setOf(ShowingVersion.OMU),
         )
         assertEquals(
-            "⁨$hebrew⁩ · 16:00–17:30 · OmU",
+            "\u2068$hebrew\u2069 · 16:00–17:30 · OmU",
             filterSummary(filter, mapOf("delphi-lux" to hebrew)),
         )
     }
@@ -52,7 +52,7 @@ class ProgramTextsIsolationTest {
             endsAbout = null,
         )
         assertEquals(
-            "⁨$hebrew⁩, Thursday 15 Oct, 16:30, ⁨delphi LUX⁩",
+            "\u2068$hebrew\u2069, Thursday 15 Oct, 16:30, \u2068delphi LUX\u2069",
             showingSpokenName(item),
         )
     }
@@ -60,7 +60,7 @@ class ProgramTextsIsolationTest {
     @Test
     fun partOfTextIsolatesEveryTitle() {
         assertEquals(
-            "Part of: ⁨$hebrew⁩, ⁨Autumn Classics⁩",
+            "Part of: \u2068$hebrew\u2069, \u2068Autumn Classics\u2069",
             partOfText(listOf(hebrew, "Autumn Classics")),
         )
     }
