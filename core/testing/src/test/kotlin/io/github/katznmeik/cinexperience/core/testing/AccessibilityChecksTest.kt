@@ -87,6 +87,14 @@ class AccessibilityChecksTest {
     }
 
     @Test
+    fun allowedRepeatedTextPasses() {
+        show {
+            Box(Modifier.size(48.dp).clickable {}.semantics { contentDescription = "Add photo" }) { Text("Add photo") }
+        }
+        composeRule.assertAccessible(allowRepeated = setOf("add photo"))
+    }
+
+    @Test
     fun screenWithoutHeadingFails() {
         composeRule.setContent { ScreenshotSurface { Text("Just text") } }
         assertProblem("No heading on the screen")

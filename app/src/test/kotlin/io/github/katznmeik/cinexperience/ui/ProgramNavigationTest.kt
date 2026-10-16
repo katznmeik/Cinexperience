@@ -78,7 +78,7 @@ class ProgramNavigationTest {
         composeRule.onNodeWithText("Show all in Program").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag(TopLevelDestination.Program.testTag).assertIsSelected()
-        composeRule.onNodeWithText("Kant Kino · Any time · All versions").assertExists()
+        composeRule.onNodeWithText("\u2068Kant Kino\u2069 · Any time · All versions").assertExists()
         // The cinema page itself never downloads; the Program tab only if stale.
         assertEquals(listOf("refreshIfStale"), program.refreshCalls)
     }
@@ -89,7 +89,7 @@ class ProgramNavigationTest {
         showApp(program)
         composeRule.onNodeWithText("KANT KINO").performClick()
         composeRule.onNodeWithText("Show all in Program").performScrollTo().performClick()
-        composeRule.onNodeWithText("Kant Kino · Any time · All versions").assertExists()
+        composeRule.onNodeWithText("\u2068Kant Kino\u2069 · Any time · All versions").assertExists()
 
         // (The Cinemas tab would come back with the cinema's page, which has no tab bar.)
         composeRule.onNodeWithTag(TopLevelDestination.Rankings.testTag).performClick()
