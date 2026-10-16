@@ -97,11 +97,14 @@ class BlockStartFrontSeatTest {
         assertEquals(listOf(3), rtlTwo.blockStartNumbers)
         assertEquals(listOf("7", "6", "5", "4", "3"), SeatLayout(listOf(rtlTwo), 22).texts())
 
-        // Not enough numbers below the start: today's rule, the first new seat takes the start.
+        // Not enough numbers below the start: they count back to 1, the others move up just as far
+        // as needed. The same as painting them one at a time, nearest first.
         val low = layoutOf("..SS").withStarts(2).rows[0] // . . 2 3
         val lowTwo = low.withCells(listOf(seat(20), seat(21)) + low.cells.drop(2))
-        assertEquals(listOf(2), lowTwo.blockStartNumbers)
-        assertEquals(listOf("2", "3", "4", "5"), SeatLayout(listOf(lowTwo), 22).texts())
+        assertEquals(listOf(1), lowTwo.blockStartNumbers)
+        assertEquals(listOf("1", "2", "3", "4"), SeatLayout(listOf(lowTwo), 22).texts())
+        val oneByOne = layoutOf("..SS").withStarts(2).withCellType(0, 1, CellType.SEAT).withCellType(0, 0, CellType.SEAT)
+        assertEquals(SeatLayout(listOf(lowTwo), 22).texts(), oneByOne.texts())
     }
 
     @Test
@@ -118,6 +121,44 @@ class BlockStartFrontSeatTest {
         val rtl = layoutOf("SSS.").rightToLeft().withStarts(1).withCellType(0, 3, CellType.SEAT)
         assertEquals(listOf(1), rtl.starts())
         assertEquals(listOf("4", "3", "2", "1"), rtl.texts())
+    }
+
+    @Test
+    fun inAContinuousRowTheNewSeatsStayAfterThePreviousBlocksNumbers() {
+        // Room below the start: the new seat takes 11, after the first block's 1–8.
+        val paris = layoutOf("SSSSSSSS|||.SSSSSSSS").withStarts(null, 12)
+        val front = paris.withCellType(0, 11, CellType.SEAT)
+        assertEquals(listOf(null, 11), front.starts())
+        assertEquals((1..8).map { "$it" } + (11..19).map { "$it" }, front.texts())
+
+        // A tight start: 1 2 3 | 4 5 gives 1 2 3 | 4 5 6, not a second seat 3.
+        val tight = layoutOf("SSS|.SS").withStarts(null, 4).withCellType(0, 4, CellType.SEAT)
+        assertEquals(listOf(null, 4), tight.starts())
+        assertEquals(listOf("1", "2", "3", "4", "5", "6"), tight.texts())
+
+        // Two new seats with room for one: the others move up by one.
+        val room = layoutOf("SSS|..SS").withStarts(null, 5).rows[0] // 1 2 3 | 5 6
+        val two = room.withCells(room.cells.take(4) + listOf(seat(20), seat(21)) + room.cells.drop(6))
+        assertEquals(listOf(null, 4), two.blockStartNumbers)
+        assertEquals(listOf("1", "2", "3", "4", "5", "6", "7"), SeatLayout(listOf(two), 22).texts())
+
+        // Right to left, the right block is numbered first: 5 4 3 | 2 1 gives 6 5 4 3 | 2 1.
+        val rtl = layoutOf("SSS.|SS").rightToLeft().withStarts(3).withCellType(0, 3, CellType.SEAT)
+        assertEquals(listOf(3), rtl.starts())
+        assertEquals(listOf("6", "5", "4", "3", "2", "1"), rtl.texts())
+        val rtlRoom = layoutOf("SSS.|SS").rightToLeft().withStarts(4).withCellType(0, 3, CellType.SEAT)
+        assertEquals(listOf("6", "5", "4", "3", "2", "1"), rtlRoom.texts())
+
+        // A start already below the bound: the new seat takes it, as without this rule.
+        val below = layoutOf("SSS|.SS").withStarts(null, 2).withCellType(0, 4, CellType.SEAT) // 1 2 3 | 2 3
+        assertEquals(listOf(null, 2), below.starts())
+        assertEquals(listOf("1", "2", "3", "2", "3", "4"), below.texts())
+
+        // Restarting blocks only stop at 1.
+        val restart = layoutOf("SSS|.SS").updateRow(0) { it.copy(numbering = SeatNumbering.RESTART_PER_BLOCK) }
+            .withStarts(null, 2).withCellType(0, 4, CellType.SEAT)
+        assertEquals(listOf(null, 1), restart.starts())
+        assertEquals(listOf("1", "2", "3", "1", "2", "3"), restart.texts())
     }
 
     @Test
@@ -242,10 +283,13 @@ class BlockStartFrontSeatTest {
         val behindColumn = stored.insertColumn(5, CellType.SEAT)
         assertEquals(listOf(listOf(5, null), listOf(5, null)), behindColumn.rows.map { it.blockStartNumbers })
 
-        // A seat in front of row 0 leaves row 1 exactly as stored.
-        val front = stored.withCellType(0, 0, CellType.SEAT)
-        assertEquals(listOf(4), front.starts())
-        assertEquals(stored.rows[1], front.rows[1])
+        // A seat column in front of a left-to-right row and behind a right-to-left one: only the first re-keys.
+        val mixed = layoutOf(".SSS.", ".SSS.").withStarts(5, null).withStarts(5, null, row = 1).rightToLeft(row = 1)
+        val front = mixed.insertColumn(0, CellType.SEAT)
+        assertEquals(listOf(4), front.starts(0))
+        assertEquals(listOf("4", "5", "6", "7"), front.texts(0))
+        assertEquals(listOf(5, null), front.starts(1))
+        assertEquals(listOf("8", "7", "6", "5"), front.texts(1))
 
         // A seat inserted inside a block still moves the seats behind it up.
         val inside = layoutOf("SS.SS").withStarts(5).withCellType(0, 2, CellType.SEAT)

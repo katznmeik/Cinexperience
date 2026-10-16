@@ -175,8 +175,9 @@ enum class NumberingDirection {
  *   the seat it was set on and numbers that block's current first numbered seat;
  *   when that seat is removed, it moves on to the next numbered seat, with the
  *   number that seat had; a numbered seat added in front of that seat takes the
- *   number before it (start − 1, when that is at least 1), so the existing seats
- *   keep their numbers ([withBlockStartsKeyedOn], [withCells]).
+ *   number before it (start − 1, at least 1 and, in a continuous row, after the
+ *   previous block's numbers), so the existing seats keep their numbers
+ *   ([withBlockStartsKeyedOn], [withCells]).
  * @property halfSeatOffset the whole row is drawn shifted half a seat to the right
  *   (staggered rows). Alternating rows with and without the offset model staggering.
  * @property numberingDirection which way the row's seats are numbered.
@@ -297,10 +298,14 @@ data class LayoutRow(
      * Likewise, new numbered seats added in front of the seat a block's explicit
      * start `s` is keyed on (before it in numbering order) count back from it: with
      * `k` of them, the first takes `s − k`, so the seat with the start and every
-     * seat after it keep their numbers. Where `s − k` would be below 1 (Yorck has
-     * no seat 0), the first new seat takes `s` and the others move up. A restored
-     * seat with its own start ([restored]) is not new; seats with a fixed label
-     * use no number and don't count.
+     * seat after it keep their numbers. They count back only as far as a lower
+     * bound: 1 (Yorck has no seat 0), and in a [SeatNumbering.CONTINUOUS] row one
+     * more than the last number before the block in numbering order, so no number
+     * is used twice. Where the bound stops them, the first new seat takes the bound
+     * and the others move up just as far as needed; never above `s`, so a start
+     * already below the bound gives the first new seat `s`, as without this rule.
+     * A restored seat with its own start ([restored]) is not new; seats with a
+     * fixed label use no number and don't count.
      *
      * When the change leaves the number of blocks and every block's start as they
      * were, the stored list is kept as it is (even with trailing `null`s or entries
@@ -343,20 +348,31 @@ data class LayoutRow(
      * For each block of [changed] whose first numbered seats in numbering order are
      * new (not in this row) and followed by a seat that carries an explicit start
      * `s` in [anchors] (the start [withBlockStartsKeyedOn] would give the block):
-     * the first new seat, keyed on `s − k` for `k` new numbered seats, when that is
-     * at least 1 (see [withCells]).
+     * the first new seat, keyed on `max(s − k, min(bound, s))` for `k` new numbered
+     * seats (see [withCells]). The bound is 1, and in a [SeatNumbering.CONTINUOUS]
+     * row one more than the last number before the block in numbering order.
      */
     private fun frontStarts(changed: LayoutRow, anchors: Map<SeatId, Int?>): Map<SeatId, Int> {
         val existing = seatIds.toSet()
         val front = HashMap<SeatId, Int>()
-        changed.blockSeatsInNumberingOrder.forEach { seats ->
-            val numbered = seats.filter { it.fixedLabel == null }
+        val rightToLeft = changed.numberingDirection == NumberingDirection.RIGHT_TO_LEFT
+        val blocks = changed.blocks.map { if (rightToLeft) it.asReversed() else it }
+        val numberedBlocks = blocks.map { columns -> columns.filter { (changed.cells[it] as LayoutCell.Seat).fixedLabel == null } }
+        val order = if (rightToLeft) blocks.indices.reversed() else blocks.indices
+        order.forEachIndexed { position, block ->
+            val numbered = numberedBlocks[block].map { changed.cells[it] as LayoutCell.Seat }
             val keyed = numbered.indexOfFirst { it.id in anchors }
-            if (keyed <= 0) return@forEach
-            val start = anchors[numbered[keyed].id] ?: return@forEach
-            if (numbered.subList(0, keyed).any { it.id in existing }) return@forEach
-            if (start - keyed < 1) return@forEach
-            front[numbered.first().id] = start - keyed
+            if (keyed <= 0) return@forEachIndexed
+            val start = anchors[numbered[keyed].id] ?: return@forEachIndexed
+            if (numbered.subList(0, keyed).any { it.id in existing }) return@forEachIndexed
+            val bound = if (changed.numbering == SeatNumbering.CONTINUOUS) {
+                // The last numbered seat before this block, with the starts of the blocks before it.
+                val previous = order.take(position).lastOrNull { numberedBlocks[it].isNotEmpty() }
+                previous?.let { changed.withBlockStartsKeyedOn(anchors + front).numbersByColumn()[numberedBlocks[it].last()]!! + 1 } ?: 1
+            } else {
+                1
+            }
+            front[numbered.first().id] = maxOf(start - keyed, minOf(bound, start))
         }
         return front
     }
@@ -462,8 +478,10 @@ data class SeatLayout(
      * on when it was painted away (see [LayoutRow.blockStartNumbers]). Its block
      * takes it unless a numbered seat that carries a start comes before the
      * restored seat in the block's numbering order; then that seat's start wins
-     * and [blockStart] is dropped. Without a [blockStart], the seat counts as new
-     * (see [LayoutRow.withCells]).
+     * and [blockStart] is dropped: e.g. when a new seat was painted in front of
+     * it meanwhile (`.SSS` from 5: the 5 painted away, a new seat at column 0
+     * takes 5, the 5 restored reads 6, so the row reads 5 6 7 8). Without a
+     * [blockStart], the seat counts as new (see [LayoutRow.withCells]).
      */
     fun withSeat(
         row: Int,

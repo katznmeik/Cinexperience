@@ -32,41 +32,48 @@ class SeedBlockStartsFrontSeatTest {
     fun aSeatInFrontOfEverySeededStartKeepsEveryOtherNumber() {
         assertEquals(38, layouts.size)
         var checked = 0
+        var parisR7: String? = null
         layouts.forEach { (key, seeded) ->
             // A gap column at both edges (which changes no start), so every block has a cell in front.
             val layout = seeded.insertColumn(0, CellType.GAP).insertColumn(seeded.columnCount + 1, CellType.GAP)
             assertEquals(key, seeded.labels().seats.mapValues { it.value.label }, layout.labels().seats.mapValues { it.value.label })
-            val before = layout.labels()
             layout.rows.forEachIndexed { index, row ->
                 row.blocks.forEachIndexed { block, columns ->
                     val start = row.blockStartNumbers.getOrNull(block) ?: return@forEachIndexed
                     if (columns.none { (row.cells[it] as LayoutCell.Seat).fixedLabel == null }) return@forEachIndexed
                     val rightToLeft = row.numberingDirection == NumberingDirection.RIGHT_TO_LEFT
-                    val front = if (rightToLeft) columns.last() + 1 else columns.first() - 1
-                    if (row.cells[front] != LayoutCell.Gap) return@forEachIndexed
+                    val front = if (rightToLeft) columns.last() + 1 else columns.first()
+                    // An aisle in front (Cinema Paris R7): a gap column between it and the block changes no start.
+                    val base = when (row.cells[if (rightToLeft) front else front - 1]) {
+                        LayoutCell.Gap -> layout
+                        else -> layout.insertColumn(front, CellType.GAP)
+                    }
+                    val frontColumn = if (rightToLeft || base !== layout) front else front - 1
+                    assertEquals(LayoutCell.Gap, base.cell(index, frontColumn))
+                    assertEquals(layout.rows.map { it.blockStartNumbers }, base.rows.map { it.blockStartNumbers })
                     val where = "$key row $index block $block"
 
-                    val added = layout.withCellType(index, front, CellType.SEAT)
+                    val before = base.labels()
+                    val added = base.withCellType(index, frontColumn, CellType.SEAT)
                     val after = added.labels()
-                    val newSeat = (added.cell(index, front) as LayoutCell.Seat).id
-                    if (start >= 2) {
-                        layout.seatIds.forEach { id -> assertEquals("$where $id", before.labelOf(id), after.labelOf(id)) }
-                        assertEquals(where, "${start - 1}", after.labelOf(newSeat)!!.seat)
-                    } else {
-                        assertEquals(where, "$start", after.labelOf(newSeat)!!.seat)
-                    }
-                    // Removing the new seat again gives the seeded row back exactly.
-                    assertEquals(where, layout.rows, added.withCellType(index, front, CellType.GAP).rows)
+                    val newSeat = (added.cell(index, frontColumn) as LayoutCell.Seat).id
+                    base.seatIds.forEach { id -> assertEquals("$where $id", before.labelOf(id), after.labelOf(id)) }
+                    assertEquals(where, "${start - 1}", after.labelOf(newSeat)!!.seat)
+                    if (key == "cinema-paris/saal-1" && row.label == "R7") parisR7 = after.labelOf(newSeat)!!.seat
+                    // Removing the new seat again gives the row back exactly.
+                    assertEquals(where, base.rows, added.withCellType(index, frontColumn, CellType.GAP).rows)
                     // In a session, too, with no change left.
-                    val session = LayoutEditSession.start(layout, hallNextSeatId = layout.nextSeatId)
-                        .setCellType(index, front, CellType.SEAT)
-                        .setCellType(index, front, CellType.GAP)
+                    val session = LayoutEditSession.start(base, hallNextSeatId = base.nextSeatId)
+                        .setCellType(index, frontColumn, CellType.SEAT)
+                        .setCellType(index, frontColumn, CellType.GAP)
                     assertFalse(where, session.hasChanges)
                     checked++
                 }
             }
         }
-        assertTrue("$checked", checked >= 25)
+        // Every seeded start, including Cinema Paris R7's 12 behind its aisle: the new seat there is 11.
+        assertEquals(26, checked)
+        assertEquals("11", parisR7)
     }
 
     @Test
