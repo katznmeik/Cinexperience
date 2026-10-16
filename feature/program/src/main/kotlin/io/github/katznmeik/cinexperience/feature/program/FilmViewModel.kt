@@ -13,6 +13,7 @@ import io.github.katznmeik.cinexperience.core.program.ProgramLinks
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramState
 import io.github.katznmeik.cinexperience.core.program.ProgramTime
+import io.github.katznmeik.cinexperience.core.ui.flow.minuteTicks
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted

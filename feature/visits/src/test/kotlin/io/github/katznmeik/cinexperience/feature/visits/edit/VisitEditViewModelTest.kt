@@ -15,6 +15,8 @@ import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.testing.SampleLayouts
+import io.github.katznmeik.cinexperience.core.ui.component.toPickerDate
+import io.github.katznmeik.cinexperience.core.ui.component.toPickerMillis
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

@@ -36,6 +36,7 @@ import io.github.katznmeik.cinexperience.core.ui.component.LabelChip
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
+import io.github.katznmeik.cinexperience.core.ui.text.timeText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 /** Only links to yorck.de are opened; [io.github.katznmeik.cinexperience.core.program.ProgramLinks] builds them. */

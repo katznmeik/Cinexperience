@@ -34,14 +34,14 @@ import androidx.compose.ui.unit.dp
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
+import io.github.katznmeik.cinexperience.core.ui.component.toPickerDate
+import io.github.katznmeik.cinexperience.core.ui.component.toPickerMillis
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
-import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.ZoneOffset
 
 /** The saved filters: pick one, delete one, or save the current filter. */
 @Composable
@@ -182,7 +182,3 @@ internal fun DateDialog(today: LocalDate, lastDate: LocalDate?, onDate: (LocalDa
         DatePicker(state = pickerState, showModeToggle = false, modifier = Modifier.padding(bottom = 4.dp))
     }
 }
-
-private fun LocalDate.toPickerMillis(): Long = atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-
-private fun Long.toPickerDate(): LocalDate = Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()

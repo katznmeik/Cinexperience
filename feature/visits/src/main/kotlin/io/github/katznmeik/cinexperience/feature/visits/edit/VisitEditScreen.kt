@@ -98,15 +98,15 @@ import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.StarRatingInput
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
+import io.github.katznmeik.cinexperience.core.ui.component.toPickerDate
+import io.github.katznmeik.cinexperience.core.ui.component.toPickerMillis
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.visits.chipText
 import io.github.katznmeik.cinexperience.feature.visits.formLabel
 import kotlinx.coroutines.CancellationException
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 
 /** Everything the form can do; the defaults do nothing (screenshots, previews). */
 internal interface VisitEditActions {
@@ -875,10 +875,6 @@ private fun VisitDatePicker(date: LocalDate, onDate: (LocalDate) -> Unit, onDism
         DatePicker(state = pickerState, showModeToggle = false)
     }
 }
-
-internal fun LocalDate.toPickerMillis(): Long = atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-
-internal fun Long.toPickerDate(): LocalDate = Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()
 
 @Composable
 private fun DialogHost(dialog: VisitEditDialog?, actions: VisitEditActions) {

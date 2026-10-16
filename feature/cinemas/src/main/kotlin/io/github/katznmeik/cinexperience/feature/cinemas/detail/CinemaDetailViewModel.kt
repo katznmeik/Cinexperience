@@ -11,15 +11,14 @@ import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramTime
+import io.github.katznmeik.cinexperience.core.ui.flow.minuteTicks
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaDeleteListener
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaEditor
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialog
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditMessages
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -31,14 +30,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Clock
-
-/** Emits now and then once a minute, so "now" stays current. */
-internal fun minuteTicks(): Flow<Unit> = flow {
-    while (true) {
-        emit(Unit)
-        delay(60_000)
-    }
-}
 
 sealed interface CinemaDetailContent {
     data object Loading : CinemaDetailContent

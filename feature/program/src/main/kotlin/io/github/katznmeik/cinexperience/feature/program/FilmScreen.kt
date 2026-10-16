@@ -36,6 +36,7 @@ import io.github.katznmeik.cinexperience.core.ui.component.ActionPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.text.dayHeaderText
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 

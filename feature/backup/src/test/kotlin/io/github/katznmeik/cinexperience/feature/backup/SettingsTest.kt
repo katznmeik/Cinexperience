@@ -26,6 +26,7 @@ import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
+import io.github.katznmeik.cinexperience.core.ui.text.dateTimeText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first

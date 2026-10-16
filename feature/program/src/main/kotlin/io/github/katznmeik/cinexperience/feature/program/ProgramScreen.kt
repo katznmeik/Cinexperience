@@ -62,6 +62,9 @@ import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.ToggleChip
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.text.dayHeaderText
+import io.github.katznmeik.cinexperience.core.ui.text.shortDayText
+import io.github.katznmeik.cinexperience.core.ui.text.timeText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import java.time.LocalDate
 import java.time.LocalTime
