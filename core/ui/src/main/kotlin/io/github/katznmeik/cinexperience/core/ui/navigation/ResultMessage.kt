@@ -11,8 +11,9 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Saved-state key of a one-off message that a closing screen leaves for the screen
  * it returns to, e.g. "Deleted Atelier" after a cinema detail deleted its cinema.
+ * Features go through [navigateUpWithResultMessage] and [resultMessage].
  */
-const val RESULT_MESSAGE_KEY: String = "cinemas.resultMessage"
+internal const val RESULT_MESSAGE_KEY: String = "cinemas.resultMessage"
 
 /**
  * Goes back and leaves [message] for the screen below, which shows it

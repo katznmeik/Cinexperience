@@ -54,10 +54,4 @@ class DatesTest {
         // Winter time in Berlin: one hour ahead of UTC; the date can change.
         assertEquals("1 Jan 2027, 00:30", dateTimeText(Instant.parse("2026-12-31T23:30:00Z"), ZoneId.of("Europe/Berlin")))
     }
-
-    @Test
-    fun dateTimeDefaultsToTheSystemZone() {
-        val instant = Instant.parse("2026-10-03T12:05:00Z")
-        assertEquals(dateTimeText(instant, ZoneId.systemDefault()), dateTimeText(instant))
-    }
 }

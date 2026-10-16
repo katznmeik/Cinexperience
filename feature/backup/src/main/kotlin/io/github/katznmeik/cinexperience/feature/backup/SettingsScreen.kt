@@ -52,6 +52,7 @@ import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateTimeText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
+import java.time.ZoneId
 
 /** Backup callbacks of the Settings screen, implemented by [SettingsViewModel] and the file pickers. */
 internal interface BackupActions {
@@ -414,9 +415,9 @@ private fun ImportPreviewDialog(preview: ImportPreview, actions: BackupActions) 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = if (fromSafetyCopy) {
-                        "Saved ${dateTimeText(preview.exportedAt)}, before an import"
+                        "Saved ${dateTimeText(preview.exportedAt, ZoneId.systemDefault())}, before an import"
                     } else {
-                        "Exported ${dateTimeText(preview.exportedAt)} · app version ${preview.appVersion}"
+                        "Exported ${dateTimeText(preview.exportedAt, ZoneId.systemDefault())} · app version ${preview.appVersion}"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = CinexTheme.colors.textMuted,

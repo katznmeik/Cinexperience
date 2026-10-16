@@ -23,6 +23,6 @@ class UnitTestTimeZoneTest {
     fun robolectricTestsRunInUtc() {
         assertEquals("UTC", TimeZone.getDefault().id)
         assertEquals(ZoneId.of("UTC"), ZoneId.systemDefault())
-        assertEquals("3 Oct 2026, 12:05", dateTimeText(Instant.parse("2026-10-03T12:05:00Z")))
+        assertEquals("3 Oct 2026, 12:05", dateTimeText(Instant.parse("2026-10-03T12:05:00Z"), ZoneId.systemDefault()))
     }
 }

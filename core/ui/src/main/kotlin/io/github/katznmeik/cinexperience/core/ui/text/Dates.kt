@@ -21,9 +21,8 @@ private val DAY_MONTH: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM", 
 /** A visit date as shown in lists and the visit form, e.g. "12 Sep 2026". */
 fun dateText(date: LocalDate): String = VISIT_DATE.format(date)
 
-/** "3 Oct 2026, 14:05": [instant] in [zone]. */
-fun dateTimeText(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): String =
-    DATE_TIME.format(instant.atZone(zone))
+/** "3 Oct 2026, 14:05": [instant] in [zone] (the program's Berlin time, or the device's zone). */
+fun dateTimeText(instant: Instant, zone: ZoneId): String = DATE_TIME.format(instant.atZone(zone))
 
 /** "16:30" */
 fun timeText(time: LocalTime): String = TIME.format(time)
