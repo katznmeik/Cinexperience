@@ -96,10 +96,10 @@ class BlockStartEditorTest {
         val vm = viewModel()
         vm.selectRow(0)
         vm.selectTool(CellType.GAP)
-        vm.tapCell(0, 7) // the seat numbered 3, the start's seat
-        assertEquals(listOf("7", "6", "5", "4", "3", "2", "1"), vm.numbers(0))
-        assertEquals(emptyList<Int?>(), vm.starts(0))
-        assertEquals(listOf(""), vm.state.blockStartInputs)
+        vm.tapCell(0, 7) // the seat numbered 3, the start's seat: the others keep their numbers
+        assertEquals(listOf("10", "9", "8", "7", "6", "5", "4"), vm.numbers(0))
+        assertEquals(listOf(4), vm.starts(0))
+        assertEquals(listOf("4"), vm.state.blockStartInputs)
         assertTrue(vm.state.hasUnsavedChanges)
 
         vm.selectTool(CellType.SEAT)

@@ -18,13 +18,15 @@ package io.github.katznmeik.cinexperience.core.model
  *   painted kind. The block start number keyed on it (the seat was its block's
  *   first numbered seat) comes back with it as well, see below.
  * - **Row settings stay with their rows.** Inserting or removing rows and
- *   columns keeps every row's label, numbering, numbering direction, block starts
- *   and offset, and every seat's kind and fixed label.
- * - **Block starts stay with their seats** ([LayoutRow.withBlockStartsKeyedOn]):
- *   when painting or removing aisles splits or merges a row's blocks, a start
- *   stays with the block that still holds the first numbered seat it was set
- *   for; a split-off part counts on (or restarts, per the row's numbering); a
- *   start whose seat is painted away is dropped, and restored with the seat.
+ *   columns keeps every row's label, numbering, numbering direction and offset,
+ *   and every seat's kind and fixed label; block starts follow the rule below.
+ * - **Block starts stay with their blocks** ([LayoutRow.withCells]): when a
+ *   change of cell types splits, merges or shortens a row's blocks, a start stays
+ *   with the block that holds the seat it was set on (its first numbered seat);
+ *   a split-off part counts on (or restarts, per the row's numbering); when that
+ *   seat is removed, the start moves on to the block's next numbered seat with
+ *   the number that seat had, and an original seat painted back gets its own
+ *   start back.
  * - [removedSeatsWithData] gives the §6.5 warning for the current state.
  *
  * Start with [Hall.startLayoutEdit] (or [start]) on the hall as currently stored,

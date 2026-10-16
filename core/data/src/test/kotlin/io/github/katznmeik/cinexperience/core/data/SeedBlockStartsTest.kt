@@ -49,22 +49,17 @@ class SeedBlockStartsTest {
                 val rightToLeft = row.numberingDirection == NumberingDirection.RIGHT_TO_LEFT
                 if (!rightToLeft || starts.size != 1 || starts[0] == null) return@forEachIndexed
                 rightToLeftSingleStarts++
-                // Kant Kino style (I5): an aisle painted into the block must not renumber the rest.
+                // Kant Kino style (I5): an aisle inserted into the block (no seat removed) must not
+                // renumber any seat of the row; the bug gave 6 5 4 3 | 4 3 2 1.
                 val block = row.blocks.single()
+                if (block.size < 2) return@forEachIndexed
+                val split = layout.insertColumn(block[maxOf(1, block.size / 2)], CellType.AISLE)
+                assertEquals("$key row $index", 2, split.rows[index].blocks.size)
                 val before = layout.labels()
-                val split = layout.withCellType(index, block[block.size / 2], CellType.AISLE)
                 val after = split.labels()
-                row.seatIds.filter { it in split.seatIds }.forEach { id ->
-                    val seat = after.seats.getValue(id)
-                    val expected = before.seats.getValue(id)
-                    // Seats right of the aisle (first in numbering order) keep their numbers exactly.
-                    if (seat.position.column > block[block.size / 2]) {
-                        assertEquals("$key row $index $id", expected.label, seat.label)
-                    }
+                row.seatIds.forEach { id ->
+                    assertEquals("$key row $index $id", before.labelOf(id), after.labelOf(id))
                 }
-                // No duplicate numbers in the split row (the bug gave 6 5 4 3 | 4 3 2 1).
-                val numbers = after.seats.values.filter { it.position.row == index }.mapNotNull { it.number }
-                assertEquals("$key row $index", numbers.size, numbers.distinct().size)
             }
         }
         assertTrue("$rightToLeftSingleStarts", rightToLeftSingleStarts >= 18)

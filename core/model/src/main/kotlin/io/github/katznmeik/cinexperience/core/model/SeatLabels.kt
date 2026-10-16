@@ -120,26 +120,7 @@ fun SeatLayout.labels(): LayoutLabels {
         rowLabels += rowLabel
         if (blocks.isEmpty()) return@forEachIndexed
 
-        // Numbers by column, assigned in numbering order.
-        val numbers = arrayOfNulls<Int>(row.cells.size)
-        val rightToLeft = row.numberingDirection == NumberingDirection.RIGHT_TO_LEFT
-        var previous: Int? = null
-        for (block in if (rightToLeft) blocks.indices.reversed() else blocks.indices) {
-            var blockHasNumber = false
-            for (column in if (rightToLeft) blocks[block].asReversed() else blocks[block]) {
-                if ((row.cells[column] as LayoutCell.Seat).fixedLabel != null) continue
-                val number = when {
-                    blockHasNumber -> previous!! + 1
-                    else -> row.blockStartNumbers.getOrNull(block)
-                        ?: previous?.takeIf { row.numbering == SeatNumbering.CONTINUOUS }?.plus(1)
-                        ?: 1
-                }
-                numbers[column] = number
-                previous = number
-                blockHasNumber = true
-            }
-        }
-
+        val numbers = row.numbersByColumn(blocks)
         blocks.forEachIndexed { block, columns ->
             for (column in columns) {
                 val cell = row.cells[column] as LayoutCell.Seat
@@ -150,4 +131,30 @@ fun SeatLayout.labels(): LayoutLabels {
         }
     }
     return LayoutLabels(rowLabels, seats)
+}
+
+/**
+ * The number of each numbered seat of this row by column (`null` for other cells
+ * and fixed-label seats), assigned in numbering order by the rules of [labels].
+ */
+internal fun LayoutRow.numbersByColumn(blocks: List<List<Int>> = this.blocks): Array<Int?> {
+    val numbers = arrayOfNulls<Int>(cells.size)
+    val rightToLeft = numberingDirection == NumberingDirection.RIGHT_TO_LEFT
+    var previous: Int? = null
+    for (block in if (rightToLeft) blocks.indices.reversed() else blocks.indices) {
+        var blockHasNumber = false
+        for (column in if (rightToLeft) blocks[block].asReversed() else blocks[block]) {
+            if ((cells[column] as LayoutCell.Seat).fixedLabel != null) continue
+            val number = when {
+                blockHasNumber -> previous!! + 1
+                else -> blockStartNumbers.getOrNull(block)
+                    ?: previous?.takeIf { numbering == SeatNumbering.CONTINUOUS }?.plus(1)
+                    ?: 1
+            }
+            numbers[column] = number
+            previous = number
+            blockHasNumber = true
+        }
+    }
+    return numbers
 }

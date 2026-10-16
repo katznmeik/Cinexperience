@@ -112,11 +112,12 @@ class BlockStartReKeyingTest {
     }
 
     @Test
-    fun theStartIsDroppedWhenItsSeatIsPaintedAway() {
+    fun theStartMovesOnWhenItsSeatIsPaintedAway() {
+        // The remaining seats keep their numbers: the start moves to the next seat, with its number.
         val row = layoutOf("SSS|SSS").withStarts(5, 10)
         val gone = row.withCellType(0, 4, CellType.GAP) // SSS|.SS
-        assertEquals(listOf(5), gone.starts())
-        assertEquals(listOf("5", "6", "7", "8", "9"), gone.texts())
+        assertEquals(listOf(5, 11), gone.starts())
+        assertEquals(listOf("5", "6", "7", "11", "12"), gone.texts())
 
         // A seat painted in front of the block's first seat joins the block; the start stays.
         val front = layoutOf("SSS|.SS").withStarts(5, 10).withCellType(0, 4, CellType.SEAT)
@@ -125,8 +126,15 @@ class BlockStartReKeyingTest {
 
         // Right to left: the first seat is the rightmost one.
         val rtl = layoutOf("SSS|SSS").rightToLeft().withStarts(10, 5).withCellType(0, 6, CellType.GAP)
-        assertEquals(listOf(10), rtl.starts())
-        assertEquals(listOf("12", "11", "10", "2", "1"), rtl.texts())
+        assertEquals(listOf(10, 6), rtl.starts())
+        assertEquals(listOf("12", "11", "10", "7", "6"), rtl.texts())
+
+        // A block without an explicit start stays automatic; one left without numbered seats keeps nothing.
+        val automatic = layoutOf("SSS|SSS").withStarts(null, 10).withCellType(0, 0, CellType.GAP)
+        assertEquals(listOf(null, 10), automatic.starts())
+        assertEquals(listOf("1", "2", "10", "11", "12"), automatic.texts())
+        val last = layoutOf("SSS|S").withStarts(null, 10).withCellType(0, 4, CellType.GAP)
+        assertEquals(emptyList(), last.starts())
     }
 
     @Test
@@ -143,9 +151,9 @@ class BlockStartReKeyingTest {
         val splitAfterR = longer.withCellType(0, 2, CellType.AISLE) // WS|S|SSS: the 5 stays with its seat beside the R
         assertEquals(listOf(5, null, 10), splitAfterR.starts())
         assertEquals(listOf("R", "5", "6", "10", "11", "12"), splitAfterR.texts())
-        val rAlone = longer.withCellType(0, 1, CellType.AISLE) // W|SS|SSS: the seat the 5 was keyed on is gone
-        assertEquals(listOf(null, null, 10), rAlone.starts())
-        assertEquals(listOf("R", "1", "2", "10", "11", "12"), rAlone.texts())
+        val rAlone = longer.withCellType(0, 1, CellType.AISLE) // W|SS|SSS: the 5's seat is gone, its block keeps 6 7
+        assertEquals(listOf(null, 6, 10), rAlone.starts())
+        assertEquals(listOf("R", "6", "7", "10", "11", "12"), rAlone.texts())
 
         // Kant Kino Saal 4 style: right to left, the "R" at the left end (last in numbering order).
         val kant = layoutOf("WSSSSSS").rightToLeft().withFixedLabel(0, 0, "R").withStarts(3) // R 8 7 6 5 4 3
@@ -211,10 +219,10 @@ class BlockStartReKeyingTest {
         fun LayoutEditSession.texts() = layout!!.texts()
         val start = LayoutEditSession.start(kant, hallNextSeatId = 9)
 
-        // The first seat (number 3) painted away loses the start; painted back it gets it back.
+        // The first seat (number 3) painted away: the start moves on to the 4; painted back, the 3 returns.
         val away = start.setCellType(0, 10, CellType.GAP)
-        assertEquals(emptyList(), away.layout!!.starts())
-        assertEquals(listOf("7", "6", "5", "4", "3", "2", "1"), away.texts())
+        assertEquals(listOf(4), away.layout!!.starts())
+        assertEquals(listOf("10", "9", "8", "7", "6", "5", "4"), away.texts())
         listOf(
             away.setCellType(0, 10, CellType.SEAT),
             away.setCellType(0, 10, CellType.AISLE).setSeat(0, 10, SeatKind.WHEELCHAIR),
@@ -238,12 +246,14 @@ class BlockStartReKeyingTest {
         val replaced = away.updateRow(0) { it.copy(blockStartNumbers = listOf(7)) }.setCellType(0, 10, CellType.SEAT)
         assertEquals(listOf(3), replaced.layout!!.starts())
 
-        // A new seat (not an original one) carries no start.
+        // A new seat (not an original one) gets no start back: its start moved on to the
+        // next seat (6), and the seat painted in front of the block takes it.
         val fresh = LayoutEditSession.start(layoutOf(".SS"), hallNextSeatId = 3)
             .setCellType(0, 0, CellType.SEAT)
             .updateRow(0) { it.copy(blockStartNumbers = listOf(5)) }
             .setCellType(0, 0, CellType.GAP)
             .setCellType(0, 0, CellType.SEAT)
-        assertEquals(emptyList(), fresh.layout!!.starts())
+        assertEquals(listOf(6), fresh.layout!!.starts())
+        assertEquals(listOf("6", "7", "8"), fresh.texts())
     }
 }

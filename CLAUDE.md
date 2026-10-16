@@ -153,12 +153,15 @@ Don't duplicate config in module build files.
   as stored, in both directions; its value is the number of that block's first
   numbered seat in numbering order (the rightmost seat when the row runs right
   to left). `CONTINUOUS` counts on across blocks, `RESTART_PER_BLOCK` restarts.
-  When aisles are painted or removed, a block start stays with its block's
-  first numbered seat (`LayoutRow.withBlockStartsKeyedOn`, applied by every
-  cell-changing `SeatLayout` operation): a split-off part gets none, merged
-  blocks keep the start of the one numbered first, a start whose seat is
-  painted away is dropped (`LayoutEditSession` gives it back with the seat),
-  and a row whose starts don't change keeps its stored list.
+  When cell types change (aisles painted or removed, columns removed), a block
+  start stays with the block that holds the seat it was set on and numbers
+  that block's current first numbered seat (`LayoutRow.withCells`, applied by
+  every `SeatLayout` operation that changes cell types): a split-off part gets
+  none, merged blocks keep the start of the one numbered first, and when that
+  seat is removed the start moves on to the next numbered seat with the number
+  it had, so the remaining seats keep theirs (`LayoutEditSession` gives the
+  original start back with the seat). A row whose starts don't change keeps
+  its stored list.
   A seat can have a `fixedLabel` (1–4 characters, no surrounding spaces, no
   control or format characters, e.g. "R"): it is shown instead of a number and
   uses up no number. It moves with its seat and survives a change of kind; a
