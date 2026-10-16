@@ -73,7 +73,7 @@ class ProgramNavigationTest {
         val program = FakeProgramRepository()
         showApp(program)
         composeRule.onNodeWithTag(TopLevelDestination.Program.testTag).performClick()
-        composeRule.onNodeWithText("Download program").assertExists()
+        waitForText("Download program")
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/tab_program.png")
         assertEquals(0, program.downloads)
         assertEquals(emptyList<String>(), program.refreshCalls)

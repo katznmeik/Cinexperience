@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.ui
 
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -37,11 +38,19 @@ class AppAccessibilityTest(private val fontScale: Float) {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private fun showTab(tab: TopLevelDestination) {
+    /**
+     * [readyText]: a text of the tab's content to wait for when the tab builds its
+     * state off the main thread (Compose's idling doesn't wait for that), so the
+     * screenshot never shows the empty loading state.
+     */
+    private fun showTab(tab: TopLevelDestination, readyText: String? = null) {
         val container = FakeAppContainer(FakeCinexRepository(SampleData.freshInstallStore()))
         composeRule.setContent { ScreenshotSurface(fontScale) { CinexApp(container) } }
         composeRule.onNodeWithTag(tab.testTag).performClick()
         composeRule.waitForIdle()
+        if (readyText != null) {
+            composeRule.waitUntil(timeoutMillis = 10_000) { composeRule.onAllNodesWithText(readyText).fetchSemanticsNodes().isNotEmpty() }
+        }
         if (fontScale != 1f) composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/tab_${tab.name.lowercase()}_${fontScaleSuffix(fontScale)}.png")
         composeRule.assertAccessible()
     }
@@ -56,5 +65,5 @@ class AppAccessibilityTest(private val fontScale: Float) {
     fun settingsTab() = showTab(TopLevelDestination.Settings)
 
     @Test
-    fun programTab() = showTab(TopLevelDestination.Program)
+    fun programTab() = showTab(TopLevelDestination.Program, readyText = "Download program")
 }
