@@ -233,6 +233,7 @@ internal class RoomHallRepository(
                 "Invalid screen distance ${hall.screenDistance}"
             }
             hall.layout?.let { layout ->
+                // By label, not by row: a stored over-long label may move to another row (see updateHall's KDoc).
                 val storedLabels = storedLayout?.rows?.mapNotNullTo(HashSet()) { it.label }.orEmpty()
                 require(layout.rows.all { TextLimits.fits(it.label, MAX_ROW_LABEL_LENGTH) || it.label in storedLabels }) {
                     "Row label is too long (at most $MAX_ROW_LABEL_LENGTH code points)"

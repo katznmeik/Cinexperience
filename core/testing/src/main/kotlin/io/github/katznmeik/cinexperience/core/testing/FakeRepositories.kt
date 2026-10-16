@@ -235,6 +235,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
             "Invalid screen distance ${hall.screenDistance}"
         }
         hall.layout?.let { layout ->
+            // By label, not by row, like Room.
             val storedLabels = existing.layout?.rows?.mapNotNullTo(HashSet()) { it.label }.orEmpty()
             require(layout.rows.all { TextLimits.fits(it.label, TextLimits.MAX_ROW_LABEL_LENGTH) || it.label in storedLabels }) {
                 "Row label is too long"

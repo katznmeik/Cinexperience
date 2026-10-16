@@ -130,7 +130,9 @@ internal object LayoutJson {
      * always stores its own encoding, so only a crafted backup has such a layout
      * (padded, e.g. with whitespace); the backup validator refuses it, so a
      * layout's JSON can't be made far larger than its content. The slack allows
-     * JSON that was merely written differently (spacing, field order).
+     * compact JSON with another field order, defaults written out on a large
+     * grid, or a little whitespace; pretty-printed layouts may be refused (nothing
+     * the app writes is).
      */
     fun isPadded(json: String, layout: SeatLayout): Boolean =
         json.length > PADDING_FACTOR * encode(layout).length.toLong() + PADDING_ALLOWANCE

@@ -9,8 +9,12 @@ import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.model.labels
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -38,7 +42,7 @@ internal class AllVisitsLayoutReadsTest : DatabaseTest() {
     }
 
     @Test
-    fun eachHallsLayoutIsDecodedOnceAndTheLabelsAreUnchanged() = runTest {
+    fun eachHallsLayoutIsDecodedOnceAndTheListIsUnchanged() = runTest {
         val cinema = cinemas.createCinema("Kino")
         val hallA = hall(cinema, "A", layoutA)
         val hallB = hall(cinema, "B", layoutOf("SSS"))
@@ -55,7 +59,8 @@ internal class AllVisitsLayoutReadsTest : DatabaseTest() {
 
         val list = counting.observeAllVisits().first()
 
-        // Once per hall with a layout (the unreadable one included), not once per visit.
+        // Once per hall with a layout (the unreadable one included). That each hall's
+        // JSON is read only once is shown by theVisitsOfAHallShareOneReadOfItsLayout.
         assertEquals(3, decoded.size)
         assertEquals(204, list.size)
         // Newest first, ties by insertion order: the same order as before.
@@ -93,14 +98,20 @@ internal class AllVisitsLayoutReadsTest : DatabaseTest() {
     }
 
     @Test
-    fun aChangedLayoutRelabelsTheVisits() = runTest {
+    fun aRunningListIsRelabelledWhenTheLayoutChanges() = runBlocking {
         val cinema = cinemas.createCinema("Kino")
         val hallA = hall(cinema, "A", layoutA)
         visits.save(Visit(hallId = hallA, date = LocalDate.of(2026, 1, 1), seatId = SeatId(8)))
-        assertEquals(SeatLabel("K", 4), visits.observeAllVisits().first().single().seatLabel)
-
-        val hall = halls.getHall(hallA)!!
-        halls.updateHall(hall.copy(layout = hall.layout!!.updateRow(1) { it.copy(label = "L") }))
-        assertEquals(SeatLabel("L", 4), visits.observeAllVisits().first().single().seatLabel)
+        // One collection across the change: the hall table is observed, so the flow re-emits.
+        val labels = Channel<SeatLabel?>(Channel.UNLIMITED)
+        val collecting = launch { visits.observeAllVisits().collect { labels.send(it.single().seatLabel) } }
+        try {
+            assertEquals(SeatLabel("K", 4), withTimeout(10_000) { labels.receive() })
+            val hall = halls.getHall(hallA)!!
+            halls.updateHall(hall.copy(layout = hall.layout!!.updateRow(1) { it.copy(label = "L") }))
+            assertEquals(SeatLabel("L", 4), withTimeout(10_000) { labels.receive() })
+        } finally {
+            collecting.cancel()
+        }
     }
 }
