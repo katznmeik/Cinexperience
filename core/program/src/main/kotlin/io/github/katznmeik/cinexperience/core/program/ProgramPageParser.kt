@@ -1,7 +1,9 @@
 package io.github.katznmeik.cinexperience.core.program
 
+import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -20,7 +22,7 @@ enum class ProgramParseFailure {
 
     /**
      * The block is not valid JSON (e.g. truncated), or the structure that leads to
-     * the entries has the wrong type (e.g. a film entry that isn't an object).
+     * the entries has the wrong type (e.g. a list of films that isn't a list).
      */
     INVALID_JSON,
 
@@ -60,7 +62,7 @@ sealed interface ProgramParseResult {
  * `<script id="__NEXT_DATA__"` element (no HTML parsing, no regex over the page).
  * A linear pre-scan bounds its size ([withinJsonLimits]); then it is decoded
  * into the parser's own small types with unknown keys skipped, so the page's
- * many other parts (images, banners, "coming soon") are never built in memory:
+ * many other parts (images, banners, "coming soon") are not built in memory:
  *
  * - `props.pageProps.films[]` and `props.pageProps.specials[]`, each with `fields`:
  *   `title`, `slug`, `tagline` (specials: `specialSubline`), `mainLabel` (genre),
@@ -71,9 +73,12 @@ sealed interface ProgramParseResult {
  *
  * Every used value is checked ([ProgramRules]). An invalid optional value (e.g. a
  * runtime of 0) is dropped; a film or showing with an invalid required value
- * (title, slug, ID, start, cinema) or of the wrong type is skipped. Only where the
- * structure itself breaks (an entry or its `fields` that isn't an object) is the
- * whole page rejected.
+ * (title, slug, ID, start, cinema) or of the wrong type is skipped, also an entry
+ * or its `fields` that isn't an object. Such an entry fails the typed decoding;
+ * after any failed typed decoding, the block is decoded again with the two lists
+ * as JSON trees (their unused parts too, within the same limits) and the entries
+ * one by one. Only where the JSON or the structure around the entries breaks (e.g.
+ * a list of films that isn't a list) is the whole page rejected.
  *
  * Films and specials are keyed by [FilmKey] (kind + slug). Films come first: a
  * showing that Yorck lists under a film and under specials belongs to the film
@@ -159,8 +164,31 @@ class ProgramPageParser(private val clock: Clock) {
 
     private fun fail(reason: ProgramParseFailure) = ProgramParseResult.Failure(reason)
 
-    private fun decode(block: String): PageDto? = try {
-        json.decodeFromString(PageDto.serializer(), block)
+    /**
+     * The block decoded into the parser's types; `null` if it isn't JSON of that shape.
+     * Whenever the typed decoding fails (an entry or its `fields` that isn't an object,
+     * but also broken JSON or a broken structure), the block is decoded again with the
+     * lists as JSON trees (within the same limits) and the entries one by one: an entry
+     * that fails becomes `null`, which is skipped like any other invalid entry. Broken
+     * JSON or structure fails that pass too.
+     */
+    private fun decode(block: String): PageDto<EntryDto?>? {
+        decodeOrNull(block, PageDto.serializer(EntryDto.serializer().nullable))?.let { return it }
+        val tree = decodeOrNull(block, PageDto.serializer(JsonElement.serializer())) ?: return null
+        val pageProps = tree.props?.pageProps ?: return PageDto()
+        return PageDto(PropsDto(PagePropsDto(pageProps.films?.map(::entryOrNull), pageProps.specials?.map(::entryOrNull))))
+    }
+
+    private fun entryOrNull(entry: JsonElement): EntryDto? = try {
+        json.decodeFromJsonElement(EntryDto.serializer(), entry)
+    } catch (e: SerializationException) {
+        null
+    } catch (e: IllegalArgumentException) {
+        null
+    }
+
+    private fun <T> decodeOrNull(block: String, deserializer: DeserializationStrategy<T>): T? = try {
+        json.decodeFromString(deserializer, block)
     } catch (e: SerializationException) {
         null
     } catch (e: IllegalArgumentException) {
@@ -227,15 +255,16 @@ class ProgramPageParser(private val clock: Clock) {
 
     // The parts of the page that are used; everything else is skipped while decoding.
     // Values are JsonElement, so a value of the wrong type drops that value or entry only.
+    // E is the type of an entry: EntryDto, or JsonElement when they are checked one by one.
 
     @Serializable
-    private class PageDto(val props: PropsDto? = null)
+    private class PageDto<E>(val props: PropsDto<E>? = null)
 
     @Serializable
-    private class PropsDto(val pageProps: PagePropsDto? = null)
+    private class PropsDto<E>(val pageProps: PagePropsDto<E>? = null)
 
     @Serializable
-    private class PagePropsDto(val films: List<EntryDto?>? = null, val specials: List<EntryDto?>? = null)
+    private class PagePropsDto<E>(val films: List<E>? = null, val specials: List<E>? = null)
 
     @Serializable
     private class EntryDto(val fields: FieldsDto? = null)

@@ -84,7 +84,7 @@ enum class BackupError {
     /** There is no safety copy to restore. */
     NO_SAFETY_COPY,
 
-    /** The data changed while the import was running; nothing was replaced. */
+    /** The data changed while an import or export was running; nothing was replaced or exported. */
     DATA_CHANGED,
 }
 

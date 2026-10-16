@@ -520,15 +520,9 @@ class ProgramPageParserTest {
 
     @Test
     fun aBrokenStructureRejectsThePage() {
-        // Where the structure itself breaks (an entry or its fields that isn't an object,
-        // a list that isn't one), the page is unreadable; the last good program stays.
-        val broken = listOf(
-            page(listOf(JsonPrimitive("not a film"), film())),
-            page(listOf(buildJsonObject { put("fields", JsonPrimitive("x")) }, film())),
-            page(listOf(film()), listOf(JsonPrimitive(1))),
-            page("{\"props\":{\"pageProps\":{\"films\":[],\"specials\":\"x\"}}}"),
-        )
-        for (page in broken) assertEquals(ProgramParseFailure.INVALID_JSON, failure(page))
+        // Where the structure around the entries breaks (a list that isn't one), the page is
+        // unreadable; the last good program stays. Entries of the wrong type: ProgramPageParserEntryTest.
+        assertEquals(ProgramParseFailure.INVALID_JSON, failure(page("{\"props\":{\"pageProps\":{\"films\":[],\"specials\":\"x\"}}}")))
     }
 
     @Test

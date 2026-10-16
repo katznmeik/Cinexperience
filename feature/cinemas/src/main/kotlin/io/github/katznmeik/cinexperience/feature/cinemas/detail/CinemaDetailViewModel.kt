@@ -24,9 +24,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.Clock
 
 /** Emits now and then once a minute, so "now" stays current. */
@@ -79,6 +82,9 @@ class CinemaDetailViewModel(
 ) : ViewModel() {
 
     private val ownDelete = MutableStateFlow<OwnDelete>(OwnDelete.None)
+
+    /** Runs the favourite writes one after another (see [toggleFavourite]). */
+    private val favouriteWrites = Mutex()
 
     private val editor = CinemaEditor(
         viewModelScope,
@@ -141,16 +147,25 @@ class CinemaDetailViewModel(
     /**
      * The ☆/★ toggle (spec §6.2): marks or unmarks this cinema as a favourite. The
      * screen updates through the repository flow; a failed write becomes a message.
+     *
+     * Taps can come faster than the database: the screen may not show the last
+     * tap's write yet. So the writes run one at a time, and each one flips what the
+     * repository holds then, not what the screen showed: an on-off double tap ends off.
      */
     fun toggleFavourite() {
-        val cinema = detail?.cinema ?: return
+        if (detail == null) return
         viewModelScope.launch {
-            try {
-                if (!cinemaRepository.setFavourite(cinema.id, !cinema.isFavourite)) editor.showMessage(EditMessages.GONE)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                editor.showMessage(FAVOURITE_FAILED)
+            favouriteWrites.withLock {
+                try {
+                    val cinema = cinemaRepository.observeCinemaDetail(cinemaId).first()?.cinema
+                    if (cinema == null || !cinemaRepository.setFavourite(cinema.id, !cinema.isFavourite)) {
+                        editor.showMessage(EditMessages.GONE)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    editor.showMessage(FAVOURITE_FAILED)
+                }
             }
         }
     }

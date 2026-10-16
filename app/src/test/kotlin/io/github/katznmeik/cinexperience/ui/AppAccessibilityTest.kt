@@ -38,18 +38,17 @@ class AppAccessibilityTest(private val fontScale: Float) {
     @get:Rule
     val composeRule = createComposeRule()
 
-    /**
-     * [readyText]: a text of the tab's content to wait for when the tab builds its
-     * state off the main thread (Compose's idling doesn't wait for that), so the
-     * screenshot never shows the empty loading state.
-     */
+    /** Opens [tab]; with [readyText], waits until that text is shown (content loaded off the main thread). */
     private fun showTab(tab: TopLevelDestination, readyText: String? = null) {
         val container = FakeAppContainer(FakeCinexRepository(SampleData.freshInstallStore()))
         composeRule.setContent { ScreenshotSurface(fontScale) { CinexApp(container) } }
         composeRule.onNodeWithTag(tab.testTag).performClick()
         composeRule.waitForIdle()
         if (readyText != null) {
-            composeRule.waitUntil(timeoutMillis = 10_000) { composeRule.onAllNodesWithText(readyText).fetchSemanticsNodes().isNotEmpty() }
+            composeRule.waitUntil(conditionDescription = "\"$readyText\" is shown", timeoutMillis = 10_000) {
+                composeRule.onAllNodesWithText(readyText).fetchSemanticsNodes().isNotEmpty()
+            }
+            composeRule.waitForIdle()
         }
         if (fontScale != 1f) composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/tab_${tab.name.lowercase()}_${fontScaleSuffix(fontScale)}.png")
         composeRule.assertAccessible()
@@ -64,6 +63,7 @@ class AppAccessibilityTest(private val fontScale: Float) {
     @Test
     fun settingsTab() = showTab(TopLevelDestination.Settings)
 
+    /** A fresh install asks for consent first; its text loads after the tab's title. */
     @Test
     fun programTab() = showTab(TopLevelDestination.Program, readyText = "Download program")
 }

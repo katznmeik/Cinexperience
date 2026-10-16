@@ -45,6 +45,7 @@ internal fun Project.configureAndroidCommon(extension: CommonExtension) {
     }
     configureKotlinJvmTarget()
     configureUnitTests()
+    forbidFileDependencies()
 }
 
 internal fun Project.configureKotlinJvmTarget() {

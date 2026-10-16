@@ -83,6 +83,7 @@ import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.StarRatingDisplay
+import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
@@ -440,7 +441,7 @@ internal fun colourOptionDescription(label: String, colour: SeatColour?): String
  */
 @Composable
 private fun ColourChoice(active: SeatColour?, onSetColour: (SeatColour?) -> Unit) {
-    val perRow = if (LocalDensity.current.fontScale >= 1.5f) 2 else 4
+    val perRow = if (isLargeText()) 2 else 4
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             "Seat colour",
@@ -660,6 +661,8 @@ internal fun HallVisitRow.detailText(): String = listOfNotNull(
 
 @Composable
 private fun VisitHistoryRow(visit: HallVisitRow, onClick: () -> Unit) {
+    // The stars grow with the text: with large text they go under it, so the texts keep the width.
+    val starsBelow = isLargeText()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -684,8 +687,9 @@ private fun VisitHistoryRow(visit: HallVisitRow, onClick: () -> Unit) {
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (starsBelow) visit.seatRating?.let { StarRatingDisplay(it.value, Modifier.padding(top = 2.dp)) }
         }
-        visit.seatRating?.let { StarRatingDisplay(it.value) }
+        if (!starsBelow) visit.seatRating?.let { StarRatingDisplay(it.value) }
     }
 }
 

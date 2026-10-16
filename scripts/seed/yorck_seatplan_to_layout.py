@@ -25,7 +25,10 @@ What comes from where:
   the seed's layout gets the documented kind instead; the fixture keeps Yorck's kinds.
 - Screen: a hall that has no screen size in the seed gets screenWidth = columns and
   screenDistance = 1.5 (yorck.de always draws the screen as wide as the seating, so its
-  drawing says nothing about the real screen). Existing values are kept.
+  drawing says nothing about the real screen). A screenWidth that still equals the
+  previous layout's column count (the value this tool wrote) follows the new grid's width;
+  other existing values, and the screens measured from the Yorck app (`MEASURED_SCREENS`),
+  are kept, with a warning if the grid's width changed.
 
 Output: the layouts are written into the seed file (other fields untouched; bump
 `seedVersion` by hand) and a fixture with Yorck's row labels, seat numbers and kinds
@@ -76,6 +79,10 @@ KIND_OVERRIDES = {
 }
 
 NEW_SCREEN_DISTANCE = 1.5
+
+# seedKey prefixes of the halls whose screen was measured from the Yorck app (spec §9): their
+# screenWidth never follows the grid, even where it equals the column count.
+MEASURED_SCREENS = ('delphi-lux/',)
 ARIA = re.compile(r'Row (\d+), Seat\(s\) (\d+) - ')
 
 
@@ -306,6 +313,24 @@ def convert(plan_path, existing_layout, kind_override=None):
     return layout, width, plan_rows(plan), kept
 
 
+def screen_width(hall, width):
+    """The seed hall's screenWidth for its regenerated layout, `width` columns wide, and a
+    warning (or None). A hall without one gets the grid's width. A width that still equals the
+    previous layout's column count (the value this tool wrote) follows the new grid, so it
+    doesn't go stale when a plan gains or loses a column. Any other width, and every measured
+    one (MEASURED_SCREENS), is kept, with a warning if the grid's width changed."""
+    old = hall.get('screenWidth')
+    if old is None:
+        return float(width), None
+    rows = (hall.get('layout') or {}).get('rows') or []
+    previous = max((len(r['cells']) for r in rows), default=None)
+    if old == previous and not hall['seedKey'].startswith(MEASURED_SCREENS):
+        return float(width), None
+    if previous is not None and previous != width:
+        return old, f'kept screenWidth {old:g}, but the grid changed from {previous} to {width} columns: check it'
+    return old, None
+
+
 # --- seed file formatting: two-space indent, one layout row per line -------------------
 
 def dump(value, indent=0, key=None):
@@ -341,8 +366,9 @@ def main():
         plan_path = os.path.join(crawl, cinema, f'hall-{name}.seatplan.json')
         hall = halls[key]
         layout, width, yorck_rows, kept = convert(plan_path, hall.get('layout'), KIND_OVERRIDES.get(key))
+        new_screen_width, warning = screen_width(hall, width)  # before the old layout is replaced
         rebuilt = {'seedKey': hall['seedKey'], 'name': hall['name'],
-                   'screenWidth': hall.get('screenWidth', float(width)),
+                   'screenWidth': new_screen_width,
                    'screenDistance': hall.get('screenDistance', NEW_SCREEN_DISTANCE)}
         if 'screenOffset' in hall:
             rebuilt['screenOffset'] = hall['screenOffset']
@@ -355,6 +381,8 @@ def main():
         print(f'{key:40s} {seats:4d} places, {len(yorck_rows):2d} rows, {width:2d} columns, '
               f'format {layout["formatVersion"]}{", kept existing gaps/aisles" if kept else ""}'
               f'{", all places " + KIND_OVERRIDES[key] if key in KIND_OVERRIDES else ""}')
+        if warning:
+            print(f'{key:40s} warning: {warning}')
     missing = [k for k, h in halls.items() if 'layout' not in h]
     assert not missing, f'halls without a layout: {missing}'
     with open(seed_path, 'w', encoding='utf-8') as f:

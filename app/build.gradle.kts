@@ -1,3 +1,4 @@
+import com.android.build.api.artifact.SingleArtifact
 import io.github.katznmeik.cinexperience.buildlogic.CheckDependencyGroupsTask
 import io.github.katznmeik.cinexperience.buildlogic.GitBuildIdValueSource
 import io.github.katznmeik.cinexperience.buildlogic.resolvedModuleGroups
@@ -123,6 +124,36 @@ val checkReleaseDependencyGroups = tasks.register<CheckDependencyGroupsTask>("ch
     report.set(layout.buildDirectory.file("reports/release-dependency-groups.txt"))
 }
 tasks.matching { it.name == "preBuild" }.configureEach { dependsOn(checkReleaseDependencyGroups) }
+
+// The merged manifests of both build types, for AppPermissionsTest and
+// NetworkSecurityConfigTest: CI runs only the debug unit tests, and the release
+// APK's permissions and network config must be checked too.
+abstract class MergedManifestsArgument : CommandLineArgumentProvider {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val debug: RegularFileProperty
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val release: RegularFileProperty
+
+    override fun asArguments(): List<String> = listOf(
+        "-Dcinex.mergedManifest.debug=${debug.get().asFile.absolutePath}",
+        "-Dcinex.mergedManifest.release=${release.get().asFile.absolutePath}",
+    )
+}
+
+val mergedManifests = objects.newInstance<MergedManifestsArgument>()
+androidComponents {
+    onVariants { variant ->
+        val manifest = variant.artifacts.get(SingleArtifact.MERGED_MANIFEST)
+        when (variant.buildType) {
+            "debug" -> mergedManifests.debug.set(manifest)
+            "release" -> mergedManifests.release.set(manifest)
+        }
+    }
+}
+tasks.withType<Test>().configureEach { jvmArgumentProviders.add(mergedManifests) }
 
 dependencies {
     implementation(projects.core.model)
