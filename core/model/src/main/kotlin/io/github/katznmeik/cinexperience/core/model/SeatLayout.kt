@@ -462,8 +462,9 @@ data class SeatLayout(
 
     /**
      * Turns one non-seat cell into a seat with the given, currently unused [id]
-     * and [fixedLabel] (used by [LayoutEditSession] to give a seat its original id
-     * and fixed label back). [blockStart] is the start number the seat was keyed
+     * and [fixedLabel]. Only tests call it; [LayoutEditSession] makes the same
+     * change through [LayoutChanges.setSeat] to give a seat its original id and
+     * fixed label back. [blockStart] is the start number the seat was keyed
      * on when it was painted away (see [LayoutRow.blockStartNumbers]). Its block
      * takes it unless a numbered seat that carries a start (automatic included)
      * comes before the restored seat in the block's numbering order; then that
