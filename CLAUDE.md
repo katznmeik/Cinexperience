@@ -83,6 +83,8 @@ Don't duplicate config in module build files.
   `MaterialTheme.colorScheme/typography`). Never hard-code colours in feature
   modules. Seat colours (`CinexTheme.colors.seat.*`) are the only hues in the app,
   plus `editorSelection` (the layout editor's selected screen, spec §7).
+  `colorScheme.error` is the text colour, not red: an error shows by its
+  message and `isError`.
   Titles are uppercase Archivo; body text is Instrument Sans.
 - **Accessibility** (M7): every main screen has a `*AccessibilityTest` that runs
   `assertAccessible()` (core:testing: every clickable has a label; the clickable
