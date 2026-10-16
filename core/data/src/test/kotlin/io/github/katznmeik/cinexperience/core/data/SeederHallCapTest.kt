@@ -78,7 +78,7 @@ internal class SeederHallCapTest : DatabaseTest() {
         assertTrue(seedIfNeeded(2))
         assertEquals(MAX_HALLS, db.hallDao().getAll().size)
         val c = db.hallDao().getAll().single { it.seedKey == "kino/c" }
-        assertTrue(c.isPreloaded)
+        assertFalse(c.isPreloaded) // like its cinema, which the user created
         assertNotNull(c.layoutJson)
         assertEquals(3f, c.screenWidth)
         assertTrue(db.seedSnapshotDao().getAll().any { it.seedKey == "kino/c" && it.field == "appliedLayout" && it.value != null })
