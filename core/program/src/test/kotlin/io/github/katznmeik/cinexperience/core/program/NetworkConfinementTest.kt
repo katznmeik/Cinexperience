@@ -19,9 +19,10 @@ import java.io.File
  *   uses a network or remote-media API: `java.net` (except `URI`), `javax.net`,
  *   `URLConnection`, `openConnection`, `openStream`, `.toURL(`, `android.net.http`,
  *   `android.webkit` / WebView, `DownloadManager`, MediaPlayer, VideoView, ExoPlayer /
- *   media3, socket channels, OkHttp, Retrofit, Ktor, Volley, Cronet, …, or native or
- *   other code from outside the sources: `System.loadLibrary` / `System.load`,
- *   `exec(` / `ProcessBuilder`, `dalvik.system` (dex class loaders);
+ *   media3, socket channels, OkHttp, Retrofit, Ktor, Volley, Cronet, …, or (not in
+ *   the build-logic plugins, which run only at build time) native or other code from
+ *   outside the sources: `System.loadLibrary` / `System.load`, `exec(` /
+ *   `ProcessBuilder`, `dalvik.system` (dex class loaders);
  * - any manifest of any source set other than core:program's declares the
  *   INTERNET permission, or any manifest allows cleartext traffic;
  * - a resource (any source set) is a network security config outside
@@ -30,10 +31,13 @@ import java.io.File
  * - a build file (`*.gradle.kts`, Groovy `*.gradle`, the convention plugins in
  *   `build-logic/`) or a version catalog (`*.toml`) pulls in a network,
  *   image-loading, media, WebView, Firebase, Sentry or Play services library, a
- *   file dependency (`implementation(files(…))`, `fileTree(…)`) or a native build
- *   (`externalNativeBuild`);
- * - a compiled library or code file (`.jar`, `.aar`, `.so`, `.dex`, `.class`) is
- *   anywhere in the tree, in any module or source set, except the Gradle wrapper's
+ *   file dependency (`implementation(files(…))`, `fileTree(…)`), a native build
+ *   (`externalNativeBuild`) or source folders of its own (`srcDir`, `srcDirs`,
+ *   `setSrcDirs`, `srcFile`, `….directories` except the assets'), which this scan
+ *   wouldn't see;
+ * - a compiled library or code file (`.jar`, `.aar`, `.so`, `.dex`, `.class`, in
+ *   any case) is anywhere in the tree (outside hidden folders and build outputs),
+ *   in any module or source set, except the Gradle wrapper's
  *   `gradle/wrapper/gradle-wrapper.jar`: such a file has no Maven group, so
  *   `:app:checkReleaseDependencyGroups` can't see it.
  *
@@ -41,7 +45,9 @@ import java.io.File
  * inputs are declared in core/program's build file, so it reruns when any
  * module changes. The merged manifests' permissions are checked in app
  * (`AppPermissionsTest`, debug and release), the release dependencies by
- * `:app:checkReleaseDependencyGroups`.
+ * `:app:checkReleaseDependencyGroups`, and every module's build refuses a
+ * dependency on files (build-logic `forbidFileDependencies`), however it is
+ * written.
  */
 class NetworkConfinementTest {
 
@@ -155,7 +161,11 @@ class NetworkConfinementTest {
         )
         for (line in caught) {
             assertTrue(line, NetworkScan.sourceViolations(line).isNotEmpty())
+            // Build-time code (the build-logic plugins) may.
+            assertEquals(line, emptyList<String>(), NetworkScan.sourceViolations(line, appCode = false))
         }
+        // Network APIs stay forbidden there too.
+        assertTrue(NetworkScan.sourceViolations("import java.net.URL", appCode = false).isNotEmpty())
         val allowed = listOf(
             "executor.execute(task)",
             "db.execSQL(\"DELETE FROM visit\")",
@@ -248,6 +258,33 @@ class NetworkConfinementTest {
     }
 
     @Test
+    fun buildRulesCatchSourceFoldersOutsideTheScan() {
+        val caught = listOf(
+            // Kotlin DSL
+            "android.sourceSets.getByName(\"main\").java.srcDir(\"extra\")",
+            "sourceSets[\"main\"].kotlin.srcDirs(\"src/test/kotlin\")",
+            "sourceSets.named(\"main\") { java.setSrcDirs(listOf(\"elsewhere\")) }",
+            "main { jniLibs.srcDirs(\"libs\") }",
+            "manifest.srcFile(\"other/AndroidManifest.xml\")",
+            "sourceSets.getByName(\"main\").kotlin.directories.add(\"extra\")",
+            "java.directories += \"extra\"",
+            // Groovy
+            "java.srcDirs = ['extra']",
+            "main { java { srcDir 'src/test/kotlin' } }",
+            "kotlin.srcDirs += 'extra'",
+        )
+        for (line in caught) assertTrue(line, NetworkScan.buildViolations(line).isNotEmpty())
+        val allowed = listOf(
+            // The Room plugin: the schemas as test assets.
+            "sourceSets.getByName(\"test\").assets.directories.add(schemaDir)",
+            "val schemaDir = \"\$projectDir/schemas\"",
+            "val dir = layout.projectDirectory.dir(\"schemas\")",
+            "room { schemaDirectory(schemaDir) }",
+        )
+        for (line in allowed) assertEquals(line, emptyList<String>(), NetworkScan.buildViolations(line))
+    }
+
+    @Test
     fun binaryRulesCatchVendoredLibrariesAnywhere() {
         val caught = listOf(
             "feature/x/libs/vendor.aar",
@@ -258,6 +295,9 @@ class NetworkConfinementTest {
             "core/data/src/test/resources/fixture.jar",
             "classes/a/A.class",
             "gradle/wrapper/other.jar",
+            // In any case: a build reads them all the same.
+            "feature/x/libs/Vendor.JAR",
+            "app/src/main/jniLibs/arm64-v8a/libvendor.So",
         )
         for (path in caught) assertTrue(path, NetworkScan.binaryViolations(path).isNotEmpty())
         // An APK isn't a dependency (and an IDE may save one next to the sources); loading code from one needs dalvik.system.
@@ -291,6 +331,7 @@ class NetworkConfinementTest {
         write("settings.gradle.kts", "rootProject.name = \"Cinexperience\"")
         write("gradle/wrapper/gradle-wrapper.jar", "PK") // allowed
         write("feature/x/libs/vendor.aar", "PK")
+        write("feature/z/libs/Vendor.JAR", "PK")
         write("feature/x/src/main/jniLibs/arm64-v8a/libvendor.so", "ELF")
         write("feature/x/src/test/resources/fixture.jar", "PK") // in a test set too
         write("feature/x/build/intermediates/compiled.jar", "PK") // build output is skipped
@@ -298,6 +339,9 @@ class NetworkConfinementTest {
         write("feature/y/build.gradle.kts", "dependencies { implementation(fileTree(mapOf(\"dir\" to \"libs\"))) }")
         write("gradle/vendor.versions.toml", "okhttp = \"com.squareup.okhttp3:okhttp:4.12.0\"") // a second catalog
         write("build-logic/convention/src/main/kotlin/VendorPlugin.kt", "\"implementation\"(\"com.github.bumptech.glide:glide:4.16.0\")")
+        write("build-logic/convention/src/main/kotlin/SourcesPlugin.kt", "sourceSets.getByName(\"main\").java.srcDir(\"extra\")")
+        // Build-time code may start processes (e.g. for the build ID).
+        write("build-logic/convention/src/main/kotlin/BuildIdPlugin.kt", "ProcessBuilder(\"git\", \"rev-parse\", \"HEAD\").start()")
         write("feature/x/src/testing/kotlin/a/A.kt", "import java.net.URL") // not a test set
         write("feature/x/src/testFixtures/kotlin/a/B.kt", "Runtime.getRuntime().exec(\"sh\")")
         write("feature/x/src/main/kotlin/a/C.kt", "init { System.loadLibrary(\"vendor\") }")
@@ -308,6 +352,7 @@ class NetworkConfinementTest {
         assertEquals(
             scan.violations.joinToString("\n"),
             setOf(
+                "build-logic/convention/src/main/kotlin/SourcesPlugin.kt",
                 "build-logic/convention/src/main/kotlin/VendorPlugin.kt",
                 "feature/x/build.gradle",
                 "feature/x/libs/vendor.aar",
@@ -317,6 +362,7 @@ class NetworkConfinementTest {
                 "feature/x/src/testFixtures/kotlin/a/B.kt",
                 "feature/x/src/testing/kotlin/a/A.kt",
                 "feature/y/build.gradle.kts",
+                "feature/z/libs/Vendor.JAR",
                 "gradle/vendor.versions.toml",
             ),
             scan.violations.map { it.substringBefore(':') }.toSet(),
@@ -390,7 +436,14 @@ internal object NetworkScan {
         "Cronet" to Regex("""(?i)\bcronet|\borg\.chromium\.net\b"""),
         "Apache HTTP" to Regex("""\borg\.apache\.http\b"""),
         "Netty" to Regex("""\bio\.netty\b"""),
-        // Native code (whose sockets need no Java API), other programs and dex code loaded at runtime.
+    )
+
+    /**
+     * Native code (whose sockets need no Java API), other programs and dex code loaded
+     * at runtime. Only for the app's sources: the build-logic plugins run at build time
+     * (and may start processes, e.g. for the build ID); they never reach the APK.
+     */
+    private val CODE_LOADING_RULES: List<Pair<String, Regex>> = listOf(
         "native libraries" to Regex("""\bloadLibrary\b|\bSystem\s*(?:\.|::)\s*load\b|\bgetRuntime\s*\(\s*\)\s*\.\s*load\b"""),
         "processes" to Regex("""\bProcessBuilder\b|\.\s*exec\s*\(|::\s*exec\b"""),
         "dex class loaders" to Regex("""\bdalvik\.system\b"""),
@@ -401,13 +454,19 @@ internal object NetworkScan {
             """|\bcoil\b|coil-|coil3|io\.coil-kt|androidx\.webkit|com\.google\.android\.gms""",
     )
 
-    /** Ways around the release dependency check: a dependency on files has no Maven group; native code is built here. */
+    /**
+     * Ways around the release dependency check and this scan: a dependency on files has
+     * no Maven group (the build also refuses one, build-logic `forbidFileDependencies`),
+     * native code is built here, and source folders outside `src/<set>/` aren't scanned
+     * (the Room plugin adds a schema folder to the test assets with `assets.directories`).
+     */
     private val BUILD_CODE_RULES: List<Pair<String, Regex>> = listOf(
         "file dependency" to Regex(
             """\b(?:\w*[Ii]mplementation|api|\w*Api|\w*[Rr]untimeOnly|\w*[Cc]ompileOnly)["']?\s*\(?\s*(?:\w+\s*\.\s*)*(?:files|fileTree)\s*\(""" +
                 """|\badd\s*\(\s*["'][^"']*["']\s*,\s*(?:\w+\s*\.\s*)*(?:files|fileTree)\s*\(""",
         ),
         "native build" to Regex("""\bexternalNativeBuild\b"""),
+        "custom source folder" to Regex("""\b(?:srcDirs?|setSrcDirs|srcFile)\b|(?<!\bassets)\.\s*directories\b"""),
     )
 
     /** Compiled libraries and code; [ALLOWED_BINARY] is the only one the repository may contain. */
@@ -453,7 +512,9 @@ internal object NetworkScan {
         }
     }
 
-    fun sourceViolations(text: String): List<String> = matches(text, SOURCE_RULES)
+    /** Rules for a source file; [appCode] false for the build-logic plugins (build-time code). */
+    fun sourceViolations(text: String, appCode: Boolean = true): List<String> =
+        matches(text, SOURCE_RULES) + if (appCode) matches(text, CODE_LOADING_RULES) else emptyList()
 
     fun manifestViolations(text: String, networkModule: Boolean): List<String> = buildList {
         if (!networkModule) INTERNET.findAll(text).forEach { add("${lineOf(text, it.range.first)}: INTERNET permission") }
@@ -481,7 +542,7 @@ internal object NetworkScan {
 
     /** A compiled library or code file at [relative] (the repository-relative path), other than [ALLOWED_BINARY]. */
     fun binaryViolations(relative: String): List<String> {
-        val extension = relative.substringAfterLast('/').substringAfterLast('.', "")
+        val extension = relative.substringAfterLast('/').substringAfterLast('.', "").lowercase()
         if (extension !in BINARY_EXTENSIONS || relative == ALLOWED_BINARY) return emptyList()
         return listOf("1: compiled library or code (.$extension); vendored binaries bypass the dependency check")
     }
@@ -504,7 +565,7 @@ internal object NetworkScan {
             val name = file.name
             val sourceSet = sourceSetOf(relative)
             val found: List<String> = when {
-                file.extension in BINARY_EXTENSIONS -> binaryViolations(relative)
+                file.extension.lowercase() in BINARY_EXTENSIONS -> binaryViolations(relative)
                 name == "AndroidManifest.xml" && sourceSet != null ->
                     manifestViolations(file.readText(), moduleOf(root, file) == NETWORK_MODULE)
                 sourceSet != null && file.extension == "xml" && relative.contains("/src/$sourceSet/res/") -> buildList {
@@ -517,9 +578,10 @@ internal object NetworkScan {
                 sourceSet != null && !isTestSet(sourceSet) && file.extension in SOURCE_EXTENSIONS -> {
                     val text = file.readText()
                     val allowed = moduleOf(root, file) == NETWORK_MODULE && relative.contains(NETWORK_PACKAGE_DIR)
-                    // The convention plugins are build files too.
-                    (if (allowed) emptyList() else sourceViolations(text)) +
-                        (if (relative.startsWith(BUILD_LOGIC_DIR)) buildViolations(text) else emptyList())
+                    // The convention plugins are build files too, and run only at build time.
+                    val buildLogic = relative.startsWith(BUILD_LOGIC_DIR)
+                    (if (allowed) emptyList() else sourceViolations(text, appCode = !buildLogic)) +
+                        (if (buildLogic) buildViolations(text) else emptyList())
                 }
                 else -> return@walk
             }

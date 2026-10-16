@@ -33,11 +33,17 @@ val networkConfinementSources = fileTree(rootDir) {
 val networkConfinementOtherFiles = fileTree(rootDir) {
     include("**/src/*/AndroidManifest.xml", "**/src/*/res/**/*.xml")
     include("**/*.gradle.kts", "**/*.gradle", "**/*.toml")
-    include("**/*.jar", "**/*.aar", "**/*.so", "**/*.dex", "**/*.class")
     exclude("**/build/**", "**/.*/**")
 }
+// Compiled libraries, whose extensions the scan compares in any case.
+val networkConfinementBinaries = fileTree(rootDir) { exclude("**/build/**", "**/.*/**") }.matching(
+    org.gradle.api.tasks.util.PatternSet().apply {
+        isCaseSensitive = false
+        include("**/*.jar", "**/*.aar", "**/*.so", "**/*.dex", "**/*.class")
+    },
+)
 tasks.withType<Test>().configureEach {
-    inputs.files(networkConfinementSources, networkConfinementOtherFiles)
+    inputs.files(networkConfinementSources, networkConfinementOtherFiles, networkConfinementBinaries)
         .withPropertyName("networkConfinementInputs")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
