@@ -27,10 +27,11 @@ SHA-1) and the Gradle distribution (`distributionSha256Sum` in
 ./gradlew recordRoborazziDebug    # PNGs -> app/ and feature/*/build/outputs/roborazzi/
 ./gradlew lintDebug               # Android Lint: no errors allowed; 16 intentional warnings (README)
 ./gradlew assembleRelease         # needs CINEX_* env vars, else debug-signed + warning
+python3 -I -B -m unittest discover -s scripts/seed -p 'test_*.py'   # seed generator tests
 ```
 
-CI (`.github/workflows/android.yml`) first runs `testDebugUnitTest recordRoborazziDebug`,
-then `lintDebug`. If the `CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
+CI (`.github/workflows/android.yml`) first runs the seed generator tests, then
+`testDebugUnitTest recordRoborazziDebug`, then `lintDebug`. If the `CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
 `CINEX_REQUIRE_RELEASE_SIGNING=true`, so a missing or blank signing value fails
 the build instead of falling back to the debug key, and
 `scripts/verify-release-apk.sh` requires the APK's only signer to be the release
