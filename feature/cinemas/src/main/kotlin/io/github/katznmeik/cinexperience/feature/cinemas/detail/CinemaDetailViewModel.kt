@@ -202,8 +202,9 @@ class CinemaDetailViewModel(
             cinemaRepository: CinemaRepository,
             hallRepository: HallRepository,
             programRepository: ProgramRepository,
+            clock: Clock = Clock.systemDefaultZone(),
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { CinemaDetailViewModel(cinemaId, cinemaRepository, hallRepository, programRepository) }
+            initializer { CinemaDetailViewModel(cinemaId, cinemaRepository, hallRepository, programRepository, clock) }
         }
     }
 }

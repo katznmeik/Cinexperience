@@ -8,13 +8,15 @@ import org.gradle.kotlin.dsl.dependencies
  * A feature module: Android library + Compose + type-safe navigation routes, with
  * access to the repositories in core:data. Feature modules never depend on each
  * other; the app module wires them together and hands them the repositories from
- * its manual DI container. ViewModel tests use the fakes from core:testing.
+ * its manual DI container. ViewModel tests use the fakes from core:testing; every
+ * feature has screenshot and accessibility tests (Roborazzi on Robolectric).
  */
 class AndroidFeatureConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) = with(target) {
         pluginManager.apply("cinex.android.library")
         pluginManager.apply("cinex.android.compose")
         pluginManager.apply("org.jetbrains.kotlin.plugin.serialization")
+        pluginManager.apply("cinex.android.roborazzi")
 
         dependencies {
             "implementation"(project(":core:model"))

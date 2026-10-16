@@ -14,7 +14,10 @@ The script is idempotent. It installs the SDK into `$HOME/android-sdk`, writes
 `local.properties`, and installs a Gradle init script into `~/.gradle/init.d`
 that routes Maven Central through Google's mirror, because Maven Central often
 answers HTTP 429 there. Set `CINEX_NO_MAVEN_MIRROR=1` to skip the mirror. JDK 21
-is required.
+is required. Downloads are checked against the published checksums: the
+command-line tools zip in the script (`CMDLINE_TOOLS_SHA1`, Google publishes only
+SHA-1) and the Gradle distribution (`distributionSha256Sum` in
+`gradle-wrapper.properties`); a version update changes the checksum too.
 
 ## Commands
 
@@ -24,10 +27,15 @@ is required.
 ./gradlew recordRoborazziDebug    # PNGs -> app/ and feature/*/build/outputs/roborazzi/
 ./gradlew lintDebug               # Android Lint: no errors allowed; 16 intentional warnings (README)
 ./gradlew assembleRelease         # needs CINEX_* env vars, else debug-signed + warning
+python3 -I -B -m unittest discover -s scripts/seed -p 'test_*.py'   # seed generator tests
 ```
 
-CI (`.github/workflows/android.yml`) first runs `testDebugUnitTest recordRoborazziDebug`,
-then `lintDebug`. If the `CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
+Unit tests run in UTC on every machine and list skipped tests in the build
+output (`configureUnitTests` in build-logic).
+
+CI (`.github/workflows/android.yml`) first runs the seed generator tests, then
+`testDebugUnitTest recordRoborazziDebug`, then `lintDebug`. If the
+`CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
 `CINEX_REQUIRE_RELEASE_SIGNING=true`, so a missing or blank signing value fails
 the build instead of falling back to the debug key, and
 `scripts/verify-release-apk.sh` requires the APK's only signer to be the release
@@ -131,12 +139,14 @@ Don't duplicate config in module build files.
   fade-through; pushes and pops take 300 ms. The bottom bar slides and resizes
   with them. Every destination draws an opaque background (`ScreenBackground`
   in core:ui around the entry composable). `TransitionFramesTest` (app) captures
-  frames at 0/25/50/75/100 % into `app/build/outputs/transitions`; look at them
-  after changing transitions.
+  frames at 0/25/50/75/100 % into `app/build/outputs/transitions` (CI uploads
+  them); look at them after changing transitions.
 - **DI:** manual (`app/.../di/AppContainer.kt`), no Hilt. `CinexApp` hands the
   repositories to the features' `xxxScreen(...)` functions; each ViewModel has a
   `factory(...)` and exposes a `StateFlow` UI state. Repository failures become
-  user-facing messages, never crashes. The fake repositories in `core:testing`
+  user-facing messages, never crashes. Screens that read the time get
+  `AppContainer.clock` (the system clock); the app tests' `FakeAppContainer`
+  fixes it at `SampleProgram.FETCHED_AT`. The fake repositories in `core:testing`
   re-implement the Room rules; `RepositoryContract` (core:data tests) runs the
   same scenarios against both, so a changed rule gets a case there.
 - **Data:** no invented sample data in the app.
@@ -340,7 +350,10 @@ Don't duplicate config in module build files.
   dependencies only from `androidx.*` (not webkit, media3, browser),
   `org.jetbrains*`, `org.jspecify` and `com.google.guava`; review a new group
   before adding it there (its denylist line carries `// network-scan: denylist`,
-  the only line the build-file scan accepts). The one request is `GET https://www.yorck.de/en/films`
+  the only line the build-file scan accepts; the task type,
+  `CheckDependencyGroupsTask`, is in build-logic). `BuildLogicScanTest`
+  (core:program) allows the marker on that line of `app/build.gradle.kts` only.
+  The one request is `GET https://www.yorck.de/en/films`
   over `HttpsURLConnection`: no query, body or cookies (no `CookieHandler`); the
   app sends `User-Agent: Cinexperience/<version> (Android; personal app)` and
   `Accept`, the HTTP client adds `Host`, `Connection` and `Accept-Encoding: gzip`;

@@ -115,6 +115,11 @@ Maven Central often rate-limits cloud machines. It applies to **every Gradle
 project on that machine**. To skip it, run the script with
 `CINEX_NO_MAVEN_MIRROR=1`. To remove it, delete that file.
 
+Downloads are checked before they are used: the script checks the command-line
+tools zip against the SHA-1 Google publishes for it (`CMDLINE_TOOLS_SHA1`), and
+the Gradle wrapper checks its distribution against `distributionSha256Sum` in
+`gradle/wrapper/gradle-wrapper.properties`. Both stop on a mismatch.
+
 Then:
 
 ```sh
@@ -136,6 +141,13 @@ files themselves.
 
 R8 / minification is off in v1 (the APK is small and only sideloaded); turning it
 on later needs keep rules for kotlinx.serialization and Room checked on a device.
+
+The seed generator (see Seed layouts) has its own Python tests (standard library
+only, run first in CI):
+
+```sh
+python3 -I -B -m unittest discover -s scripts/seed -p 'test_*.py'
+```
 
 ### Seed layouts
 

@@ -3,6 +3,7 @@ package io.github.katznmeik.cinexperience.ui
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -53,6 +54,14 @@ class ProgramNavigationTest {
         composeRule.waitForIdle()
     }
 
+    /**
+     * The Program tab builds its state off the main thread, which Compose's idling
+     * doesn't wait for: wait for the text itself (real time, generous).
+     */
+    private fun waitForText(text: String) = composeRule.waitUntil(timeoutMillis = 10_000) {
+        composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+    }
+
     @Test
     fun fourTabsInOrder() {
         showApp()
@@ -64,7 +73,7 @@ class ProgramNavigationTest {
         val program = FakeProgramRepository()
         showApp(program)
         composeRule.onNodeWithTag(TopLevelDestination.Program.testTag).performClick()
-        composeRule.onNodeWithText("Download program").assertExists()
+        waitForText("Download program")
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/tab_program.png")
         assertEquals(0, program.downloads)
         assertEquals(emptyList<String>(), program.refreshCalls)
@@ -78,7 +87,7 @@ class ProgramNavigationTest {
         composeRule.onNodeWithText("Show all in Program").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag(TopLevelDestination.Program.testTag).assertIsSelected()
-        composeRule.onNodeWithText("\u2068Kant Kino\u2069 · Any time · All versions").assertExists()
+        waitForText("\u2068Kant Kino\u2069 · Any time · All versions")
         // The cinema page itself never downloads; the Program tab only if stale.
         assertEquals(listOf("refreshIfStale"), program.refreshCalls)
     }
@@ -89,12 +98,12 @@ class ProgramNavigationTest {
         showApp(program)
         composeRule.onNodeWithText("KANT KINO").performClick()
         composeRule.onNodeWithText("Show all in Program").performScrollTo().performClick()
-        composeRule.onNodeWithText("\u2068Kant Kino\u2069 · Any time · All versions").assertExists()
+        waitForText("\u2068Kant Kino\u2069 · Any time · All versions")
 
         // (The Cinemas tab would come back with the cinema's page, which has no tab bar.)
         composeRule.onNodeWithTag(TopLevelDestination.Rankings.testTag).performClick()
         composeRule.onNodeWithTag(TopLevelDestination.Program.testTag).performClick()
-        composeRule.onNodeWithText("All cinemas · Any time · All versions").assertExists()
+        waitForText("All cinemas · Any time · All versions")
         assertEquals(listOf("refreshIfStale", "refreshIfStale"), program.refreshCalls)
     }
 

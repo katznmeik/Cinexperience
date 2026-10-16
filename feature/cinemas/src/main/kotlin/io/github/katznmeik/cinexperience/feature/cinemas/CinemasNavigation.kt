@@ -23,6 +23,7 @@ import io.github.katznmeik.cinexperience.feature.cinemas.list.CinemasViewModel
 import io.github.katznmeik.cinexperience.feature.cinemas.manage.ManageCinemasEntry
 import io.github.katznmeik.cinexperience.feature.cinemas.manage.ManageCinemasViewModel
 import kotlinx.serialization.Serializable
+import java.time.Clock
 
 /** Cinemas tab (spec §6.1): list of all cinemas. Start destination of the app. */
 @Serializable
@@ -86,6 +87,7 @@ fun NavGraphBuilder.cinemasScreen(
 
 /**
  * @param programRepository the downloaded program for "Now showing" (spec §6.2); only read here.
+ * @param clock "now" for "Now showing".
  * @param onOpenFilm opens the film page of a showing (film kind and slug).
  * @param onShowAllInProgram opens the Program tab filtered to the cinema with this seed key.
  * @param onOpenProgram opens the Program tab as it is (the hints without a program).
@@ -94,6 +96,7 @@ fun NavGraphBuilder.cinemaDetailScreen(
     cinemaRepository: CinemaRepository,
     hallRepository: HallRepository,
     programRepository: ProgramRepository,
+    clock: Clock = Clock.systemDefaultZone(),
     onBack: () -> Unit,
     onOpenHall: (Long) -> Unit,
     onCinemaDeleted: (message: String) -> Unit,
@@ -105,7 +108,7 @@ fun NavGraphBuilder.cinemaDetailScreen(
         val cinemaId = entry.toRoute<CinemaDetailRoute>().cinemaId
         ScreenBackground {
             val viewModel: CinemaDetailViewModel =
-                viewModel(factory = CinemaDetailViewModel.factory(cinemaId, cinemaRepository, hallRepository, programRepository))
+                viewModel(factory = CinemaDetailViewModel.factory(cinemaId, cinemaRepository, hallRepository, programRepository, clock))
             val openFilm = dropUnlessResumedWith<Pair<FilmKind, String>> { (kind, slug) -> onOpenFilm(kind, slug) }
             CinemaDetailEntry(
                 viewModel = viewModel,

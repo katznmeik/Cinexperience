@@ -34,3 +34,6 @@ keystore.properties
 Thumbs.db
 .cxx/
 .externalNativeBuild/
+
+# Python bytecode (scripts/seed and its tests)
+__pycache__/

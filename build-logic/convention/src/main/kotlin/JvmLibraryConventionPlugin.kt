@@ -1,5 +1,6 @@
 import io.github.katznmeik.cinexperience.buildlogic.JAVA_TARGET
 import io.github.katznmeik.cinexperience.buildlogic.configureKotlinJvmTarget
+import io.github.katznmeik.cinexperience.buildlogic.configureUnitTests
 import io.github.katznmeik.cinexperience.buildlogic.forbidFileDependencies
 import io.github.katznmeik.cinexperience.buildlogic.library
 import io.github.katznmeik.cinexperience.buildlogic.libs
@@ -19,6 +20,7 @@ class JvmLibraryConventionPlugin : Plugin<Project> {
             targetCompatibility = JAVA_TARGET
         }
         configureKotlinJvmTarget()
+        configureUnitTests()
         forbidFileDependencies()
 
         // Lets `./gradlew testDebugUnitTest` (the Android task name used by CI)

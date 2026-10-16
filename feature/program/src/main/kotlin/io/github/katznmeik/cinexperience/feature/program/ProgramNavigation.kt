@@ -13,6 +13,7 @@ import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
 import kotlinx.serialization.Serializable
+import java.time.Clock
 
 /**
  * Program tab (spec §6.9). [cinemaSeedKey] filters it to one cinema ("Show all
@@ -46,6 +47,7 @@ fun NavController.navigateToProgram(cinemaSeedKey: String, tabOptions: NavOption
 /**
  * The Program tab.
  *
+ * @param clock "now": which showings are still to come, and today's date.
  * @param onOpenFilm opens the film page ([navigateToFilm]).
  * @param onLogVisit opens Add visit pre-filled from a showing.
  */
@@ -53,6 +55,7 @@ fun NavGraphBuilder.programScreen(
     programRepository: ProgramRepository,
     cinemaRepository: CinemaRepository,
     filterStore: ProgramFilterStore,
+    clock: Clock = Clock.systemDefaultZone(),
     onOpenFilm: (FilmKey) -> Unit,
     onLogVisit: (LogVisitRequest) -> Unit,
 ) {
@@ -60,7 +63,7 @@ fun NavGraphBuilder.programScreen(
         val cinema = entry.toRoute<ProgramRoute>().cinemaSeedKey
         ScreenBackground {
             ProgramEntry(
-                viewModel = viewModel(factory = ProgramViewModel.factory(programRepository, cinemaRepository, filterStore, cinema)),
+                viewModel = viewModel(factory = ProgramViewModel.factory(programRepository, cinemaRepository, filterStore, cinema, clock)),
                 onOpenFilm = dropUnlessResumedWith(onOpenFilm),
                 onLogVisit = dropUnlessResumedWith(onLogVisit),
             )
@@ -68,10 +71,11 @@ fun NavGraphBuilder.programScreen(
     }
 }
 
-/** The film page; reached from the Program tab and from a cinema's "Now showing". */
+/** The film page; reached from the Program tab and from a cinema's "Now showing". [clock] is "now". */
 fun NavGraphBuilder.filmScreen(
     programRepository: ProgramRepository,
     cinemaRepository: CinemaRepository,
+    clock: Clock = Clock.systemDefaultZone(),
     onBack: () -> Unit,
     onLogVisit: (LogVisitRequest) -> Unit,
 ) {
@@ -85,7 +89,7 @@ fun NavGraphBuilder.filmScreen(
                 })
             } else {
                 FilmEntry(
-                    viewModel = viewModel(factory = FilmViewModel.factory(film, programRepository, cinemaRepository)),
+                    viewModel = viewModel(factory = FilmViewModel.factory(film, programRepository, cinemaRepository, clock)),
                     onBack = dropUnlessResumed(block = onBack),
                     onLogVisit = dropUnlessResumedWith(onLogVisit),
                 )

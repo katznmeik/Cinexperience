@@ -63,7 +63,7 @@ internal class BackupReviewRegressionTest : BackupTestBase() {
     }
 
     @Test
-    fun failureWhileMovingFiles() = runTest {
+    fun aRestoreFailingWhilePlacingFilesKeepsTheSafetyCopy() = runTest {
         failedRestoreKeepsTheRealCopy { device ->
             device.failpoint = { if (it == ImportStep.FILE_PLACED) throw IOException("Disk full") }
             device.repository.prepareSafetyCopyRestore()
@@ -71,7 +71,7 @@ internal class BackupReviewRegressionTest : BackupTestBase() {
     }
 
     @Test
-    fun failureInsideTheTransaction() = runTest {
+    fun aRestoreFailingInsideTheTransactionKeepsTheSafetyCopy() = runTest {
         failedRestoreKeepsTheRealCopy { device ->
             device.failpoint = { if (it == ImportStep.ROWS_REPLACED) throw SQLiteFullException("database or disk is full") }
             device.repository.prepareSafetyCopyRestore()
@@ -79,7 +79,7 @@ internal class BackupReviewRegressionTest : BackupTestBase() {
     }
 
     @Test
-    fun clearedStagingFiles() = runTest {
+    fun aRestoreWhoseStagedFilesWereClearedFailsAndKeepsTheSafetyCopy() = runTest {
         failedRestoreKeepsTheRealCopy { device ->
             device.repository.prepareSafetyCopyRestore().also {
                 File(device.cacheDir, RoomBackupRepository.STAGING_FOLDER).deleteRecursively()
@@ -88,7 +88,7 @@ internal class BackupReviewRegressionTest : BackupTestBase() {
     }
 
     @Test
-    fun dataChangedDuringTheAttempt() = runTest {
+    fun dataEditedDuringARestoreFailsItAndKeepsTheSafetyCopy() = runTest {
         val (deviceB, doc) = prepareTwoDevices()
         val bOnly = deviceB.snapshot()
         deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
@@ -116,7 +116,7 @@ internal class BackupReviewRegressionTest : BackupTestBase() {
     }
 
     @Test
-    fun failedImportFromAFileDoesNotAddACopyEither() = runTest {
+    fun aFailedImportFromAFileLeavesNoSafetyCopy() = runTest {
         val (deviceB, doc) = prepareTwoDevices()
         deviceB.failpoint = { if (it == ImportStep.ROWS_REPLACED) throw SQLiteFullException("full") }
         repeat(3) {
@@ -161,19 +161,19 @@ internal class BackupReviewRegressionTest : BackupTestBase() {
     }
 
     @Test
-    fun progressCallbackThrowingAtTheEnd() = runTest {
+    fun aProgressCallbackThrowingAfterTheCommitStillCountsAsSuccess() = runTest {
         failureAfterTheCommitIsStillASuccess(onProgress = { if (it >= 1f) throw IllegalStateException("The screen is gone") })
     }
 
     @Test
-    fun errorRightAfterTheCommit() = runTest {
+    fun anErrorRightAfterTheCommitStillCountsAsSuccess() = runTest {
         failureAfterTheCommitIsStillASuccess { device ->
             device.failpoint = { if (it == ImportStep.COMMITTED) throw OutOfMemoryError("Simulated") }
         }
     }
 
     @Test
-    fun errorWhileCleaningUpOldFiles() = runTest {
+    fun anErrorWhileDeletingOldFilesStillCountsAsSuccess() = runTest {
         var deleted = 0
         failureAfterTheCommitIsStillASuccess { device ->
             device.failpoint = {

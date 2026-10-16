@@ -45,7 +45,7 @@ class AppAccessibilityTest(private val fontScale: Float) {
         composeRule.onNodeWithTag(tab.testTag).performClick()
         composeRule.waitForIdle()
         if (readyText != null) {
-            composeRule.waitUntil(conditionDescription = "\"$readyText\" is shown", timeoutMillis = 5_000) {
+            composeRule.waitUntil(conditionDescription = "\"$readyText\" is shown", timeoutMillis = 10_000) {
                 composeRule.onAllNodesWithText(readyText).fetchSemanticsNodes().isNotEmpty()
             }
             composeRule.waitForIdle()

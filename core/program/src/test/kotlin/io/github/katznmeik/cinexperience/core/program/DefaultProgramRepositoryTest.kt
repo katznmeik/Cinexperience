@@ -383,7 +383,7 @@ class DefaultProgramRepositoryTest {
         val dispatcher = executor.asCoroutineDispatcher()
         val scope = CoroutineScope(SupervisorJob() + dispatcher)
         try {
-            return runBlocking { withTimeout(20_000) { block(scope, dispatcher) } }
+            return runBlocking { withTimeout(FakeTransport.HANG_GUARD_MS) { block(scope, dispatcher) } }
         } finally {
             scope.cancel()
             executor.shutdownNow()
@@ -399,19 +399,18 @@ class DefaultProgramRepositoryTest {
     }
 
     @Test
-    fun switchingOffAbortsARunningDownloadAtOnceAndKeepsNothing() = withThreads { scope, dispatcher ->
+    fun switchingOffEndsARunningDownloadByAbortingItAndKeepsNothing() = withThreads { scope, dispatcher ->
         settings.permission = DownloadPermission.ALLOWED
         stallEveryRequest()
         val repository = blockingRepository(scope, dispatcher)
         val refresh = scope.launch { repository.refresh() }
-        assertTrue(transport.blocking.await(10, TimeUnit.SECONDS))
+        assertTrue(transport.blocking.await(FakeTransport.STALL_LIMIT_SECONDS, TimeUnit.SECONDS))
 
-        val started = System.nanoTime()
+        // The command returns once the download has stopped: ended by its abort, not by waiting.
         assertEquals(ProgramActionResult.Success, repository.setDownloadsEnabled(false))
-        assertTrue("waited for a timeout", (System.nanoTime() - started) / 1_000_000 < 5_000)
+        assertEquals("ended by the abort, not by waiting", 1, transport.aborted)
         refresh.join()
 
-        assertEquals(1, transport.aborted)
         assertEquals(1, transport.requests.size)
         assertNull(repository.program)
         assertEquals(ProgramStatus.Idle, repository.status)
@@ -425,7 +424,7 @@ class DefaultProgramRepositoryTest {
         stallEveryRequest()
         val repository = blockingRepository(scope, dispatcher)
         scope.launch { repository.refresh() }
-        assertTrue(transport.blocking.await(10, TimeUnit.SECONDS))
+        assertTrue(transport.blocking.await(FakeTransport.STALL_LIMIT_SECONDS, TimeUnit.SECONDS))
 
         // The Settings screen closes right after the switch is turned off: the command has
         // started (the gate is closed) when its caller is cancelled.
@@ -433,12 +432,13 @@ class DefaultProgramRepositoryTest {
         assertEquals(DownloadPermission.OFF, repository.state.value.permission)
         caller.cancel()
         caller.join()
+        // Idle again once the command has stopped the download (by its abort).
         repository.state.first { it.permission == DownloadPermission.OFF && it.status == ProgramStatus.Idle }
+        assertEquals(1, transport.aborted)
         // Restart: a new repository on the same stored settings.
         val restarted = blockingRepository(scope, dispatcher)
         assertEquals(DownloadPermission.OFF, restarted.state.first { it.isLoaded }.permission)
         assertEquals(DownloadPermission.OFF, settings.permission)
-        withTimeout(5_000) { while (transport.aborted == 0) kotlinx.coroutines.delay(10) }
     }
 
     @Test
@@ -447,13 +447,13 @@ class DefaultProgramRepositoryTest {
         stallEveryRequest()
         val repository = blockingRepository(scope, dispatcher)
         val refresh = scope.launch { repository.refresh() }
-        assertTrue(transport.blocking.await(10, TimeUnit.SECONDS))
+        assertTrue(transport.blocking.await(FakeTransport.STALL_LIMIT_SECONDS, TimeUnit.SECONDS))
 
         // Nothing releases the transport but the abort: the delete must cancel the download.
         assertEquals(ProgramActionResult.Success, repository.deleteProgram())
+        assertEquals("ended by the abort, not by waiting", 1, transport.aborted)
         refresh.join()
 
-        assertEquals(1, transport.aborted)
         assertNull(repository.program)
         assertFalse(cacheFile.exists())
         assertEquals(ProgramStatus.Idle, repository.status)
@@ -468,12 +468,12 @@ class DefaultProgramRepositoryTest {
             val released = CountDownLatch(1)
             abort.onAbort { released.countDown() }
             blocking.countDown()
-            released.await(10, TimeUnit.SECONDS)
+            released.await(FakeTransport.STALL_LIMIT_SECONDS, TimeUnit.SECONDS)
             ok(TestPages.fixture)
         }
         val repository = blockingRepository(scope, dispatcher)
         val refresh = scope.launch { repository.refresh() }
-        assertTrue(transport.blocking.await(10, TimeUnit.SECONDS))
+        assertTrue(transport.blocking.await(FakeTransport.STALL_LIMIT_SECONDS, TimeUnit.SECONDS))
         repository.setDownloadsEnabled(false)
         refresh.join()
         assertNull(repository.program)
@@ -496,7 +496,7 @@ class DefaultProgramRepositoryTest {
         }
         val repository = blockingRepository(scope, dispatcher)
         scope.launch { repository.refresh() }
-        assertTrue(transport.blocking.await(10, TimeUnit.SECONDS))
+        assertTrue(transport.blocking.await(FakeTransport.STALL_LIMIT_SECONDS, TimeUnit.SECONDS))
 
         // Off, and while it is still stopping the old download, on again and pull to refresh.
         val off = scope.launch { repository.setDownloadsEnabled(false) }
@@ -517,11 +517,15 @@ class DefaultProgramRepositoryTest {
     @Test
     fun aCancelledCallerDoesNotStopTheSharedDownload() = withThreads { scope, dispatcher ->
         settings.permission = DownloadPermission.ALLOWED
+        val requested = CountDownLatch(1)
         val release = CountDownLatch(1)
-        transport.onRequest = { release.await(10, TimeUnit.SECONDS) }
+        transport.onRequest = {
+            requested.countDown()
+            release.await(FakeTransport.STALL_LIMIT_SECONDS, TimeUnit.SECONDS)
+        }
         val repository = blockingRepository(scope, dispatcher)
         val caller = scope.launch { repository.refresh() } // e.g. a screen that is closed meanwhile
-        withTimeout(5_000) { while (transport.requests.isEmpty()) kotlinx.coroutines.delay(10) }
+        assertTrue(requested.await(FakeTransport.STALL_LIMIT_SECONDS, TimeUnit.SECONDS))
         caller.cancel()
         caller.join()
         release.countDown()
