@@ -363,7 +363,11 @@ Don't duplicate config in module build files.
 - **Seed data:** `core/data/src/main/assets/seed/yorck.json`. Bump `seedVersion`
   for every change; `seedKey`s are permanent. Seeding only inserts missing items
   and fills empty fields, it never overwrites or deletes (a renamed seed hall
-  only gets the new name on fresh installs). For `screenOffset`, 0 counts as
+  only gets the new name on fresh installs). An item the user deleted (its seed
+  key has `seed_snapshot` rows, which are kept) is not inserted again, nor are
+  the halls of a deleted cinema. A user-added item with a seed item's name is
+  adopted (it gets the seed key, stays deletable), and halls the seeder adds to
+  a cinema the user created stay deletable too. For `screenOffset`, 0 counts as
   empty (see `Seeder`). One exception (spec §9): when a newer seed ships a
   layout that differs from the one the seeder last wrote into a hall, a hall
   whose layout is still exactly that written layout (compared by structure

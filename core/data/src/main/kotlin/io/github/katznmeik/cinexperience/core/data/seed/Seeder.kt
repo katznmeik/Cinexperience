@@ -21,9 +21,26 @@ import java.util.Locale
  *
  * - **Matching.** Items are matched by their stable `seedKey`. If there is no
  *   match, a *user-added* item with the same name (trimmed, case-insensitive; for
- *   halls within the same cinema) is adopted: it gets the seed key and becomes
- *   preloaded, instead of a duplicate being inserted. Otherwise the item is
- *   inserted as preloaded; a new hall of an existing cinema goes into that cinema.
+ *   halls within the same cinema) is adopted instead of a duplicate being
+ *   inserted: it gets the seed key but stays user-added (`isPreloaded` false), so
+ *   the user can still delete it. Otherwise the item is inserted (unless the user
+ *   deleted it, see below); a new hall of an existing cinema goes into that
+ *   cinema. A cinema is inserted as preloaded; an inserted hall is preloaded exactly when
+ *   its cinema is, so a hall added to a cinema the user created stays deletable
+ *   like that cinema, and deleting that cinema doesn't take preloaded halls with it.
+ * - **Deleted stays deleted.** An item whose seed key has `seed_snapshot` rows
+ *   was seeded before (every run records rows for every seed cinema and hall it
+ *   matches or inserts). If it is missing now, the user deleted it (only
+ *   user-added items, and halls of a user-added cinema, can be deleted), so it is
+ *   not inserted again, and neither is any hall of a deleted cinema, not even
+ *   one the seed has just added. The run leaves such an item's rows as they are:
+ *   they are the record of the deletion, so they are kept (the table has no
+ *   foreign key, and only an import replaces them). A missing item without rows is
+ *   inserted: on a fresh database there are none, and an import replaces all
+ *   rows with the backup's own, so the backup's state decides (a backup from
+ *   before the seed had an item has neither the item nor its rows). A cinema
+ *   the user creates again under the deleted one's name is adopted again as
+ *   above; its halls that were seeded before stay deleted.
  * - **Never overwrite, never delete.** Names and notes are never touched. The
  *   seed only fills fields that are empty (`null`): a cinema's address, a hall's
  *   layout, screen width and screen distance (and screen offset, see below) —
@@ -111,7 +128,10 @@ internal class Seeder(
             val matched = cinemas.firstOrNull { it.seedKey == seedCinema.seedKey }
                 ?: cinemas.filter { it.seedKey == null && sameName(it.name, seedCinema.name) }.minByOrNull { it.id }
             val cinemaId: Long
+            val cinemaIsPreloaded: Boolean
             if (matched == null) {
+                // Seeded before and gone: the user deleted it, with its halls (see the class doc).
+                if (snapshots.seen(CINEMA, seedCinema.seedKey)) continue
                 val entity = CinemaEntity(
                     name = seedCinema.name,
                     address = seedCinema.address,
@@ -120,6 +140,7 @@ internal class Seeder(
                     seedKey = seedCinema.seedKey,
                 )
                 cinemaId = cinemaDao.insert(entity)
+                cinemaIsPreloaded = true
                 cinemas += entity.copy(id = cinemaId)
             } else {
                 val key = seedCinema.seedKey
@@ -133,6 +154,7 @@ internal class Seeder(
                     cinemas[cinemas.indexOf(matched)] = updated
                 }
                 cinemaId = matched.id
+                cinemaIsPreloaded = matched.isPreloaded
             }
             snapshots.record(CINEMA, seedCinema.seedKey, "address", seedCinema.address)
 
@@ -150,6 +172,8 @@ internal class Seeder(
                     ?: halls.filter { it.seedKey == null && it.cinemaId == cinemaId && sameName(it.name, seedHall.name) }
                         .minByOrNull { it.id }
                 if (matchedHall == null) {
+                    // Seeded before and gone: the user deleted it (see the class doc).
+                    if (snapshots.seen(HALL, key)) continue
                     val entity = HallEntity(
                         cinemaId = cinemaId,
                         name = seedHall.name,
@@ -159,7 +183,8 @@ internal class Seeder(
                         screenOffset = seedOffset?.toFloat() ?: ScreenOffsetRules.CENTRED,
                         referenceImagePath = null,
                         notes = null,
-                        isPreloaded = true,
+                        // Like its cinema: a hall in a cinema the user created stays deletable.
+                        isPreloaded = cinemaIsPreloaded,
                         seedKey = key,
                         nextSeatId = seedLayout?.nextSeatId ?: SeatLayout.FIRST_SEAT_ID,
                     )
@@ -301,9 +326,13 @@ internal class Seeder(
     private class Snapshots(existing: List<SeedSnapshotEntity>) {
         private val last = existing.associateBy({ Triple(it.kind, it.seedKey, it.field) }, { it.value })
         private val changed = LinkedHashMap<Triple<String, String, String>, String?>()
+        private val seenItems = existing.mapTo(HashSet()) { it.kind to it.seedKey }
 
         /** The value the previous seed supplied for a field; `null` if none (or never seeded). */
         fun previous(kind: String, key: String, field: String): String? = last[Triple(kind, key, field)]
+
+        /** Whether any value was recorded for the item before this run, i.e. it was seeded before. */
+        fun seen(kind: String, key: String): Boolean = (kind to key) in seenItems
 
         /** Whether a value (possibly `null`) was recorded for the field before this run. */
         fun has(kind: String, key: String, field: String): Boolean = Triple(kind, key, field) in last
