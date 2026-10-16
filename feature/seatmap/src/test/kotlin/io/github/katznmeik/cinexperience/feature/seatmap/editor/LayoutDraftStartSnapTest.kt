@@ -10,16 +10,18 @@ import io.github.katznmeik.cinexperience.core.testing.FakeStore
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
 /**
- * The editor starts with a stored screen width and distance within its range
- * snapped to its steps (N25), e.g. values from a hand-edited backup, which only
- * has to hold finite values within the data limits: so the first step moves by
- * half a seat or row instead of jumping, and a screen as wide as the grid keeps
- * following it. Values outside the editor's range are kept, as the stored offset
- * beyond the grid is (LayoutEditorViewModelTest, LayoutEditorLegacyHallTest).
+ * The editor starts with a stored screen width within its range and a stored
+ * distance up to 15 rows snapped to its steps (N25), e.g. values from a hand-edited
+ * backup, which only has to hold finite values within the data limits: so the
+ * first step moves by half a seat or row instead of jumping, and a screen as wide
+ * as the grid keeps following it. Other widths and farther distances are kept, as
+ * the stored offset beyond the grid is (LayoutEditorViewModelTest,
+ * LayoutEditorLegacyHallTest).
  */
 class LayoutDraftStartSnapTest {
 
@@ -38,8 +40,11 @@ class LayoutDraftStartSnapTest {
         assertEquals(12f, LayoutDraft.start(hall.copy(screenWidth = 11.9f)).screenWidth)
         assertEquals(15f, LayoutDraft.start(hall.copy(screenDistance = 14.8f)).screenDistance)
 
-        // A distance below the editor's minimum snaps, but is kept below it (see ScreenRules.MIN_DISTANCE).
+        // A distance below the editor's minimum (ScreenRules.MIN_DISTANCE) snaps to the nearer of 0 and 0.5;
+        // a 0 stays (ScreenDistanceMinimumTest).
+        assertEquals(0f, LayoutDraft.start(hall.copy(screenDistance = 0f)).screenDistance)
         assertEquals(0f, LayoutDraft.start(hall.copy(screenDistance = 0.2f)).screenDistance)
+        assertEquals(0.5f, LayoutDraft.start(hall.copy(screenDistance = 0.25f)).screenDistance)
         assertEquals(0.5f, LayoutDraft.start(hall.copy(screenDistance = 0.3f)).screenDistance)
 
         // Values the app writes are unchanged.
@@ -78,15 +83,40 @@ class LayoutDraftStartSnapTest {
         assertEquals(8f, draft.withColumnCount(8).screenWidth)
     }
 
+    private val oddHall = hall.copy(screenWidth = 4.3f, screenDistance = 2.2f)
+    private val repository = FakeCinexRepository(FakeStore(cinemas = listOf(Cinema(id = 1, name = "Kino")), halls = listOf(oddHall)))
+
+    private fun viewModel() = LayoutEditorViewModel(1, repository, FakeReferenceImageStore())
+
+    private fun storedHall() = repository.store.value.halls.single()
+
     @Test
     fun loadingASnappedScreenIsNoUnsavedChange() {
-        val odd = hall.copy(screenWidth = 4.3f, screenDistance = 2.2f)
-        val store = FakeStore(cinemas = listOf(Cinema(id = 1, name = "Kino")), halls = listOf(odd))
-        val vm = LayoutEditorViewModel(1, FakeCinexRepository(store), FakeReferenceImageStore())
-        val state = vm.uiState.value
+        val state = viewModel().uiState.value
         assertEquals(4.5f, state.draft!!.screenWidth)
         assertEquals(2f, state.draft!!.screenDistance)
         assertFalse(state.hasUnsavedChanges)
         assertFalse(state.canUndo)
+    }
+
+    @Test
+    fun saveWritesTheSnappedScreen() {
+        // Saved with another change ...
+        val edited = viewModel()
+        edited.changeRowCount(+1)
+        edited.save()
+        assertTrue(edited.uiState.value.isClosed)
+        assertEquals(4.5f, storedHall().screenWidth)
+        assertEquals(2f, storedHall().screenDistance)
+        assertEquals(3, storedHall().layout!!.rowCount)
+
+        // ... and without one: Save writes what the editor shows.
+        repository.store.value = repository.store.value.copy(halls = listOf(oddHall))
+        val untouched = viewModel()
+        untouched.save()
+        assertTrue(untouched.uiState.value.isClosed)
+        assertEquals(4.5f, storedHall().screenWidth)
+        assertEquals(2f, storedHall().screenDistance)
+        assertEquals(oddHall.layout!!.rows, storedHall().layout!!.rows)
     }
 }

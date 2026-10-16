@@ -7,10 +7,10 @@ import kotlin.math.max
  * and [Hall.screenDistance] in row depths between the screen and row 1.
  *
  * Shared by the layout editor (its steppers and drag handles stay within
- * [MIN_WIDTH]..[maxWidth] and [MIN_DISTANCE]..[MAX_DISTANCE]), the repositories
- * (which refuse other values) and the backup validator, so whatever the editor
- * can set is saved and exported, and a backup can't bring in a screen so large
- * that the map scales to nothing.
+ * [MIN_WIDTH]..[maxWidth] and 0.5..[MAX_DISTANCE]: it sets no distance below half
+ * a row), the repositories (which refuse other values) and the backup validator,
+ * so whatever the editor can set is saved and exported, and a backup can't bring
+ * in a screen so large that the map scales to nothing.
  */
 object ScreenSizeRules {
     /** The editor's narrowest screen. Stored widths only need to be positive ([isValidWidth]). */
@@ -18,7 +18,8 @@ object ScreenSizeRules {
 
     /**
      * A stored screen may stand right in front of row 1. The layout editor itself
-     * sets at least half a row, so its screen bar never lies on the first row.
+     * sets at least half a row, so the line of its screen bar stays in front of
+     * the first row.
      */
     const val MIN_DISTANCE: Float = 0f
 

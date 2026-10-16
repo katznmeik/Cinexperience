@@ -167,7 +167,7 @@ data class LayoutDraft(
 
     fun withScreenWidth(value: Float): LayoutDraft = copy(screenWidth = ScreenRules.width(value, columnCount))
 
-    /** Snapped and limited ([ScreenRules.distance]): at least half a row, unless already nearer. */
+    /** Snapped and limited ([ScreenRules.distance]): at least half a row, unless already nearer (then 0 is allowed too). */
     fun withScreenDistance(value: Float): LayoutDraft = copy(screenDistance = ScreenRules.distance(value, current = screenDistance))
 
     /** Moves the screen sideways: snapped to half seats, its centre within the grid (see [ScreenOffsetRules]). */
@@ -186,16 +186,22 @@ data class LayoutDraft(
          * hall's mark); missing screen geometry starts as wide as the grid and
          * [DEFAULT_SCREEN_DISTANCE] rows away.
          *
-         * A stored width or distance within the editor's range is snapped to its
-         * steps ([ScreenRules.width], [ScreenRules.distance]; a distance below
-         * [ScreenRules.MIN_DISTANCE] stays below it), so the first step moves it by
-         * one step instead of jumping, and a screen as wide as the grid keeps
-         * following it. The app only stores such values, but a backup may hold
-         * others: e.g. a width of 10.3 starts as 10.5. Loading is no change; saving
-         * writes the snapped values. A value outside the range (an older build's,
-         * or wider than this grid allows) is kept as it is, as is a stored offset
-         * beyond the grid; the controls limit them once they're changed. The
-         * offset is only made valid (half-seat steps) if it isn't.
+         * A stored width within the editor's range ([ScreenRules.MIN_WIDTH] to
+         * [ScreenRules.maxWidth] of the grid) and a stored distance up to
+         * [ScreenRules.MAX_DISTANCE] are snapped to the editor's half-seat and
+         * half-row steps ([ScreenRules.width], [ScreenRules.distance]), so the first
+         * step moves them by one step instead of jumping, and a screen as wide as
+         * the grid keeps following it. A distance below [ScreenRules.MIN_DISTANCE]
+         * snaps to the nearer of 0 and 0.5 (0.5 from 0.25 on); a 0 then stays until
+         * the distance is changed. The app only stores such values, but a backup
+         * may hold others: e.g. a width of 10.3 starts as 10.5. Loading is no
+         * change; saving writes the snapped values.
+         *
+         * Any other width (narrower than the editor's narrowest, or wider than this
+         * grid allows) and a distance beyond [ScreenRules.MAX_DISTANCE] (an older
+         * build's) are kept as they are, as is a stored offset beyond the grid; the
+         * controls limit them once they're changed. The offset is only made valid
+         * (half-seat steps) if it isn't.
          */
         fun start(hall: Hall): LayoutDraft {
             val started = hall.startLayoutEdit()
@@ -224,8 +230,8 @@ private fun LayoutEditSession.copyCellType(row: Int, column: Int, template: Layo
 /**
  * Bounds, steps and texts of the screen geometry in the editor (spec §4.2, §6.5).
  * The bounds are [ScreenSizeRules]', which the repositories and the backup
- * validator enforce too, except that the editor keeps the screen at least
- * [MIN_DISTANCE] in front of row 0.
+ * validator enforce too, except that the editor itself sets no distance below
+ * [MIN_DISTANCE].
  */
 object ScreenRules {
     /** Step of the steppers and the drag handles: half a seat / half a row. */
@@ -233,11 +239,12 @@ object ScreenRules {
     const val MIN_WIDTH = ScreenSizeRules.MIN_WIDTH
 
     /**
-     * The nearest screen the editor sets: half a row in front of row 0. At 0 the bar
-     * would lie on row 0, where only its upper part can be touched (the screen
-     * controls never reach into row 0, see [hitTest]). The data rules still allow 0
-     * ([ScreenSizeRules.MIN_DISTANCE], e.g. from an older version or a backup):
-     * [distance] keeps such a distance until the screen is moved away from it.
+     * The nearest screen the editor sets: the bar's line half a row in front of
+     * row 0. At 0 the line would lie on row 0's edge, where only the bar's upper
+     * part can be touched ([hitTest] keeps row 0's touches for painting). The data
+     * rules still allow 0 ([ScreenSizeRules.MIN_DISTANCE], e.g. from an older
+     * version or a backup): [distance] keeps a stored 0 until the screen is moved
+     * away from it.
      */
     const val MIN_DISTANCE = 0.5f
     const val MAX_DISTANCE = ScreenSizeRules.MAX_DISTANCE
