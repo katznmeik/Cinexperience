@@ -49,7 +49,9 @@ class ProgramWriteRaceTest {
     /**
      * The cache folder. [ProgramCache.write] looks at its folder (`isDirectory`) before
      * it writes anything, and nothing else does: [writes] counts the writes, and
-     * [onWrite] runs at the next one, once.
+     * [onWrite] runs at the next one, once. Each write, and each delete, lists the
+     * folder once (leftover temporary files): with [listingsBeforeFailure] set, that
+     * many listings pass and the next one fails, as if the cache couldn't be deleted.
      */
     private class WatchedFolder(path: String) : File(path) {
         @Volatile
@@ -58,10 +60,24 @@ class ProgramWriteRaceTest {
         @Volatile
         var writes = 0
 
+        @Volatile
+        var listingsBeforeFailure = -1
+
         override fun isDirectory(): Boolean {
             writes++
             onWrite?.also { onWrite = null }?.invoke()
             return super.isDirectory()
+        }
+
+        override fun listFiles(): Array<File>? {
+            when {
+                listingsBeforeFailure == 0 -> {
+                    listingsBeforeFailure = -1
+                    throw SecurityException("simulated: the folder can't be read")
+                }
+                listingsBeforeFailure > 0 -> listingsBeforeFailure--
+            }
+            return super.listFiles()
         }
     }
 
@@ -158,6 +174,30 @@ class ProgramWriteRaceTest {
         assertEquals(DownloadPermission.ALLOWED, repository.state.value.permission)
         assertFalse(cacheFile.exists())
         assertEquals("the delete doesn't wait for the old program to be written again", 1, folder.writes)
+    }
+
+    @Test
+    fun aDeleteThatFailsWhileTheProgramIsWrittenKeepsTheShownOne() = runTest {
+        val shown = cachedProgram(TestPages.NOW.minus(Duration.ofHours(7)))
+        val io = StandardTestDispatcher(testScheduler)
+        val repository = repository(io)
+        runCurrent()
+
+        val result = whenTheProgramIsWritten(io) {
+            // The download's write lists the folder; the delete's listing fails.
+            folder.listingsBeforeFailure = 1
+            repository.deleteProgram()
+        }
+        repository.refresh()
+        runCurrent()
+
+        assertNull(folder.onWrite)
+        assertEquals(-1, folder.listingsBeforeFailure) // the delete did fail
+        assertEquals(ProgramActionResult.Failure(ProgramError.DELETE_FAILED), result())
+        assertEquals(shown, repository.state.value.program)
+        assertEquals(ProgramStatus.Idle, repository.state.value.status)
+        // The file holds the program shown, not the stopped download's.
+        assertEquals(shown, ProgramCache(cacheFolder).read())
     }
 
     @Test

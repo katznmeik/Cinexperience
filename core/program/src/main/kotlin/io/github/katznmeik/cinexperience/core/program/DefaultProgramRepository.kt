@@ -80,6 +80,10 @@ class DefaultProgramRepository internal constructor(
     @Volatile
     private var deleting = false
 
+    /** Set by a download that [deleteProgram] stopped after it wrote the cache: the file holds its program. */
+    @Volatile
+    private var leftForDelete = false
+
     private val loading: Job = scope.launch(ioDispatcher) { load() }
 
     private fun load() {
@@ -130,10 +134,13 @@ class DefaultProgramRepository internal constructor(
             deleting = false
         }
         val deleted = withContext(ioDispatcher) { cache.delete() }
+        val leftOver = leftForDelete.also { leftForDelete = false }
         if (deleted) {
             mutableState.update { it.copy(program = null) }
             ProgramActionResult.Success
         } else {
+            // The file may hold the program of the download stopped here: back to the one shown.
+            if (leftOver) withContext(ioDispatcher) { restoreCache(mutableState.value.program) }
             ProgramActionResult.Failure(ProgramError.DELETE_FAILED)
         }
     }
@@ -230,8 +237,11 @@ class DefaultProgramRepository internal constructor(
         if (!updateIfCurrent(generation) { it.copy(program = parsed) }) {
             // Stopped while the file was written: the cache goes back to the program that is
             // shown (the stop waits for this download, so nothing else changes it meanwhile),
-            // unless the stop is a delete, which removes the file next.
-            if (stored && !deleting) restoreCache(mutableState.value.program)
+            // unless the stop is a delete, which removes the file next (or, if that fails,
+            // sets it back itself).
+            if (stored) {
+                if (deleting) leftForDelete = true else restoreCache(mutableState.value.program)
+            }
             return ProgramStatus.Idle
         }
         return if (stored) ProgramStatus.Idle else ProgramStatus.Failed(ProgramError.STORAGE)
