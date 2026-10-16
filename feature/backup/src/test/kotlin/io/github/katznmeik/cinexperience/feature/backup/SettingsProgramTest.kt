@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -180,7 +179,7 @@ class SettingsProgramScreenshotTest {
         show(ProgramSettingsState(isLoaded = true, downloadsOn = false))
         composeRule.onNodeWithText("No program downloaded").performScrollTo().assertExists()
         composeRule.onNode(androidx.compose.ui.test.isToggleable()).assertIsOff()
-        composeRule.onNodeWithText("Delete downloaded program").assertHasNoClickAction()
+        composeRule.onNodeWithText("Delete downloaded program").assertIsNotEnabled()
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/settings-program-off.png")
     }
 
@@ -201,7 +200,7 @@ class SettingsProgramScreenshotTest {
     @Test
     fun lockedWhileImporting() {
         show(ProgramSettingsState(isLoaded = true, downloadsOn = true, lastDownload = SampleProgram.FETCHED_AT), importing = true)
-        composeRule.onNodeWithText("Delete downloaded program").performScrollTo().assertHasNoClickAction()
+        composeRule.onNodeWithText("Delete downloaded program").performScrollTo().assertIsNotEnabled()
         composeRule.onNode(androidx.compose.ui.test.isToggleable()).assertIsNotEnabled()
     }
 

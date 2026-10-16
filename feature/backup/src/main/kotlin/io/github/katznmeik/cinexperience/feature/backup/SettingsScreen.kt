@@ -34,6 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -459,7 +462,8 @@ private data class RowProgress(val fraction: Float?)
 
 /**
  * Icon, title, muted subtitle and a trailing chevron (or [trailing]). Disabled rows
- * are drawn muted and can't be tapped; rows without [onClick] are informational.
+ * are drawn muted, can't be tapped and are announced as disabled buttons; enabled
+ * rows without [onClick] are informational (or show a running task).
  * With [progress], a progress bar is drawn under the subtitle.
  */
 @Composable
@@ -478,7 +482,15 @@ private fun SettingsRow(
             .fillMaxWidth()
             .heightIn(min = 64.dp)
             .then(
-                if (enabled && onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier,
+                when {
+                    onClick != null -> Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                    // A button that can't be used now (another task runs): one announcement, "disabled".
+                    !enabled -> Modifier.semantics(mergeDescendants = true) {
+                        role = Role.Button
+                        disabled()
+                    }
+                    else -> Modifier
+                },
             )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertHasClickAction
-import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -379,7 +379,7 @@ class SettingsScreenshotTest {
             onOpenAllVisits = { opened++ },
         )
         for (row in listOf("Manage cinemas & halls", "All visits", "Export backup")) {
-            composeRule.onNodeWithText(row).assertHasNoClickAction().performClick()
+            composeRule.onNodeWithText(row).assertIsNotEnabled().performClick()
         }
         composeRule.onNodeWithText("Importing… 60%").assertExists()
         assertEquals(0, opened)
