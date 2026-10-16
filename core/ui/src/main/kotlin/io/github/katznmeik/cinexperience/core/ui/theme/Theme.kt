@@ -10,7 +10,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 private val LocalCinexColors = staticCompositionLocalOf { DarkCinexColors }
 private val LocalCinexTextStyles = staticCompositionLocalOf { DefaultCinexTextStyles }
 
-private fun CinexColors.toMaterialColorScheme() = darkColorScheme(
+internal fun CinexColors.toMaterialColorScheme() = darkColorScheme(
     primary = text,
     onPrimary = onPrimary,
     primaryContainer = surfaceRaised,
@@ -38,8 +38,12 @@ private fun CinexColors.toMaterialColorScheme() = darkColorScheme(
     inverseOnSurface = onPrimary,
     outline = outline,
     outlineVariant = divider,
-    error = seat.avoid,
+    // Errors are shown by their message and the isError semantics, in the text colour:
+    // red is a seat colour (spec §7), and it would fail 4.5:1 on surfaceRaised.
+    error = text,
     onError = onPrimary,
+    errorContainer = surfaceRaised,
+    onErrorContainer = text,
     scrim = background,
 )
 

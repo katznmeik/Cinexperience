@@ -83,6 +83,8 @@ Don't duplicate config in module build files.
   `MaterialTheme.colorScheme/typography`). Never hard-code colours in feature
   modules. Seat colours (`CinexTheme.colors.seat.*`) are the only hues in the app,
   plus `editorSelection` (the layout editor's selected screen, spec §7).
+  `colorScheme.error` is the text colour, not red: an error shows by its
+  message and `isError`.
   Titles are uppercase Archivo; body text is Instrument Sans.
 - **Accessibility** (M7): every main screen has a `*AccessibilityTest` that runs
   `assertAccessible()` (core:testing: every clickable has a label; the clickable
@@ -157,6 +159,15 @@ Don't duplicate config in module build files.
   as stored, in both directions; its value is the number of that block's first
   numbered seat in numbering order (the rightmost seat when the row runs right
   to left). `CONTINUOUS` counts on across blocks, `RESTART_PER_BLOCK` restarts.
+  When cell types change (aisles painted or removed, columns removed), a block
+  start stays with the block that holds the seat it was set on and numbers
+  that block's current first numbered seat (`LayoutRow.withCells`, applied by
+  every `SeatLayout` operation that changes cell types): a split-off part gets
+  none, merged blocks keep the start of the one numbered first, and when that
+  seat is removed the start moves on to the next numbered seat with the number
+  it had, so the remaining seats keep theirs (`LayoutEditSession` gives the
+  original start back with the seat). A row whose starts don't change keeps
+  its stored list.
   A seat can have a `fixedLabel` (1–4 characters, no surrounding spaces, no
   control or format characters, e.g. "R"): it is shown instead of a number and
   uses up no number. It moves with its seat and survives a change of kind; a
@@ -267,8 +278,14 @@ Don't duplicate config in module build files.
   paths outside their folder. Files are copied in when picked; a replaced or
   removed file is deleted only after a successful save, discarding deletes the
   files added in that session, deleting a visit deletes its photo. The startup
-  sweep (`DataContainer.sweepOrphanFiles`) deletes unreferenced files older than
-  1 h. Auto Backup excludes them (database and preferences only); the backup
+  sweep (`DataContainer.sweepOrphanFiles`) deletes unreferenced visit photos
+  (and camera captures) older than 7 days, because a visit form restored after
+  process death still holds its unsaved photos, and unreferenced reference
+  screenshots older than 1 h (the editor's draft doesn't survive process death).
+  A restored visit form drops session photos whose files are gone
+  (`VisitPhotoStore.exists`); if its photo was one, it clears it and says "The
+  photo is no longer available." The saved visit's photo is never touched.
+  Auto Backup excludes these files (database and preferences only); the backup
   export includes the referenced ones. Tests use the fakes in `core:testing`
   (`FakeReferenceImageStore`, `FakeVisitPhotoStore`, `FakeBackupRepository`).
 - **Program / network (v1.1, spec §11.1 "Network & security", binding):**

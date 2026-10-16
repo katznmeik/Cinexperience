@@ -319,45 +319,53 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
     ) {
         // 1–2: cinema, hall, date, film
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                LabelledField("Cinema", Modifier.weight(1f)) {
-                    DropdownField(
-                        text = state.cinemaName,
-                        placeholder = "Choose",
-                        contentDescription = "Cinema",
-                        options = state.cinemas.map { it.id to it.name },
-                        onSelect = actions::onSelectCinema,
-                    )
-                }
-                LabelledField("Hall", Modifier.weight(1f)) {
-                    DropdownField(
-                        text = state.hallName,
-                        placeholder = if (state.cinemaName == null) "Choose cinema first" else "Choose",
-                        contentDescription = "Hall",
-                        options = state.halls.map { it.id to it.name },
-                        onSelect = actions::onSelectHall,
-                    )
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                LabelledField("Date", Modifier.weight(1f)) {
-                    FieldBox(
-                        onClick = { showDatePicker = true },
-                        contentDescription = "Date, ${dateText(form.date)}",
-                    ) {
-                        FieldText(dateText(form.date), Modifier.weight(1f))
+            FieldPair(
+                first = { fieldModifier ->
+                    LabelledField("Cinema", fieldModifier) {
+                        DropdownField(
+                            text = state.cinemaName,
+                            placeholder = "Choose",
+                            contentDescription = "Cinema",
+                            options = state.cinemas.map { it.id to it.name },
+                            onSelect = actions::onSelectCinema,
+                        )
                     }
-                }
-                LabelledField("Film", Modifier.weight(1f)) {
-                    TextInput(
-                        value = form.filmTitle,
-                        onValueChange = actions::onFilmTitle,
-                        placeholder = "Film title",
-                        contentDescription = "Film title",
-                        singleLine = true,
-                    )
-                }
-            }
+                },
+                second = { fieldModifier ->
+                    LabelledField("Hall", fieldModifier) {
+                        DropdownField(
+                            text = state.hallName,
+                            placeholder = if (state.cinemaName == null) "Choose cinema first" else "Choose",
+                            contentDescription = "Hall",
+                            options = state.halls.map { it.id to it.name },
+                            onSelect = actions::onSelectHall,
+                        )
+                    }
+                },
+            )
+            FieldPair(
+                first = { fieldModifier ->
+                    LabelledField("Date", fieldModifier) {
+                        FieldBox(
+                            onClick = { showDatePicker = true },
+                            contentDescription = "Date, ${dateText(form.date)}",
+                        ) {
+                            FieldText(dateText(form.date), Modifier.weight(1f))
+                        }
+                    }
+                },
+                second = { fieldModifier ->
+                    LabelledField("Film", fieldModifier) {
+                        TextInput(
+                            value = form.filmTitle,
+                            onValueChange = actions::onFilmTitle,
+                            placeholder = "Film title",
+                            contentDescription = "Film title",
+                            singleLine = true,
+                        )
+                    }
+                },
+            )
         }
 
         LabelledField("Format") {
@@ -442,6 +450,28 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
             },
             onDismiss = { showDatePicker = false },
         )
+    }
+}
+
+/**
+ * Two fields side by side; with large text one below the other, so their
+ * texts ("Choose cinema first", a film title) aren't cut off.
+ */
+@Composable
+private fun FieldPair(
+    first: @Composable (Modifier) -> Unit,
+    second: @Composable (Modifier) -> Unit,
+) {
+    if (LocalDensity.current.fontScale > 1.3f) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            first(Modifier.fillMaxWidth())
+            second(Modifier.fillMaxWidth())
+        }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            first(Modifier.weight(1f))
+            second(Modifier.weight(1f))
+        }
     }
 }
 

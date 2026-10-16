@@ -35,7 +35,7 @@ class SeatMapViewStateTest {
     fun aHeldViewStaysStillWithoutCountingAsAZoomByTheUser() {
         val state = SeatMapViewState()
         val asDrawn = bounds.fitted()
-        state.hold(asDrawn)
+        state.hold(asDrawn, bounds)
         assertFalse(state.isAdjusted) // no "Fit" button for it
 
         // The screen grows past the grid's left edge: the content gets wider, the view stays put.
@@ -49,17 +49,5 @@ class SeatMapViewStateTest {
         state.release()
         assertFalse(state.isAdjusted)
         assertEquals(grown.fitted(), state.transformFor(grown))
-    }
-
-    @Test
-    fun holdingKeepsAViewTheUserZoomed() {
-        val state = SeatMapViewState()
-        val zoomed = ViewTransform(4f, Offset(-100f, -100f))
-        state.userTransform = zoomed
-        state.hold(bounds.fitted()) // ignored: the user's view is held anyway
-        assertEquals(bounds.clamp(zoomed), state.transformFor(bounds))
-        state.release()
-        assertTrue(state.isAdjusted)
-        assertEquals(bounds.clamp(zoomed), state.transformFor(bounds))
     }
 }

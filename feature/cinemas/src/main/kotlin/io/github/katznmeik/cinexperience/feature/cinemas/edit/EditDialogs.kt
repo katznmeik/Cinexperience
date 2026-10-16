@@ -61,34 +61,41 @@ private fun CinemaFormDialog(dialog: EditDialog.CinemaForm, actions: EditDialogA
     AlertDialog(
         onDismissRequest = actions::onDismiss,
         title = { Text(if (dialog.isNew) "Add cinema" else "Edit cinema") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                NameField(dialog.name, dialog.nameError, actions::onNameChange)
-                OutlinedTextField(
-                    value = dialog.address,
-                    onValueChange = actions::onAddressChange,
-                    label = { Text("Address (optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (!dialog.isNew) {
-                    OutlinedTextField(
-                        value = dialog.notes,
-                        onValueChange = actions::onNotesChange,
-                        label = { Text("Notes (optional)") },
-                        minLines = 2,
-                        maxLines = 5,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                if (dialog.canDelete) {
-                    TextButton(onClick = actions::onDeleteCinema) { Text("Delete cinema") }
-                }
-            }
-        },
+        text = { CinemaFormFields(dialog, actions) },
         confirmButton = { TextButton(onClick = actions::onConfirm) { Text(if (dialog.isNew) "Add" else "Save") } },
         dismissButton = { TextButton(onClick = actions::onDismiss) { Text("Cancel") } },
     )
+}
+
+/**
+ * The fields of the cinema form. (Robolectric never goes idle while an AlertDialog
+ * with a text field is shown, so the tests check these on their own.)
+ */
+@Composable
+internal fun CinemaFormFields(dialog: EditDialog.CinemaForm, actions: EditDialogActions) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        NameField(dialog.name, dialog.nameError, actions::onNameChange)
+        OutlinedTextField(
+            value = dialog.address,
+            onValueChange = actions::onAddressChange,
+            label = { Text("Address (optional)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (!dialog.isNew) {
+            OutlinedTextField(
+                value = dialog.notes,
+                onValueChange = actions::onNotesChange,
+                label = { Text("Notes (optional)") },
+                minLines = 2,
+                maxLines = 5,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (dialog.canDelete) {
+            TextButton(onClick = actions::onDeleteCinema) { Text("Delete cinema") }
+        }
+    }
 }
 
 @Composable
@@ -102,8 +109,9 @@ private fun HallNameDialog(dialog: EditDialog.HallName, actions: EditDialogActio
     )
 }
 
+/** The name field of the cinema and hall forms, with [error] below it. */
 @Composable
-private fun NameField(value: String, error: String?, onValueChange: (String) -> Unit) {
+internal fun NameField(value: String, error: String?, onValueChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,

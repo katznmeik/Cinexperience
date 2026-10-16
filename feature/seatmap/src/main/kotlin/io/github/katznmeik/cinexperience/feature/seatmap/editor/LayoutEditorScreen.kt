@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -543,12 +542,12 @@ private fun ReferenceToggle(selected: Boolean, hasImage: Boolean, onClick: () ->
 
 @Composable
 private fun SeatKindRow(selected: SeatKind, actions: LayoutEditorActions) {
-    Row(
+    // Wraps onto a second line when the chips don't fit (large text).
+    FlowRow(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        itemVerticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text("Seat type", style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.textMuted)

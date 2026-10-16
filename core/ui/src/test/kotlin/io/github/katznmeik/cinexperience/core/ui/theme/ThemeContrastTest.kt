@@ -38,6 +38,16 @@ class ThemeContrastTest {
     }
 
     @Test
+    fun errorTextOnEveryBackground() {
+        // Error labels and messages (text fields with isError), e.g. in dialogs on surfaceRaised.
+        val scheme = c.toMaterialColorScheme()
+        listOf("surfaceRaised" to c.surfaceRaised, "surface" to c.surface, "canvas" to c.canvas, "background" to c.background)
+            .forEach { (bg, color) -> assertContrast("error on $bg", scheme.error, color, TEXT_CONTRAST) }
+        assertContrast("onError on error", scheme.onError, scheme.error, TEXT_CONTRAST)
+        assertContrast("onErrorContainer on errorContainer", scheme.onErrorContainer, scheme.errorContainer, TEXT_CONTRAST)
+    }
+
+    @Test
     fun textOnLightFills() {
         // Selected chips, the "Add visit" button, Save, the selected rankings scope.
         assertContrast("onPrimary on text", c.onPrimary, c.text, TEXT_CONTRAST)

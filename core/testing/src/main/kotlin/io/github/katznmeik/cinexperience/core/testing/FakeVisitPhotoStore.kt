@@ -59,6 +59,8 @@ class FakeVisitPhotoStore(initialFiles: Set<String> = emptySet()) : VisitPhotoSt
         files -= relativePath
     }
 
+    override suspend fun exists(relativePath: String): Boolean = relativePath in files
+
     override suspend fun deleteOrphans(referencedPaths: Set<String>, modifiedBefore: Long): Int {
         val orphans = files - referencedPaths
         orphans.forEach { delete(it) }
