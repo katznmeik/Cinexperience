@@ -518,9 +518,10 @@ class ProgramViewModel(
             cinemaRepository: CinemaRepository,
             filterStore: ProgramFilterStore,
             initialCinema: String?,
+            clock: Clock = Clock.systemDefaultZone(),
         ): ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                ProgramViewModel(programRepository, cinemaRepository, filterStore, createSavedStateHandle(), initialCinema)
+                ProgramViewModel(programRepository, cinemaRepository, filterStore, createSavedStateHandle(), initialCinema, clock)
             }
         }
     }

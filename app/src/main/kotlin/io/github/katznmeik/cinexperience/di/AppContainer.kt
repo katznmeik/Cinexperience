@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.time.Clock
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -57,6 +58,9 @@ interface AppContainer {
 
     /** The Program tab's current and saved filters (app settings, spec §6.9, §8). */
     val programFilterStore: ProgramFilterStore
+
+    /** "Now" for the Program tab, the film page and a cinema's "Now showing": the system clock. */
+    val clock: Clock get() = Clock.systemDefaultZone()
 
     /** Housekeeping when the app starts (once per process), off the main thread. */
     fun onAppStart() {}

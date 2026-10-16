@@ -21,6 +21,7 @@ import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
+import io.github.katznmeik.cinexperience.core.testing.SampleProgram
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.di.AppContainer
 import io.github.katznmeik.cinexperience.feature.program.InMemoryProgramFilterStore
@@ -33,12 +34,19 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.Clock
+import java.time.ZoneOffset
 
-/** App container backed by the in-memory fake repositories. */
+/**
+ * App container backed by the in-memory fake repositories. Its [clock] stands at
+ * the sample program's download time (15 Oct 2026, 10:00 in Berlin), so the
+ * screens that read the time don't depend on the day the tests run.
+ */
 internal class FakeAppContainer(
     repository: FakeCinexRepository,
     override val backupRepository: FakeBackupRepository = FakeBackupRepository(),
     override val programRepository: FakeProgramRepository = FakeProgramRepository(),
+    override val clock: Clock = Clock.fixed(SampleProgram.FETCHED_AT, ZoneOffset.UTC),
 ) : AppContainer {
     override val applicationContext: Context = RuntimeEnvironment.getApplication()
     override val appVersion: String = "0.1.0"
@@ -193,7 +201,8 @@ class TabScreenshotTest {
             navController.closeDeletedCinema("Deleted Atelier")
         }
 
-        composeRule.waitUntil { composeRule.onAllNodesWithText("Deleted Atelier").fetchSemanticsNodes().isNotEmpty() }
+        // A real-time wait: generous, so a slow machine doesn't fail it.
+        composeRule.waitUntil(timeoutMillis = 10_000) { composeRule.onAllNodesWithText("Deleted Atelier").fetchSemanticsNodes().isNotEmpty() }
         composeRule.onNodeWithText("13 venues · 0 visits").assertExists()
     }
 }

@@ -139,6 +139,7 @@ fun CinexApp(
                 cinemaRepository = container.cinemaRepository,
                 hallRepository = container.hallRepository,
                 programRepository = container.programRepository,
+                clock = container.clock,
                 onBack = navController::navigateUp,
                 onOpenHall = navController::navigateToHallDetail,
                 onCinemaDeleted = navController::closeDeletedCinema,
@@ -178,12 +179,14 @@ fun CinexApp(
                 programRepository = container.programRepository,
                 cinemaRepository = container.cinemaRepository,
                 filterStore = container.programFilterStore,
+                clock = container.clock,
                 onOpenFilm = navController::navigateToFilm,
                 onLogVisit = navController::logVisit,
             )
             filmScreen(
                 programRepository = container.programRepository,
                 cinemaRepository = container.cinemaRepository,
+                clock = container.clock,
                 onBack = navController::navigateUp,
                 onLogVisit = navController::logVisit,
             )

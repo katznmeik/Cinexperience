@@ -143,8 +143,9 @@ class FilmViewModel(
             filmId: FilmKey,
             programRepository: ProgramRepository,
             cinemaRepository: CinemaRepository,
+            clock: Clock = Clock.systemDefaultZone(),
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { FilmViewModel(filmId, programRepository, cinemaRepository) }
+            initializer { FilmViewModel(filmId, programRepository, cinemaRepository, clock) }
         }
     }
 }
