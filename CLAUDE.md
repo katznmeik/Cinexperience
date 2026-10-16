@@ -33,7 +33,9 @@ the build instead of falling back to the debug key, and
 `scripts/verify-release-apk.sh` requires the APK's only signer to be the release
 certificate in `signing/release-cert.sha256`. Without that secret it runs
 `assembleDebug` and uploads a `-debug` APK. Workflow steps run with
-`shell: bash` (pipefail) and check out without persisted credentials.
+`shell: bash` (pipefail) and check out without persisted credentials. The
+workflow actions are pinned to commit SHAs with a version comment, so updating
+one means changing its SHA.
 
 **Versions and releases:** the version is `cinexVersionName` in `gradle.properties`
 (MAJOR.MINOR.PATCH); `versionCode` is derived from it (MAJOR*10000 + MINOR*100 +
@@ -138,9 +140,9 @@ Don't duplicate config in module build files.
 - **Data:** no invented sample data in the app.
 - **Favourite cinemas:** `Cinema.isFavourite`, written only through
   `CinemaRepository.setFavourite` (detail's ☆/★ `IconToggleButton`, read as
-  "Favourite, checked"). In the list, `CinemaFilter.FAVOURITES` is a filter, not
-  a sort: only favourites, always in score order; the sort chips go back to
-  `ALL` with their sort. Sort and filter live in the ViewModel (not persisted).
+  "Favourite, checked"); every cinema flow carries it. In the list,
+  `CinemaFilter.FAVOURITES` is a filter, not a sort: only favourites, always in
+  score order; the sort chips go back to `ALL` with their sort. Sort and filter live in the ViewModel (not persisted).
 - **Seats** are identified by a stable `SeatId` stored in the layout (see
   `core/model/.../SeatLayout.kt`), never by grid position or label. Ids are never
   reused within a hall (`Hall.nextSeatId` is the hall's mark; the repository
@@ -225,8 +227,6 @@ Don't duplicate config in module build files.
   `ScreenSizeRules` (core:model: width > 0 and ≤ 120 = 2 × `MAX_COLUMNS`,
   distance 0–15), shared by the editor's `ScreenRules`, the repositories and the
   backup validator.
-- **Favourite cinemas:** `Cinema.isFavourite`, written only through
-  `CinemaRepository.setFavourite`; every cinema flow carries it.
 - **Schema changes:** the database is at version 2 (`MIGRATION_1_2` added
   `cinema.is_favourite` and `hall.screen_offset`). Bump the `CinexDatabase`
   version, add a migration to `ALL_MIGRATIONS`, commit the exported
@@ -352,8 +352,10 @@ Don't duplicate config in module build files.
   `app/src/main/res/xml/network_security_config.xml`: HTTPS only, system CAs only,
   no pinning. No WebView, no images from Yorck. Download failures become
   `ProgramStatus.Failed` with a user-facing message (Errors such as out of memory
-  too); the last good program stays. Tests: `FakeTransport` (no sockets) and the
-  invented fixture `core/program/src/test/resources/program/films-page.html`;
+  too); the last good program stays. Tests: `FakeTransport` (no sockets),
+  `FakeHttpsConnection` (a fake `HttpsURLConnection`; `HttpsProgramTransportTest`
+  checks the real connection setup with it) and the invented fixture
+  `core/program/src/test/resources/program/films-page.html`;
   app tests pass `DefaultProgramRepository.create(…, transport = …)` a transport
   that always fails. Never commit Yorck's page or parts of it; `RealProgramPageTest`
   checks a local copy named by `CINEX_PROGRAM_PAGE` (skipped otherwise; keep it in
