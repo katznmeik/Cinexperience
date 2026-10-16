@@ -315,15 +315,27 @@ Don't duplicate config in module build files.
 - **Program / network (v1.1, spec §11.1 "Network & security", binding):**
   `core:program` is the only module with network code and the only manifest
   with `INTERNET`; inside it only the `net/` package (`HttpsProgramTransport`,
-  `ProgramDownloader`). Three checks fail the build otherwise:
-  `NetworkConfinementTest` (core:program) scans every module's sources (non-test
-  sets: no `java.net` except `URI`, `javax.net`, `URLConnection`,
-  `openConnection`/`openStream`/`.toURL(`, WebView, MediaPlayer, VideoView,
-  ExoPlayer/media3, `DownloadManager`, OkHttp, Retrofit, Ktor, …), manifests and
-  resources of all sets (INTERNET, cleartext, `src="user"`, `debug-overrides`,
-  network security configs outside `app/src/main/res/xml/`, WebView layouts) and
-  build files (network, image, media, WebView, Firebase, Sentry, Play services
-  libraries); `AppPermissionsTest` (app) pins the merged manifest's permissions;
+  `ProgramDownloader`). These checks fail the build otherwise:
+  `NetworkConfinementTest` (core:program) scans every module's sources (all sets
+  but `test`, `androidTest` and their `<Variant>` sets: no `java.net` except `URI`,
+  `javax.net`, `URLConnection`, `openConnection`/`openStream`/`.toURL(`, WebView,
+  MediaPlayer, VideoView, ExoPlayer/media3, `DownloadManager`, OkHttp, Retrofit,
+  Ktor, …; outside build-logic also `loadLibrary`, `exec(`/`ProcessBuilder`,
+  `dalvik.system`), manifests and resources of all sets (INTERNET, cleartext,
+  `src="user"`, `debug-overrides`, network security configs outside
+  `app/src/main/res/xml/`, WebView layouts), build files (`*.gradle(.kts)`,
+  `*.toml`, build-logic: network, image, media, WebView, Firebase, Sentry, Play
+  services libraries, file dependencies, `externalNativeBuild`, `srcDir(s)` and
+  the variant API's `add…SourceDirectory`, repositories other than `google()`,
+  `mavenCentral()` and `gradlePluginPortal()`; only
+  `scripts/maven-central-mirror.init.gradle` may add Google's Maven Central
+  mirror, and every module applies `cinex.android.application`/`.library`/
+  `.feature` or `cinex.jvm.library`) and allows no `.jar`/`.aar`/`.so`/`.dex`/
+  `.class` (any case) but the Gradle wrapper; those convention plugins refuse any
+  dependency on files (`forbidFileDependencies` in build-logic, a reviewed list
+  of plugin configurations excepted);
+  `AppPermissionsTest` (app) pins the merged manifest's permissions, debug and
+  release (the build passes both merged manifests to the unit tests);
   `:app:checkReleaseDependencyGroups` (runs before every build) allows release
   dependencies only from `androidx.*` (not webkit, media3, browser),
   `org.jetbrains*`, `org.jspecify` and `com.google.guava`; review a new group
@@ -346,7 +358,9 @@ Don't duplicate config in module build files.
   `ProgramRepository` per process (`AppContainer`). The page is untrusted:
   `ProgramPageParser` cuts out the `__NEXT_DATA__` block by text search, bounds
   it (500,000 JSON values, depth 64), decodes only the used fields into its own
-  types (unknown parts are skipped, not built) and checks every field
+  types (unknown parts are skipped, not built; if that typed decoding fails, e.g.
+  for an entry or its `fields` that isn't an object, it decodes again with the two
+  lists as trees and skips the entries that fail) and checks every field
   (`ProgramRules`; the model types' `init` blocks check again); texts are cleaned
   plain text (`ProgramText`), never HTML. Films and specials are keyed by
   `FilmKey` (kind + slug); a showing a film and specials both list belongs to the

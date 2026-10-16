@@ -47,7 +47,8 @@ import java.util.concurrent.atomic.AtomicLong
  *   even if their caller is cancelled. Off is stored first; then a running
  *   download is cancelled, which aborts its blocked network call at once.
  * - **Status:** only the current download writes [ProgramStatus]; a stopped one
- *   can't overwrite a newer state (each download has a generation number).
+ *   can't overwrite a newer state (each download has a generation number). One
+ *   stopped while it writes the cache sets the cache back to the program shown.
  * - **Failures** never throw: they become [ProgramStatus.Failed] (downloads) or
  *   [ProgramActionResult.Failure] (commands), and the last good program stays
  *   (also in the cache, which is replaced only by a new program that was parsed
@@ -74,6 +75,14 @@ class DefaultProgramRepository internal constructor(
 
     /** The generation of the current download; anything older may not write the state. */
     private val generation = AtomicLong(0)
+
+    /** True while [deleteProgram] stops a download: the cache goes anyway, so it isn't set back first. */
+    @Volatile
+    private var deleting = false
+
+    /** Set by a download that [deleteProgram] stopped after it wrote the cache: the file holds its program. */
+    @Volatile
+    private var leftForDelete = false
 
     private val loading: Job = scope.launch(ioDispatcher) { load() }
 
@@ -118,12 +127,20 @@ class DefaultProgramRepository internal constructor(
     }
 
     override suspend fun deleteProgram(): ProgramActionResult = command {
-        stopDownload()
+        deleting = true
+        try {
+            stopDownload()
+        } finally {
+            deleting = false
+        }
         val deleted = withContext(ioDispatcher) { cache.delete() }
+        val leftOver = leftForDelete.also { leftForDelete = false }
         if (deleted) {
             mutableState.update { it.copy(program = null) }
             ProgramActionResult.Success
         } else {
+            // The file may hold the program of the download stopped here: back to the one shown.
+            if (leftOver) withContext(ioDispatcher) { restoreCache(mutableState.value.program) }
             ProgramActionResult.Failure(ProgramError.DELETE_FAILED)
         }
     }
@@ -177,9 +194,14 @@ class DefaultProgramRepository internal constructor(
         return age.isNegative || age >= Duration.ofHours(ProgramRepository.STALE_AFTER_HOURS)
     }
 
-    /** Applies [transform] only while [generation] is still the current download's. */
-    private fun updateIfCurrent(generation: Long, transform: (ProgramState) -> ProgramState) {
-        mutableState.update { if (this.generation.get() == generation) transform(it) else it }
+    /** Applies [transform] only while [generation] is still the current download's; returns whether it did. */
+    private fun updateIfCurrent(generation: Long, transform: (ProgramState) -> ProgramState): Boolean {
+        var applied = false
+        mutableState.update { state ->
+            applied = this.generation.get() == generation
+            if (applied) transform(state) else state
+        }
+        return applied
     }
 
     private suspend fun downloadAndStore(generation: Long) {
@@ -212,8 +234,22 @@ class DefaultProgramRepository internal constructor(
         currentCoroutineContext().ensureActive()
         if (this.generation.get() != generation) return ProgramStatus.Idle
         val stored = cache.write(parsed)
-        updateIfCurrent(generation) { it.copy(program = parsed) }
+        if (!updateIfCurrent(generation) { it.copy(program = parsed) }) {
+            // Stopped while the file was written: the cache goes back to the program that is
+            // shown (the stop waits for this download, so nothing else changes it meanwhile),
+            // unless the stop is a delete, which removes the file next (or, if that fails,
+            // sets it back itself).
+            if (stored) {
+                if (deleting) leftForDelete = true else restoreCache(mutableState.value.program)
+            }
+            return ProgramStatus.Idle
+        }
         return if (stored) ProgramStatus.Idle else ProgramStatus.Failed(ProgramError.STORAGE)
+    }
+
+    /** Writes [program] into the cache again, or removes the cache if there is none (or the write fails). */
+    private fun restoreCache(program: Program?) {
+        if (program == null || !cache.write(program)) cache.delete()
     }
 
     companion object {

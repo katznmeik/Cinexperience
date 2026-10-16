@@ -16,19 +16,34 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
 }
 
-// NetworkConfinementTest scans the sources, manifests and build files of every
-// module, so they are inputs of this module's tests: a change anywhere re-runs it
-// instead of reusing an up-to-date or cached result.
+// NetworkConfinementTest scans the sources, manifests, build files and compiled
+// libraries of every module, so they are inputs of this module's tests: a change
+// anywhere re-runs it instead of reusing an up-to-date or cached result.
+// The sources of the test sets it skips (test, test<Variant>, androidTest…) are left
+// out. It scans testFixtures; Ant patterns can't tell that from other sets starting
+// with "testF", so those stay inputs.
+val networkConfinementTestSets = listOf("**/src/test/**", "**/src/androidTest/**") +
+    ('A'..'Z').map { "**/src/androidTest$it*/**" } +
+    ('A'..'Z').filter { it != 'F' }.map { "**/src/test$it*/**" }
 val networkConfinementSources = fileTree(rootDir) {
-    include("**/src/*/kotlin/**", "**/src/*/java/**", "**/*.gradle.kts", "**/libs.versions.toml")
-    exclude("**/build/**", "**/.*/**", "**/src/test*/**", "**/src/androidTest*/**")
+    include("**/src/*/kotlin/**", "**/src/*/java/**")
+    exclude("**/build/**", "**/.*/**")
+    exclude(networkConfinementTestSets)
 }
-val networkConfinementManifestsAndResources = fileTree(rootDir) {
+val networkConfinementOtherFiles = fileTree(rootDir) {
     include("**/src/*/AndroidManifest.xml", "**/src/*/res/**/*.xml")
+    include("**/*.gradle.kts", "**/*.gradle", "**/*.toml")
     exclude("**/build/**", "**/.*/**")
 }
+// Compiled libraries, whose extensions the scan compares in any case.
+val networkConfinementBinaries = fileTree(rootDir) { exclude("**/build/**", "**/.*/**") }.matching(
+    org.gradle.api.tasks.util.PatternSet().apply {
+        isCaseSensitive = false
+        include("**/*.jar", "**/*.aar", "**/*.so", "**/*.dex", "**/*.class")
+    },
+)
 tasks.withType<Test>().configureEach {
-    inputs.files(networkConfinementSources, networkConfinementManifestsAndResources)
+    inputs.files(networkConfinementSources, networkConfinementOtherFiles, networkConfinementBinaries)
         .withPropertyName("networkConfinementInputs")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
