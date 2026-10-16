@@ -1,5 +1,6 @@
-import java.io.ByteArrayOutputStream
-import javax.inject.Inject
+import io.github.katznmeik.cinexperience.buildlogic.CheckDependencyGroupsTask
+import io.github.katznmeik.cinexperience.buildlogic.GitBuildIdValueSource
+import io.github.katznmeik.cinexperience.buildlogic.resolvedModuleGroups
 
 plugins {
     alias(libs.plugins.cinex.android.application)
@@ -59,27 +60,8 @@ val appVersionCode: Int = appVersionName.split(".").let { parts ->
 // Build ID: the first 7 characters of the commit the APK is built from, shown in
 // Settings → About. CI checks out the pushed commit, so it equals ${GITHUB_SHA::7}
 // in the APK file name (cinexperience-<id>.apk). Without git, or outside a git
-// checkout, it is "unknown". As a ValueSource it works with the configuration cache:
-// Gradle runs it again on every build and reconfigures when HEAD has moved.
-abstract class GitBuildIdValueSource : ValueSource<String, ValueSourceParameters.None> {
-    @get:Inject
-    abstract val execOperations: ExecOperations
-
-    override fun obtain(): String = try {
-        val output = ByteArrayOutputStream()
-        val result = execOperations.exec {
-            commandLine("git", "rev-parse", "HEAD")
-            standardOutput = output
-            errorOutput = ByteArrayOutputStream()
-            isIgnoreExitValue = true
-        }
-        val hash = output.toString(Charsets.UTF_8).trim()
-        if (result.exitValue == 0 && hash.matches(Regex("[0-9a-f]{40}"))) hash.take(7) else "unknown"
-    } catch (e: Exception) {
-        "unknown" // git is not installed
-    }
-}
-
+// checkout, it is "unknown" (GitBuildIdValueSource in build-logic, which also works
+// with the configuration cache).
 val appBuildId: String = providers.of(GitBuildIdValueSource::class) {}.get()
 
 android {
@@ -127,61 +109,12 @@ android {
 // resolved release runtime classpath must be on this allowlist. A new library
 // from another group fails every build (preBuild depends on this task) until it
 // has been reviewed and added here. NetworkConfinementTest checks the build files
-// by name as well.
-abstract class CheckDependencyGroupsTask : DefaultTask() {
-    @get:Input
-    abstract val groups: SetProperty<String>
-
-    @get:Input
-    abstract val allowedGroups: SetProperty<String>
-
-    @get:Input
-    abstract val allowedGroupPrefixes: ListProperty<String>
-
-    @get:Input
-    abstract val forbiddenGroups: SetProperty<String>
-
-    @get:OutputFile
-    abstract val report: RegularFileProperty
-
-    @TaskAction
-    fun check() {
-        val forbidden = forbiddenGroups.get()
-        val unexpected = groups.get().filter { group ->
-            group in forbidden || (group !in allowedGroups.get() && allowedGroupPrefixes.get().none { group.startsWith(it) })
-        }
-        if (unexpected.isNotEmpty()) {
-            throw GradleException(
-                "Release dependencies from groups that are not allowed: ${unexpected.sorted().joinToString()}. " +
-                    "Review them (spec §11.1: no third-party network, HTML or image libraries) and update " +
-                    "checkReleaseDependencyGroups in app/build.gradle.kts.",
-            )
-        }
-        report.get().asFile.writeText(groups.get().sorted().joinToString("\n", postfix = "\n"))
-    }
-}
-
+// by name as well. The task type (CheckDependencyGroupsTask) is in build-logic; the
+// lists stay here.
 val checkReleaseDependencyGroups = tasks.register<CheckDependencyGroupsTask>("checkReleaseDependencyGroups") {
     group = "verification"
     description = "Fails if the release runtime classpath has a module group that is not on the allowlist."
-    groups.set(
-        provider { configurations.getByName("releaseRuntimeClasspath") }
-            .flatMap { it.incoming.resolutionResult.rootComponent }
-            .map { root ->
-                val seen = HashSet<org.gradle.api.artifacts.result.ResolvedComponentResult>()
-                val queue = ArrayDeque(listOf(root))
-                val found = sortedSetOf<String>()
-                while (queue.isNotEmpty()) {
-                    val component = queue.removeFirst()
-                    if (!seen.add(component)) continue
-                    (component.id as? org.gradle.api.artifacts.component.ModuleComponentIdentifier)?.let { found += it.group }
-                    component.dependencies
-                        .filterIsInstance<org.gradle.api.artifacts.result.ResolvedDependencyResult>()
-                        .forEach { queue += it.selected }
-                }
-                found
-            },
-    )
+    groups.set(resolvedModuleGroups("releaseRuntimeClasspath"))
     allowedGroupPrefixes.set(listOf("androidx."))
     allowedGroups.set(setOf("org.jetbrains", "org.jetbrains.kotlin", "org.jetbrains.kotlinx", "org.jspecify", "com.google.guava"))
     // Inside androidx: WebView and media players can load remote content. (The marker
