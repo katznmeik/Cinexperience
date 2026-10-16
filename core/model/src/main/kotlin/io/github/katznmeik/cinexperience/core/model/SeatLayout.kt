@@ -174,7 +174,11 @@ enum class NumberingDirection {
  *   splits, merges or shortens blocks, a start stays with the block that holds
  *   the seat it was set on and numbers that block's current first numbered seat;
  *   when that seat is removed, it moves on to the next numbered seat, with the
- *   number that seat had ([withBlockStartsKeyedOn], [withCells]).
+ *   number that seat had; a numbered seat added in front of that seat takes the
+ *   number before it (start − 1, counting back only to 1 and, in a continuous
+ *   row, to just after the previous block's numbers; never above the start
+ *   itself), so the existing seats keep their numbers
+ *   ([withBlockStartsKeyedOn], [withCells]).
  * @property halfSeatOffset the whole row is drawn shifted half a seat to the right
  *   (staggered rows). Alternating rows with and without the offset model staggering.
  * @property numberingDirection which way the row's seats are numbered.
@@ -292,6 +296,18 @@ data class LayoutRow(
      * the number that seat had, so every remaining seat keeps its number. A block
      * left without numbered seats keeps nothing; an automatic block stays automatic.
      *
+     * Likewise, new numbered seats added in front of the seat a block's explicit
+     * start `s` is keyed on (before it in numbering order) count back from it: with
+     * `k` of them, the first takes `s − k`, so the seat with the start and every
+     * seat after it keep their numbers. They count back only as far as a lower
+     * bound: 1 (Yorck has no seat 0), and in a [SeatNumbering.CONTINUOUS] row one
+     * more than the last number before the block in numbering order, so no number
+     * is used twice. Where the bound stops them, the first new seat takes the bound
+     * and the others move up just as far as needed; never above `s`, so a start
+     * already below the bound gives the first new seat `s`, as without this rule.
+     * A restored seat with its own start ([restored]) is not new; seats with a
+     * fixed label use no number and don't count.
+     *
      * When the change leaves the number of blocks and every block's start as they
      * were, the stored list is kept as it is (even with trailing `null`s or entries
      * beyond the blocks, as older data may hold), so an edit that doesn't touch the
@@ -299,7 +315,8 @@ data class LayoutRow(
      */
     internal fun withCells(newCells: List<LayoutCell>, restored: Map<SeatId, Int?> = emptyMap()): LayoutRow {
         val changed = copy(cells = newCells)
-        val reKeyed = changed.withBlockStartsKeyedOn(blockStartAnchors() + movedStarts(changed) + restored)
+        val anchors = blockStartAnchors() + movedStarts(changed) + restored
+        val reKeyed = changed.withBlockStartsKeyedOn(anchors + frontStarts(changed, anchors))
         val blockCount = changed.blocks.size
         val sameStarts = blockCount == blocks.size &&
             (0 until blockCount).all { reKeyed.blockStartNumbers.getOrNull(it) == blockStartNumbers.getOrNull(it) }
@@ -326,6 +343,39 @@ data class LayoutRow(
             moved[(cells[next] as LayoutCell.Seat).id] = checkNotNull(numbers[next])
         }
         return moved
+    }
+
+    /**
+     * For each block of [changed] whose first numbered seats in numbering order are
+     * new (not in this row) and followed by a seat that carries an explicit start
+     * `s` in [anchors] (the start [withBlockStartsKeyedOn] would give the block):
+     * the first new seat, keyed on `max(s − k, min(bound, s))` for `k` new numbered
+     * seats (see [withCells]). The bound is 1, and in a [SeatNumbering.CONTINUOUS]
+     * row one more than the last number before the block in numbering order.
+     */
+    private fun frontStarts(changed: LayoutRow, anchors: Map<SeatId, Int?>): Map<SeatId, Int> {
+        val existing = seatIds.toSet()
+        val front = HashMap<SeatId, Int>()
+        val rightToLeft = changed.numberingDirection == NumberingDirection.RIGHT_TO_LEFT
+        val blocks = changed.blocks.map { if (rightToLeft) it.asReversed() else it }
+        val numberedBlocks = blocks.map { columns -> columns.filter { (changed.cells[it] as LayoutCell.Seat).fixedLabel == null } }
+        val order = if (rightToLeft) blocks.indices.reversed() else blocks.indices
+        order.forEachIndexed { position, block ->
+            val numbered = numberedBlocks[block].map { changed.cells[it] as LayoutCell.Seat }
+            val keyed = numbered.indexOfFirst { it.id in anchors }
+            if (keyed <= 0) return@forEachIndexed
+            val start = anchors[numbered[keyed].id] ?: return@forEachIndexed
+            if (numbered.subList(0, keyed).any { it.id in existing }) return@forEachIndexed
+            val bound = if (changed.numbering == SeatNumbering.CONTINUOUS) {
+                // The last numbered seat before this block, with the starts of the blocks before it.
+                val previous = order.take(position).lastOrNull { numberedBlocks[it].isNotEmpty() }
+                previous?.let { changed.withBlockStartsKeyedOn(anchors + front).numbersByColumn()[numberedBlocks[it].last()]!! + 1 } ?: 1
+            } else {
+                1
+            }
+            front[numbered.first().id] = maxOf(start - keyed, minOf(bound, start))
+        }
+        return front
     }
 
     companion object {
@@ -415,11 +465,7 @@ data class SeatLayout(
     /** Sets one cell's type. A cell that becomes a seat gets a fresh id; an unchanged type is a no-op. */
     fun withCellType(row: Int, column: Int, type: CellType): SeatLayout {
         if (cell(row, column).type == type) return this
-        val allocator = IdAllocator(nextSeatId)
-        val newCell = allocator.cell(type)
-        val newRows = rows.toMutableList()
-        newRows[row] = rows[row].withCells(rows[row].cells.toMutableList().also { it[column] = newCell })
-        return SeatLayout(newRows, allocator.next)
+        return LayoutChanges(this).apply { setCellType(row, column, type) }.build()
     }
 
     /**
@@ -429,7 +475,10 @@ data class SeatLayout(
      * on when it was painted away (see [LayoutRow.blockStartNumbers]). Its block
      * takes it unless a numbered seat that carries a start comes before the
      * restored seat in the block's numbering order; then that seat's start wins
-     * and [blockStart] is dropped.
+     * and [blockStart] is dropped: e.g. when a new seat was painted in front of
+     * it meanwhile (`.SSS` from 5: the 5 painted away, a new seat at column 0
+     * takes 5, the 5 restored reads 6, so the row reads 5 6 7 8). Without a
+     * [blockStart], the seat counts as new (see [LayoutRow.withCells]).
      */
     fun withSeat(
         row: Int,
@@ -438,23 +487,14 @@ data class SeatLayout(
         kind: SeatKind = SeatKind.STANDARD,
         fixedLabel: String? = null,
         blockStart: Int? = null,
-    ): SeatLayout {
-        require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
-        require(id !in seatPositions) { "$id is already used in this layout" }
-        if (id.value >= MAX_SEAT_ID) throw SeatIdsExhaustedException("$id is not below $MAX_SEAT_ID")
-        require(blockStart == null || blockStart >= 0) { "Block start numbers must not be negative: $blockStart" }
-        val newCells = rows[row].cells.toMutableList().also { it[column] = LayoutCell.Seat(id, kind, fixedLabel) }
-        val restored = if (blockStart == null) emptyMap() else mapOf(id to blockStart)
-        val newRows = rows.toMutableList().also { it[row] = rows[row].withCells(newCells, restored) }
-        return SeatLayout(newRows, maxOf(nextSeatId, id.value + 1))
-    }
+    ): SeatLayout = LayoutChanges(this).apply { setSeat(row, column, id, kind, fixedLabel, blockStart) }.build()
 
     /** Changes the [SeatKind] of the seat at ([row], [column]); the seat keeps its id and fixed label. */
     fun withSeatKind(row: Int, column: Int, kind: SeatKind): SeatLayout {
         val seat = cell(row, column)
         require(seat is LayoutCell.Seat) { "Cell ($row, $column) is not a seat" }
         if (seat.kind == kind) return this
-        return copy(rows = replaceCell(row, column, seat.copy(kind = kind)))
+        return LayoutChanges(this).apply { setSeatKind(row, column, kind) }.build()
     }
 
     /**
@@ -620,6 +660,60 @@ data class SeatLayout(
          */
         const val MAX_SEAT_ID: Int = 1_000_000_000
     }
+}
+
+/**
+ * A [SeatLayout] being changed cell by cell: the changes of [SeatLayout.withCellType],
+ * [SeatLayout.withSeat] and [SeatLayout.withSeatKind] (those use it, so they are
+ * the same), validated once in [build] instead of after every cell. A paint stroke
+ * over many cells ([LayoutEditSession.paintCells]) then costs one grid, not one
+ * grid per cell. After an exception the changes are incomplete: don't [build] them.
+ */
+internal class LayoutChanges(layout: SeatLayout) {
+    private val rows = layout.rows.toMutableList()
+    private val ids = HashSet(layout.seatIds)
+    private var nextSeatId = layout.nextSeatId
+
+    fun row(index: Int): LayoutRow = rows[index]
+
+    fun cell(row: Int, column: Int): LayoutCell = rows[row].cells[column]
+
+    operator fun contains(id: SeatId): Boolean = id in ids
+
+    /** As [SeatLayout.withCellType]. */
+    fun setCellType(row: Int, column: Int, type: CellType) {
+        if (cell(row, column).type == type) return
+        val allocator = IdAllocator(nextSeatId)
+        replace(row, column, allocator.cell(type), emptyMap())
+        nextSeatId = allocator.next
+    }
+
+    /** As [SeatLayout.withSeat]. */
+    fun setSeat(row: Int, column: Int, id: SeatId, kind: SeatKind, fixedLabel: String?, blockStart: Int?) {
+        require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
+        require(id !in ids) { "$id is already used in this layout" }
+        if (id.value >= SeatLayout.MAX_SEAT_ID) throw SeatIdsExhaustedException("$id is not below ${SeatLayout.MAX_SEAT_ID}")
+        require(blockStart == null || blockStart >= 0) { "Block start numbers must not be negative: $blockStart" }
+        val restored = if (blockStart == null) emptyMap() else mapOf(id to blockStart)
+        replace(row, column, LayoutCell.Seat(id, kind, fixedLabel), restored)
+        nextSeatId = maxOf(nextSeatId, id.value + 1)
+    }
+
+    /** As [SeatLayout.withSeatKind]: no re-keying, the seat stays the same seat. */
+    fun setSeatKind(row: Int, column: Int, kind: SeatKind) {
+        val seat = cell(row, column)
+        require(seat is LayoutCell.Seat) { "Cell ($row, $column) is not a seat" }
+        if (seat.kind == kind) return
+        rows[row] = rows[row].copy(cells = rows[row].cells.toMutableList().also { it[column] = seat.copy(kind = kind) })
+    }
+
+    private fun replace(row: Int, column: Int, cell: LayoutCell, restored: Map<SeatId, Int?>) {
+        (cell(row, column) as? LayoutCell.Seat)?.let { ids -= it.id }
+        rows[row] = rows[row].withCells(rows[row].cells.toMutableList().also { it[column] = cell }, restored)
+        (cell as? LayoutCell.Seat)?.let { ids += it.id }
+    }
+
+    fun build(): SeatLayout = SeatLayout(rows.toList(), nextSeatId)
 }
 
 /**

@@ -2,6 +2,7 @@ package io.github.katznmeik.cinexperience.core.data.repository
 
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.CinemaSummary
+import io.github.katznmeik.cinexperience.core.model.DataLimits
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallDetail
 import io.github.katznmeik.cinexperience.core.model.SeatColour
@@ -24,6 +25,17 @@ enum class DeleteResult {
 
     /** Preloaded (seed) cinemas and halls cannot be deleted, only renamed/edited. */
     PRELOADED,
+}
+
+/**
+ * [HallRepository.createHall] refused a new hall because [DataLimits.MAX_HALLS]
+ * halls exist already. [message] is user-facing.
+ */
+class HallLimitReachedException : IllegalStateException(MESSAGE) {
+    companion object {
+        val MESSAGE: String =
+            "The app holds at most ${DataLimits.MAX_HALLS_TEXT} halls. Delete a hall to add a new one."
+    }
 }
 
 interface CinemaRepository {
@@ -70,7 +82,11 @@ interface HallRepository {
 
     suspend fun getHall(hallId: Long): Hall?
 
-    /** Creates a user-added hall in [cinemaId] and returns its id. */
+    /**
+     * Creates a user-added hall in [cinemaId] and returns its id. Throws
+     * [HallLimitReachedException] when [DataLimits.MAX_HALLS] halls exist already,
+     * so whatever is saved can be exported.
+     */
     suspend fun createHall(cinemaId: Long, name: String): Long
 
     suspend fun renameHall(hallId: Long, name: String): Boolean

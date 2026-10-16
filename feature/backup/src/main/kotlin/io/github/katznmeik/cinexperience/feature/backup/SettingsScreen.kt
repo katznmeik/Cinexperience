@@ -136,7 +136,10 @@ internal fun SettingsScreen(
     // While an import replaces the data nothing else may write: Back and the Data rows
     // are blocked here, tab switching in CinexApp.
     val importing = backup.task is BackupTask.Importing
-    BackHandler(enabled = importing) {}
+    // An export runs in this screen's ViewModel: Back would clear it and cancel the
+    // export without a word, so Back waits for it too (switching tabs keeps it).
+    val exporting = backup.task is BackupTask.Exporting
+    BackHandler(enabled = importing || exporting) {}
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(backup.message) {
         backup.message?.let {
