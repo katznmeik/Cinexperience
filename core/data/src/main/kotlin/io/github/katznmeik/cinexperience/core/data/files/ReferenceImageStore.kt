@@ -139,8 +139,8 @@ internal class FileReferenceImageStore(
 
 /**
  * The smallest power of two that, as `inSampleSize`, brings an image whose longer
- * side is [longer] px to at most [max] px. Decoders round a sampled size up
- * (4,097 px with a sample of 2 gives 2,049), so this rounds up too. At most 2^30,
+ * side is [longer] px to at most [max] px. Some decoders (JPEG) round a sampled
+ * size up (4,097 px with a sample of 2 gives 2,049), so this rounds up too. At most 2^30,
  * which brings any `Int` size within any [max] ≥ 2.
  */
 internal fun sampleSizeWithin(longer: Int, max: Int): Int {

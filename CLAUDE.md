@@ -272,7 +272,9 @@ Don't duplicate config in module build files.
   "can't be read by this app version". Tests:
   `core/data/src/test/.../backup/`. Known limitation: if the current data fails
   validation (e.g. a layout from a newer app), import is refused; there is no
-  "Replace anyway".
+  "Replace anyway". Data with more than `MAX_HALLS` halls (only possible from
+  v1.0/v1.1, which had no cap on creating or importing halls) fails export and
+  import that way too; the remedy is to delete halls first.
 - **Row and seat labels:** Yorck mostly numbers rows and seats, which is the
   default labelling; some rows are letters ("C") or balcony rows ("R1"), and a
   row's first seat is often 2, 3 or 4. Keep fixtures, examples and UI texts

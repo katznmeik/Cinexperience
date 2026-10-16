@@ -15,6 +15,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.core.app.ActivityOptionsCompat
+import io.github.katznmeik.cinexperience.core.data.backup.BackupError
+import io.github.katznmeik.cinexperience.core.data.backup.BackupException
 import io.github.katznmeik.cinexperience.core.testing.FakeBackupRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
@@ -24,6 +26,7 @@ import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -108,6 +111,28 @@ class ExportBackTest {
         assertEquals(listOf(destination), backup.exportedTo)
 
         // Once it has finished, Back works again: back to the start tab.
+        pressBack()
+        composeRule.onNodeWithText("13 venues · 0 visits").assertExists()
+    }
+
+    @Test
+    fun backWorksAgainAfterAFailedExport() {
+        showSettings()
+
+        val gate = CompletableDeferred<Unit>()
+        backup.gate = gate
+        backup.exportFailure = BackupException(BackupError.WRITE_FAILED, "Couldn't write the backup file. Nothing was exported.")
+        composeRule.onNodeWithText("Export backup").performClick()
+        composeRule.onNodeWithText("Exporting… 50%").assertExists()
+
+        pressBack()
+        composeRule.onNodeWithText("Exporting… 50%").assertExists()
+
+        // The export fails: it ends, nothing is recorded, and Back is no longer blocked.
+        gate.complete(Unit)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Exporting… 50%").assertDoesNotExist()
+        assertNull(backup.lastExport.value)
         pressBack()
         composeRule.onNodeWithText("13 venues · 0 visits").assertExists()
     }
