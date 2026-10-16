@@ -68,8 +68,8 @@ All data is stored locally in a Room (SQLite) database.
 | name | String | e.g. "Delphi LUX" |
 | address | String? | |
 | notes | String? | free text |
-| isPreloaded | Boolean | shipped with the app vs. user-added |
-| seedKey | String? | stable key of a preloaded cinema (seed updates) |
+| isPreloaded | Boolean | inserted from the app's seed data (§9) vs. user-added; preloaded items can't be deleted. A user-added cinema the seed adopts (same name), and the seed halls added to it, stay user-added |
+| seedKey | String? | stable key of the cinema's seed entry (seed updates); also set on a user-added cinema the seed adopted |
 | isFavourite | Boolean | marked as a favourite cinema by the user (§6.1, §6.2) |
 
 ### 4.2 Hall
@@ -115,10 +115,13 @@ runs continuously across blocks or restarts in each block, and can set the
 starting number of each block. When aisles are painted or removed or columns
 are removed, a block's start number stays with the block that holds the seat
 it was set on. When that seat is removed, the start moves on to the next seat
-with that seat's number, so the remaining seats keep their numbers. A seat
-added in front of a block with an explicit start takes the number before it
-(start − 1, when that is at least 1), so the existing seats keep theirs. A row
-can also be shifted by half a seat (staggered rows), as seen in some halls.
+with that seat's number, so the remaining seats keep their numbers. A numbered
+seat added in front of a block with an explicit start takes the number before
+it (start − 1), so the existing seats keep theirs. New seats count back only to
+1 and, in a continuous row, to just after the previous block's numbers; where
+that stops them, the block starts there (never above its old start) and the
+seats behind move up as far as needed. A row can also be shifted by half a
+seat (staggered rows), as seen in some halls.
 
 The screen is drawn at the top as a straight bar, with the width, distance and
 horizontal offset from §4.2.
