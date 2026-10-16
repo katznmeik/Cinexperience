@@ -25,22 +25,26 @@ import java.util.Locale
  *   inserted: it gets the seed key but stays user-added (`isPreloaded` false), so
  *   the user can still delete it. Otherwise the item is inserted (unless the user
  *   deleted it, see below); a new hall of an existing cinema goes into that
- *   cinema. A cinema is inserted as preloaded; an inserted hall is preloaded exactly when
- *   its cinema is, so a hall added to a cinema the user created stays deletable
- *   like that cinema, and deleting that cinema doesn't take preloaded halls with it.
+ *   cinema. A cinema is inserted as preloaded; an inserted hall is preloaded
+ *   exactly when its cinema is, so a hall added to a cinema the user created
+ *   stays deletable like that cinema, and deleting that cinema doesn't take
+ *   preloaded halls with it.
  * - **Deleted stays deleted.** An item whose seed key has `seed_snapshot` rows
  *   was seeded before (every run records rows for every seed cinema and hall it
  *   matches or inserts). If it is missing now, the user deleted it (only
- *   user-added items, and halls of a user-added cinema, can be deleted), so it is
- *   not inserted again, and neither is any hall of a deleted cinema, not even
- *   one the seed has just added. The run leaves such an item's rows as they are:
+ *   user-added items, and halls of a user-added cinema, can be deleted; data
+ *   from pre-release builds, seed v1/v2, can still hold preloaded halls inside
+ *   an adopted cinema, e.g. Blauer Stern typed in by hand before seed v3: such
+ *   halls go with their cinema and then stay deleted too), so it is not
+ *   inserted again, and neither is any hall of a deleted cinema, not even one
+ *   the seed has just added. The run leaves such an item's rows as they are:
  *   they are the record of the deletion, so they are kept (the table has no
- *   foreign key, and only an import replaces them). A missing item without rows is
- *   inserted: on a fresh database there are none, and an import replaces all
- *   rows with the backup's own, so the backup's state decides (a backup from
- *   before the seed had an item has neither the item nor its rows). A cinema
- *   the user creates again under the deleted one's name is adopted again as
- *   above; its halls that were seeded before stay deleted.
+ *   foreign key, and only an import replaces them). A missing item without
+ *   rows is inserted: on a fresh database there are none, and an import
+ *   replaces all rows with the backup's own, so the backup's state decides (a
+ *   backup from before the seed had an item has neither the item nor its rows).
+ *   A cinema the user creates again under the deleted one's name is adopted
+ *   again as above; its halls that were seeded before stay deleted.
  * - **Never overwrite, never delete.** Names and notes are never touched. The
  *   seed only fills fields that are empty (`null`): a cinema's address, a hall's
  *   layout, screen width and screen distance (and screen offset, see below) —

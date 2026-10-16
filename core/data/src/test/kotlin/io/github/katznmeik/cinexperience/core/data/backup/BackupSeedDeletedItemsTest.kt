@@ -49,7 +49,7 @@ internal class BackupSeedDeletedItemsTest : BackupTestBase() {
     }
 
     @Test
-    fun aCinemaMissingWithItsSeedRecordsIsAddedAfterTheImport() = runTest {
+    fun aCinemaMissingWithoutItsSeedRecordsIsAddedAfterTheImport() = runTest {
         // A backup made before the seed had "yorck": neither the rows nor the seed records.
         deviceA.seed()
         val yorck = db.cinemaDao().getAll().single { it.seedKey == "yorck" }

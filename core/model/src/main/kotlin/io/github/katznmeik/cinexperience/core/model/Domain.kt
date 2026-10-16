@@ -6,10 +6,12 @@ import java.time.LocalDate
  * A cinema (spec §4.1).
  *
  * @property id database id; `0` for a cinema that has not been saved yet.
- * @property isPreloaded shipped with the app's seed data; preloaded cinemas can be
- *   renamed and edited but not deleted.
- * @property seedKey stable key of a preloaded cinema in the seed asset (§9), `null`
- *   for user-added cinemas. Never shown to the user.
+ * @property isPreloaded inserted by the seeder (§9); preloaded cinemas can be
+ *   renamed and edited but not deleted. A user-added cinema the seeder adopted
+ *   (same name as a seed cinema) is not preloaded, so it stays deletable.
+ * @property seedKey stable key of the cinema's entry in the seed asset (§9): set
+ *   for preloaded cinemas and for user-added ones the seeder adopted, `null` for
+ *   the other user-added cinemas. Never shown to the user.
  * @property isFavourite marked as a favourite cinema by the user (§6.1, §6.2);
  *   changed only through `CinemaRepository.setFavourite`.
  */
@@ -35,7 +37,9 @@ data class Cinema(
  *   the repositories reject other values.
  * @property referenceImagePath app-private relative path of the Yorck-app
  *   screenshot used in the layout editor (§6.5), relative to the app's files dir.
- * @property isPreloaded see [Cinema.isPreloaded]; preloaded halls cannot be deleted.
+ * @property isPreloaded inserted by the seeder into a preloaded cinema (§9);
+ *   preloaded halls cannot be deleted. Adopted halls and seed halls the seeder
+ *   added to a user-added cinema are not preloaded.
  * @property seedKey see [Cinema.seedKey], e.g. `"delphi-lux/saal-3"`.
  * @property nextSeatId the hall's seat id high-water mark: every id below it may
  *   have been used by an earlier layout of this hall, so new seats must get ids at
