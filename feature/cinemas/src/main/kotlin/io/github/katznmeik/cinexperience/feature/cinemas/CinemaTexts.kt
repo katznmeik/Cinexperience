@@ -2,10 +2,14 @@ package io.github.katznmeik.cinexperience.feature.cinemas
 
 import io.github.katznmeik.cinexperience.core.model.Cinema
 import io.github.katznmeik.cinexperience.core.model.HallSummary
+import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 
 /** "no visits", "1 visit", "8 visits". */
 internal fun visitsText(count: Int): String = if (count == 0) "no visits" else countText(count, "visit")
+
+/** A list row's score for screen readers: "Score 4.2" or "Not rated", instead of the bare "4.2" or "–". */
+internal fun scoreDescription(score: Double?): String = score?.let { "Score ${formatScore(it)}" } ?: "Not rated"
 
 /** Street part of the address ("Kantstraße 10" of "Kantstraße 10, 10623 Berlin"), or `null`. */
 internal val Cinema.shortAddress: String?

@@ -61,6 +61,7 @@ import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialogHost
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.ItemMenu
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.MenuEntry
 import io.github.katznmeik.cinexperience.feature.cinemas.hallMeta
+import io.github.katznmeik.cinexperience.feature.cinemas.scoreDescription
 
 @Composable
 internal fun CinemaDetailEntry(
@@ -368,7 +369,9 @@ private fun HallRow(
                 text = formatScore(hall.overallScore),
                 style = CinexTheme.textStyles.score.copy(textAlign = TextAlign.End),
                 color = CinexTheme.colors.text,
-                modifier = Modifier.widthIn(min = 34.dp),
+                modifier = Modifier
+                    .widthIn(min = 34.dp)
+                    .clearAndSetSemantics { contentDescription = scoreDescription(hall.overallScore) },
             )
         }
         ItemMenu(

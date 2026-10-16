@@ -30,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,6 +45,7 @@ import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.cinemas.cinemaMeta
+import io.github.katznmeik.cinexperience.feature.cinemas.scoreDescription
 import io.github.katznmeik.cinexperience.feature.cinemas.visitsText
 
 @Composable
@@ -194,6 +197,7 @@ private fun CinemaCard(summary: CinemaSummary, onClick: () -> Unit) {
                 text = formatScore(summary.overallScore),
                 style = CinexTheme.textStyles.score,
                 color = CinexTheme.colors.text,
+                modifier = Modifier.clearAndSetSemantics { contentDescription = scoreDescription(summary.overallScore) },
             )
             Text(
                 text = visitsText(summary.visitCount),
