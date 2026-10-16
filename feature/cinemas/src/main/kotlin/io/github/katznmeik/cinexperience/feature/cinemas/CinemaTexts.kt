@@ -32,9 +32,13 @@ internal fun hallMeta(hall: HallSummary): String {
 
 /**
  * Hall row subtitle in Manage cinemas & halls: "Added by you · " before [hallMeta]
- * only for a hall the user created (no seed key). Seed halls the seeder added to a
- * user-added cinema aren't preloaded but weren't added by the user either; like
- * adopted halls, they carry a seed key and get no origin label.
+ * only for a hall the user created (not preloaded, no seed key). Seed halls the
+ * seeder added to a user-added cinema aren't preloaded but weren't added by the
+ * user either; they carry a seed key and get no origin label. An adopted hall
+ * (created by the user, then matched to a seed hall) carries one too, so it loses
+ * the label: accepted, the subtitle stays neutral rather than wrong. A preloaded
+ * hall without a seed key (only from a crafted backup) is never "Added by you"
+ * next to its disabled Delete.
  */
 internal fun manageHallMeta(hall: HallSummary): String =
-    if (hall.hall.seedKey == null) "Added by you · ${hallMeta(hall)}" else hallMeta(hall)
+    if (!hall.hall.isPreloaded && hall.hall.seedKey == null) "Added by you · ${hallMeta(hall)}" else hallMeta(hall)

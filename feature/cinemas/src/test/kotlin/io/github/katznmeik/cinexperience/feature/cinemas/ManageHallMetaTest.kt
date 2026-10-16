@@ -28,4 +28,21 @@ class ManageHallMetaTest {
         val seeded = Hall(id = 3, cinemaId = 7, name = "Saal 2", isPreloaded = false, seedKey = "blauer-stern/saal-2")
         assertEquals("Layout not drawn yet · 2 visits", manageHallMeta(summary(seeded)))
     }
+
+    /**
+     * A hall the user created and the seeder later adopted (same name as a seed hall)
+     * gets the seed key and loses the label: an accepted trade-off, the subtitle stays neutral.
+     */
+    @Test
+    fun anAdoptedHallHasNoLabel() {
+        val adopted = Hall(id = 4, cinemaId = 5, name = "Saal 3", isPreloaded = false, seedKey = "delphi-lux/saal-3")
+        assertEquals("Layout not drawn yet · 2 visits", manageHallMeta(summary(adopted)))
+    }
+
+    /** Preloaded without a seed key (only from a crafted backup): never "Added by you" next to a disabled Delete. */
+    @Test
+    fun aPreloadedHallWithoutASeedKeyIsNot() {
+        val crafted = Hall(id = 5, cinemaId = 1, name = "Saal 4", isPreloaded = true, seedKey = null)
+        assertEquals("Layout not drawn yet · 2 visits", manageHallMeta(summary(crafted)))
+    }
 }
