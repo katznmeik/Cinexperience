@@ -76,6 +76,10 @@ class DefaultProgramRepository internal constructor(
     /** The generation of the current download; anything older may not write the state. */
     private val generation = AtomicLong(0)
 
+    /** True while [deleteProgram] stops a download: the cache goes anyway, so it isn't set back first. */
+    @Volatile
+    private var deleting = false
+
     private val loading: Job = scope.launch(ioDispatcher) { load() }
 
     private fun load() {
@@ -119,7 +123,12 @@ class DefaultProgramRepository internal constructor(
     }
 
     override suspend fun deleteProgram(): ProgramActionResult = command {
-        stopDownload()
+        deleting = true
+        try {
+            stopDownload()
+        } finally {
+            deleting = false
+        }
         val deleted = withContext(ioDispatcher) { cache.delete() }
         if (deleted) {
             mutableState.update { it.copy(program = null) }
@@ -220,8 +229,9 @@ class DefaultProgramRepository internal constructor(
         val stored = cache.write(parsed)
         if (!updateIfCurrent(generation) { it.copy(program = parsed) }) {
             // Stopped while the file was written: the cache goes back to the program that is
-            // shown (the stop waits for this download, so nothing else changes it meanwhile).
-            if (stored) restoreCache(mutableState.value.program)
+            // shown (the stop waits for this download, so nothing else changes it meanwhile),
+            // unless the stop is a delete, which removes the file next.
+            if (stored && !deleting) restoreCache(mutableState.value.program)
             return ProgramStatus.Idle
         }
         return if (stored) ProgramStatus.Idle else ProgramStatus.Failed(ProgramError.STORAGE)

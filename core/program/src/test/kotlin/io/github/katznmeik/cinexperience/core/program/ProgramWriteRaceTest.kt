@@ -48,13 +48,18 @@ class ProgramWriteRaceTest {
 
     /**
      * The cache folder. [ProgramCache.write] looks at its folder (`isDirectory`) before
-     * it writes anything; [onWrite] runs there once.
+     * it writes anything, and nothing else does: [writes] counts the writes, and
+     * [onWrite] runs at the next one, once.
      */
     private class WatchedFolder(path: String) : File(path) {
         @Volatile
         var onWrite: (() -> Unit)? = null
 
+        @Volatile
+        var writes = 0
+
         override fun isDirectory(): Boolean {
+            writes++
             onWrite?.also { onWrite = null }?.invoke()
             return super.isDirectory()
         }
@@ -112,8 +117,9 @@ class ProgramWriteRaceTest {
         assertEquals(DownloadPermission.OFF, state.permission)
         assertEquals(ProgramStatus.Idle, state.status)
         assertEquals(shown, state.program)
-        // The file holds the same program, so a restart shows it too.
+        // The file holds the same program (written again), so a restart shows it too.
         assertEquals(shown, ProgramCache(cacheFolder).read())
+        assertEquals(2, folder.writes)
     }
 
     @Test
@@ -151,6 +157,7 @@ class ProgramWriteRaceTest {
         assertEquals(ProgramStatus.Idle, repository.state.value.status)
         assertEquals(DownloadPermission.ALLOWED, repository.state.value.permission)
         assertFalse(cacheFile.exists())
+        assertEquals("the delete doesn't wait for the old program to be written again", 1, folder.writes)
     }
 
     @Test
