@@ -34,7 +34,6 @@ import io.github.katznmeik.cinexperience.core.ui.component.CinexNavigationBarIte
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.di.AppContainer
 import io.github.katznmeik.cinexperience.feature.backup.settingsScreen
-import io.github.katznmeik.cinexperience.feature.cinemas.CINEMA_RESULT_MESSAGE_KEY
 import io.github.katznmeik.cinexperience.feature.cinemas.CinemasRoute
 import io.github.katznmeik.cinexperience.feature.cinemas.cinemaDetailScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.cinemasScreen
@@ -196,8 +195,6 @@ fun CinexApp(
                 rankingsRepository = container.rankingsRepository,
                 onOpenHall = navController::navigateToHallDetail,
                 onOpenCinema = navController::navigateToCinemaDetail,
-                // A cinema deleted in a detail opened from here leaves its message for this screen.
-                resultMessageKey = CINEMA_RESULT_MESSAGE_KEY,
             )
 
             // Settings tab
