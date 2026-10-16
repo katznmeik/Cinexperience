@@ -5,7 +5,9 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -450,6 +452,10 @@ internal fun EditorCanvas(
     val screenSelectedState = rememberUpdatedState(screenSelected)
     val screenLabelState = rememberUpdatedState(screenLabel)
     fun bounds(size: Size) = editorViewBounds(size, currentGeometry, maxZoomScale, screenLabelHeight, handleRoom)
+    // While a screen drag holds the view (dragScreenControl), the fitted scale it
+    // started with: the canvas keeps measuring its height with it, although the
+    // fitted scale follows the content's width, which the drag changes.
+    val heldFitScale = remember { mutableStateOf<Float?>(null) }
 
     // As tall as the grid fitted to the width (plus the screen label's room above it),
     // within the limits. The hint line and the "Fit" control sit below the canvas
@@ -459,7 +465,8 @@ internal fun EditorCanvas(
             .layout { measurable, constraints ->
                 val width = constraints.maxWidth
                 val fitted = editorViewBounds(Size(width.toFloat(), 0f), geometry, maxZoomScale, screenLabelHeight, handleRoom)
-                val height = (screenLabelHeight + fitted.content.height * fitted.fitScale + BOTTOM_SPACE.toPx()).roundToInt()
+                val scale = heldFitScale.value ?: fitted.fitScale
+                val height = (screenLabelHeight + fitted.content.height * scale + BOTTOM_SPACE.toPx()).roundToInt()
                     .coerceIn(minHeight.roundToPx(), maxHeight.roundToPx())
                     .coerceIn(constraints.minHeight, constraints.maxHeight)
                 val placeable = measurable.measure(Constraints.fixed(width, height))
@@ -475,7 +482,8 @@ internal fun EditorCanvas(
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val viewport = size.toSize()
                     val g = currentGeometry
-                    val transform = viewState.transformFor(bounds(viewport))
+                    val viewAtDown = bounds(viewport)
+                    val transform = viewState.transformFor(viewAtDown)
                     val zoomPan: (Offset, Offset, Float) -> Unit = { centroid, pan, zoom ->
                         val b = bounds(viewport)
                         viewState.userTransform = b.pinched(viewState.transformFor(b), centroid, pan, zoom)
@@ -510,7 +518,7 @@ internal fun EditorCanvas(
                         is CanvasHit.WidthHandle -> {
                             val start = currentDraft.screenWidth
                             val sign = if (hit.right) 1f else -1f
-                            dragScreenControl(down, transform, viewState, currentActions) { total ->
+                            dragScreenControl(down, transform, viewAtDown.fitScale, heldFitScale, viewState, currentActions) { total ->
                                 currentActions.onScreenWidth(start + sign * 2f * total.x / (g.metrics.pitchX * transform.scale))
                             }
                         }
@@ -521,7 +529,7 @@ internal fun EditorCanvas(
                             val startDistance = currentDraft.screenDistance
                             val startOffset = currentDraft.screenOffset
                             var axis: DragAxis? = null
-                            dragScreenControl(down, transform, viewState, currentActions) { total ->
+                            dragScreenControl(down, transform, viewAtDown.fitScale, heldFitScale, viewState, currentActions) { total ->
                                 val locked = axis ?: dragAxis(total, slop)?.also { axis = it }
                                 when (locked) {
                                     DragAxis.HORIZONTAL ->
@@ -656,16 +664,22 @@ internal class ScreenLabel(private val text: TextLayoutResult, private val selec
  * A drag on the screen's controls from [down] until the finger lifts, as one undo
  * step; reports the total movement. The view is held still meanwhile (the
  * content's size changes with the screen), without counting as a zoom by the
- * user, so no "fit to view" button appears for it.
+ * user, so no "fit to view" button appears for it: [transform] is the view as
+ * drawn at [down], and the canvas keeps its height for [fitScale], the fitted
+ * scale at [down], in [heldFitScale]. Both follow the content again when the
+ * finger lifts.
  */
 private suspend fun AwaitPointerEventScope.dragScreenControl(
     down: PointerInputChange,
     transform: ViewTransform,
+    fitScale: Float,
+    heldFitScale: MutableState<Float?>,
     viewState: SeatMapViewState,
     actions: EditorCanvasActions,
     onDrag: (total: Offset) -> Unit,
 ) {
     viewState.hold(transform)
+    heldFitScale.value = fitScale
     actions.onBeginGesture()
     try {
         down.consume()
@@ -681,6 +695,7 @@ private suspend fun AwaitPointerEventScope.dragScreenControl(
         }
     } finally {
         actions.onEndGesture()
+        heldFitScale.value = null
         viewState.release()
     }
 }
