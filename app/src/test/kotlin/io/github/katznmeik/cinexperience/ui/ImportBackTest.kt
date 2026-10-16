@@ -27,8 +27,8 @@ import org.robolectric.annotation.GraphicsMode
 import java.time.Instant
 
 /**
- * Back while an import replaces the data (spec §8: nothing else may write
- * meanwhile): Settings blocks it until the import has finished. The import is
+ * Back while an import replaces the data (CLAUDE.md "Backup": nothing else may
+ * write meanwhile): Settings blocks it until the import has finished. The import is
  * started through the UI (Restore safety copy → preview → Replace), because the
  * Back handler follows the Settings task, not the repository's `isImporting`.
  */

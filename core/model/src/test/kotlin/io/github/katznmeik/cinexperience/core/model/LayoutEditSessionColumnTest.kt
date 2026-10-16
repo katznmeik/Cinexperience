@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 /**
  * Removing a column (or shrinking the grid) after painting over a seat: the
  * painted-over seat is gone for good, so a seat painted later in its place must
- * not revive its id or its fixed label (spec §4.3, §6.5). A painted-over seat in
+ * not revive its id or its fixed label (CLAUDE.md "Seats"). A painted-over seat in
  * a column that stays keeps its id and label, also when it shifts.
  */
 class LayoutEditSessionColumnTest {

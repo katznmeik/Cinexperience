@@ -25,7 +25,7 @@ import org.junit.Test
 import java.time.LocalDate
 
 /**
- * A save or delete that is still running (spec §6.4): a second tap on Save or
+ * A save or delete that is still running: a second tap on Save or
  * Delete, Back, Discard and a photo pick must not insert a second visit, delete
  * the photo the visit is about to reference, or close the form twice.
  */
