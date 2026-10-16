@@ -112,10 +112,6 @@ class LayoutEditSession private constructor(
         return copyWith(changes.build(), ghosts)
     }
 
-    /** SEAT → GAP → AISLE → SEAT. */
-    fun cycleCell(row: Int, column: Int): LayoutEditSession =
-        setCellType(row, column, requireLayout().cell(row, column).type.next())
-
     /** Changes a row's label, numbering, numbering direction, block starts or offset (not its cells). */
     fun updateRow(index: Int, transform: (LayoutRow) -> LayoutRow): LayoutEditSession =
         copyWith(requireLayout().updateRow(index, transform), ghosts)
@@ -144,17 +140,6 @@ class LayoutEditSession private constructor(
             ghosts.filterKeys { it.column != index }
                 .mapKeys { (p, _) -> if (p.column > index) p.copy(column = p.column - 1) else p },
         )
-
-    /** Grows or shrinks the grid at the bottom / right edge. */
-    fun resize(rowCount: Int, columnCount: Int, fill: CellType = CellType.SEAT): LayoutEditSession {
-        require(rowCount > 0 && columnCount > 0) { "Layout must be at least 1×1" }
-        var session = this
-        while (session.requireLayout().columnCount < columnCount) session = session.insertColumn(session.requireLayout().columnCount, fill)
-        while (session.requireLayout().columnCount > columnCount) session = session.removeColumn(session.requireLayout().columnCount - 1)
-        while (session.requireLayout().rowCount < rowCount) session = session.insertRow(session.requireLayout().rowCount, fill)
-        while (session.requireLayout().rowCount > rowCount) session = session.removeRow(session.requireLayout().rowCount - 1)
-        return session
-    }
 
     /** Seats of [original] with data that the current [layout] would remove (spec §6.5). */
     fun removedSeatsWithData(seatsWithData: Set<SeatId>): List<RemovedSeat> =
