@@ -8,12 +8,12 @@ import io.github.katznmeik.cinexperience.core.model.LayoutLabels
 import io.github.katznmeik.cinexperience.core.model.LayoutRow
 import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
+import io.github.katznmeik.cinexperience.core.model.ScreenSizeRules
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
@@ -163,16 +163,20 @@ private fun LayoutEditSession.copyCellType(row: Int, column: Int, template: Layo
         LayoutCell.Gap -> setCellType(row, column, CellType.GAP)
     }
 
-/** Bounds, steps and texts of the screen geometry in the editor (spec §4.2, §6.5). */
+/**
+ * Bounds, steps and texts of the screen geometry in the editor (spec §4.2, §6.5).
+ * The bounds are [ScreenSizeRules]', which the repositories and the backup
+ * validator enforce too.
+ */
 object ScreenRules {
     /** Step of the steppers and the drag handles: half a seat / half a row. */
     const val STEP = 0.5f
-    const val MIN_WIDTH = 1f
-    const val MIN_DISTANCE = 0f
-    const val MAX_DISTANCE = 15f
+    const val MIN_WIDTH = ScreenSizeRules.MIN_WIDTH
+    const val MIN_DISTANCE = ScreenSizeRules.MIN_DISTANCE
+    const val MAX_DISTANCE = ScreenSizeRules.MAX_DISTANCE
 
     /** The screen may be up to twice as wide as the grid. */
-    fun maxWidth(columns: Int): Float = max(columns * 2f, 2f)
+    fun maxWidth(columns: Int): Float = ScreenSizeRules.maxWidth(columns)
 
     fun snap(value: Float): Float = (value / STEP).roundToInt() * STEP
 

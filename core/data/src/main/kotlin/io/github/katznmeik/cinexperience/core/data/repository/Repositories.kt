@@ -81,9 +81,19 @@ interface HallRepository {
      * and `nextSeatId` are not changeable. [Hall.screenOffset] must be
      * [io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules.isValid]
      * (IllegalArgumentException otherwise; snap it with `ScreenOffsetRules.snap`).
-     * A set screen width must be finite and positive, a set distance finite and
-     * not negative, and the layout's JSON at most `LayoutJson.MAX_JSON_LENGTH`
-     * chars (no layout within `SeatLayout`'s limits comes near it).
+     * A set screen width and distance must be valid for
+     * [io.github.katznmeik.cinexperience.core.model.ScreenSizeRules], the name,
+     * notes and row labels must fit their
+     * [io.github.katznmeik.cinexperience.core.model.TextLimits], and the layout's
+     * JSON must be at most `LayoutJson.MAX_JSON_LENGTH` chars (no layout within
+     * `SeatLayout`'s limits comes near it); IllegalArgumentException otherwise.
+     * Name, notes, row labels and screen size are checked against the limits only
+     * when they change (an older build may have stored a value beyond today's
+     * limits; it is kept as it is); a blank name, the layout JSON length, the
+     * screen offset and the reference path are always checked. A row label counts
+     * as unchanged if any row of the stored layout has it, so through this API an
+     * existing over-long label could be moved or copied to other rows; the editor
+     * can't do that, and the layout's size stays bounded.
      * A caller that doesn't deal with the offset keeps it by saving a copy of
      * the hall it read. When the layout changes, overrides of seats
      * that no longer exist are deleted (visits keep their seat id; it simply has no

@@ -77,9 +77,13 @@ internal class BackupLimitsTest : BackupTestBase() {
     /** [json] padded with spaces (valid JSON whitespace) to exactly [length] chars. */
     private fun padded(json: String, length: Int): String = "{" + " ".repeat(length - json.length) + json.substring(1)
 
-    /** A [MAX_ROWS] × [MAX_COLUMNS] layout with the highest seat ids, its JSON padded to exactly the limit. */
+    /**
+     * A [MAX_ROWS] × [MAX_COLUMNS] layout with the highest seat ids, its JSON padded
+     * as far as the validator accepts (twice its own encoding plus 1,024 chars, see
+     * `LayoutJson.isPadded`; `BackupLayoutAndScreenLimitsTest` checks the padding).
+     */
     private val largestLayout = SeatLayout.create(MAX_ROWS, MAX_COLUMNS, firstSeatId = MAX_SEAT_ID - MAX_ROWS * MAX_COLUMNS)
-    private val largestLayoutJson = padded(LayoutJson.encode(largestLayout), LayoutJson.MAX_JSON_LENGTH)
+    private val largestLayoutJson = LayoutJson.encode(largestLayout).let { padded(it, 2 * it.length + 1024) }
 
     private val name = "N".repeat(MAX_NAME_LENGTH - 10) + emoji.repeat(10) // 1,000 code points, 1,010 chars
     private val longText = "L".repeat(MAX_LONG_TEXT_LENGTH)
@@ -98,7 +102,7 @@ internal class BackupLimitsTest : BackupTestBase() {
 
     @Test
     fun dataAtTheLimitsIsAccepted() {
-        assertEquals(LayoutJson.MAX_JSON_LENGTH, largestLayoutJson.length)
+        assertTrue(largestLayoutJson.length < LayoutJson.MAX_JSON_LENGTH)
         BackupValidator.validate(data(), emptySet())
         BackupValidator.validate(atTheLimits(), emptySet())
     }

@@ -13,6 +13,7 @@ import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
 import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
+import io.github.katznmeik.cinexperience.core.model.SeatIdsExhaustedException
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
@@ -559,11 +560,12 @@ class LayoutEditorViewModel(
     /**
      * Applies an edit. Inside a gesture it only updates the draft (the gesture is
      * one step); otherwise it records an undo step (coalesced by [coalesceKey]).
-     * An edit the model refuses changes nothing and shows [EDIT_FAILED]: only
-     * damaged data gets there, e.g. a hall whose seat ids are used up
-     * (`SeatLayout.MAX_SEAT_ID`), and it must not crash the app.
+     * An edit that needs a seat id the hall doesn't have left changes nothing and
+     * shows [EDIT_FAILED]: only damaged data gets there (a hall whose seat ids are
+     * used up, `SeatLayout.MAX_SEAT_ID`), and it must not crash the app. Any other
+     * exception is a bug and is not caught. Internal for tests.
      */
-    private fun edit(
+    internal fun edit(
         coalesceKey: String? = null,
         syncInputs: Boolean = true,
         newSelection: Int? = state.selectedRow,
@@ -572,7 +574,7 @@ class LayoutEditorViewModel(
         val current = draft ?: return
         val edited = try {
             transform(current)
-        } catch (e: IllegalArgumentException) {
+        } catch (e: SeatIdsExhaustedException) {
             _uiState.update { it.copy(message = EDIT_FAILED) }
             return
         }

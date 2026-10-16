@@ -115,12 +115,30 @@ internal object LayoutJson {
     /**
      * Longest layout JSON (in chars) that [decode] reads, the repositories store
      * and the backup validator accepts (also for the layouts in seed records). The
-     * largest seed layout has about 3,300 chars; a [SeatLayout.MAX_ROWS] ×
-     * [SeatLayout.MAX_COLUMNS] grid with ten-digit seat ids, fixed labels on every
-     * seat and every row setting has under 100,000. At most 3 bytes per char, its
-     * row stays far below Android's 2 MB limit per database row.
+     * largest seed layout, stored with its `seatIds` (delphi Filmpalast Saal 1),
+     * has about 6,100 chars; a [SeatLayout.MAX_ROWS] × [SeatLayout.MAX_COLUMNS]
+     * grid with nine-digit seat ids (they are below [SeatLayout.MAX_SEAT_ID]),
+     * fixed labels on every seat and every row setting has under 100,000. At most
+     * 3 bytes per char, its row stays far below Android's 2 MB limit per database
+     * row.
      */
     const val MAX_JSON_LENGTH: Int = 256 * 1024
+
+    /**
+     * Whether [json], which decodes to [layout], is much longer than this app's
+     * own encoding of [layout]: more than twice as long plus 1,024 chars. The app
+     * always stores its own encoding, so only a crafted backup has such a layout
+     * (padded, e.g. with whitespace); the backup validator refuses it, so a
+     * layout's JSON can't be made far larger than its content. The slack allows
+     * compact JSON with another field order, defaults written out on a large
+     * grid, or a little whitespace; pretty-printed layouts may be refused (nothing
+     * the app writes is).
+     */
+    fun isPadded(json: String, layout: SeatLayout): Boolean =
+        json.length > PADDING_FACTOR * encode(layout).length.toLong() + PADDING_ALLOWANCE
+
+    private const val PADDING_FACTOR = 2
+    private const val PADDING_ALLOWANCE = 1024
 
     val json: Json = Json {
         ignoreUnknownKeys = true

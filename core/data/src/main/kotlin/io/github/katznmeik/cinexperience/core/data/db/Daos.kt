@@ -38,13 +38,25 @@ internal data class HallWithCinema(
     val overrides: List<SeatOverrideEntity>,
 )
 
-/** A visit with the names needed for the "All visits" list. */
+/** A hall's stored layout JSON, read on its own (see [VisitWithContext]). */
+internal data class HallLayoutJson(
+    @ColumnInfo(name = "id") val hallId: Long,
+    @ColumnInfo(name = "layout_json") val layoutJson: String?,
+)
+
+/**
+ * A visit with the names needed for the "All visits" list, and its hall's layout
+ * for the seat label. Room reads the layouts in a second query, once per hall
+ * (not once per visit, as a join column would), and every visit of a hall shares
+ * that one [hallLayout] object.
+ */
 internal data class VisitWithContext(
     @Embedded val visit: VisitEntity,
     @ColumnInfo(name = "hall_name") val hallName: String,
-    @ColumnInfo(name = "hall_layout_json") val hallLayoutJson: String?,
     @ColumnInfo(name = "cinema_id") val cinemaId: Long,
     @ColumnInfo(name = "cinema_name") val cinemaName: String,
+    @Relation(entity = HallEntity::class, parentColumn = "hall_id", entityColumn = "id")
+    val hallLayout: HallLayoutJson?,
 )
 
 @Dao
@@ -124,10 +136,11 @@ internal interface VisitDao {
     @Query("SELECT COUNT(*) FROM visit WHERE hall_id = :hallId")
     suspend fun countForHall(hallId: Long): Int
 
+    /** Newest first; the halls' layouts are read once per hall (see [VisitWithContext]), in the same transaction. */
+    @Transaction
     @Query(
         """
-        SELECT visit.*, hall.name AS hall_name, hall.layout_json AS hall_layout_json,
-               cinema.id AS cinema_id, cinema.name AS cinema_name
+        SELECT visit.*, hall.name AS hall_name, cinema.id AS cinema_id, cinema.name AS cinema_name
         FROM visit
         INNER JOIN hall ON hall.id = visit.hall_id
         INNER JOIN cinema ON cinema.id = hall.cinema_id

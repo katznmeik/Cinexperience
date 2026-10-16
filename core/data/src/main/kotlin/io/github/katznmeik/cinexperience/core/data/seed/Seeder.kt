@@ -186,10 +186,17 @@ internal class Seeder(
                     } else {
                         null
                     }
-                    val replacement = if (filled == null && seedLayout != null && !adopted &&
-                        replacesUntouchedLayout(matchedHall, seedLayout, applied)
+                    // The hall's stored layout, decoded once, where a replacement is possible
+                    // (null if there is none or it is unreadable).
+                    val stored = if (filled == null && seedLayout != null && !adopted) {
+                        matchedHall.layoutJson?.let(LayoutJson::decodeOrNull)
+                    } else {
+                        null
+                    }
+                    val replacement = if (stored != null && seedLayout != null &&
+                        replacesUntouchedLayout(matchedHall, stored, seedLayout, applied)
                     ) {
-                        shiftedAbove(seedLayout, db.seatIdMark(matchedHall, matchedHall.layoutJson?.let(LayoutJson::decodeOrNull)))
+                        shiftedAbove(seedLayout, db.seatIdMark(matchedHall, stored))
                     } else {
                         null
                     }
@@ -197,7 +204,6 @@ internal class Seeder(
                         updated = updated.copy(layoutJson = LayoutJson.encode(filled), nextSeatId = filled.nextSeatId)
                         snapshots.record(HALL, key, APPLIED_LAYOUT, seedAppliedJson)
                     } else if (replacement != null) {
-                        val stored = matchedHall.layoutJson?.let(LayoutJson::decodeOrNull)
                         val shifted = replacement
                         // A stored value that is still the previous seed's follows the new seed;
                         // anything else keeps what the fill rule gave (the user's value, or a filled gap).
@@ -275,13 +281,17 @@ internal class Seeder(
     }
 
     /**
-     * Whether [hall]'s stored layout is still exactly the layout the seeder wrote
-     * into it ([appliedJson], see [appliedLayoutJson]) and [seedLayout], a
-     * different one, replaces it: see "Untouched seed layouts are updated" in the
-     * class doc.
+     * Whether [hall]'s [stored] layout (as decoded from it) is still exactly the
+     * layout the seeder wrote into it ([appliedJson], see [appliedLayoutJson]) and
+     * [seedLayout], a different one, replaces it: see "Untouched seed layouts are
+     * updated" in the class doc.
      */
-    private suspend fun replacesUntouchedLayout(hall: HallEntity, seedLayout: SeatLayout, appliedJson: String?): Boolean {
-        val stored = hall.layoutJson?.let(LayoutJson::decodeOrNull) ?: return false
+    private suspend fun replacesUntouchedLayout(
+        hall: HallEntity,
+        stored: SeatLayout,
+        seedLayout: SeatLayout,
+        appliedJson: String?,
+    ): Boolean {
         val applied = appliedJson?.let(LayoutJson::decodeOrNull) ?: return false
         if (seedLayout.hasSameStructureAs(applied) || !stored.hasSameStructureAs(applied)) return false
         return db.visitDao().countForHall(hall.id) == 0 && db.seatOverrideDao().countForHall(hall.id) == 0

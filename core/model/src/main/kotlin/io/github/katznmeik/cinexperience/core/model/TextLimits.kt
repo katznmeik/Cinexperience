@@ -19,6 +19,14 @@ object TextLimits {
     /** Notes of cinemas, halls and visits, and a visit's film title. */
     const val MAX_LONG_TEXT_LENGTH: Int = 20_000
 
+    /**
+     * A layout row's label ("7", "C", "R1"): the editor allows 6 characters, the
+     * longest seed label has 2. Longer labels would widen the map's label column
+     * until the seats shrink to nothing. Checked by the repositories and the backup
+     * validator, not by `LayoutRow` itself.
+     */
+    const val MAX_ROW_LABEL_LENGTH: Int = 16
+
     /** Whether [text] (`null` = no text) has at most [max] code points. */
     fun fits(text: String?, max: Int): Boolean = when {
         text == null || text.length <= max -> true

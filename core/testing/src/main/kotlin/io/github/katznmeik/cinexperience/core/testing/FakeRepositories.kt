@@ -14,6 +14,7 @@ import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
+import io.github.katznmeik.cinexperience.core.model.ScreenSizeRules
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
@@ -219,12 +220,27 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
      */
     override suspend fun updateHall(hall: Hall): Boolean {
         write()
-        val cleanName = hall.name.requireName()
+        val cleanName = hall.name.trim().also { require(it.isNotEmpty()) { "Name must not be blank" } }
+        val cleanNotes = hall.notes?.trim()?.takeIf { it.isNotEmpty() }
         require(ScreenOffsetRules.isValid(hall.screenOffset)) { "Invalid screen offset ${hall.screenOffset}" }
-        require(hall.screenWidth.let { it == null || (it.isFinite() && it > 0f) }) { "Invalid screen width ${hall.screenWidth}" }
-        require(hall.screenDistance.let { it == null || (it.isFinite() && it >= 0f) }) { "Invalid screen distance ${hall.screenDistance}" }
         val existing = store.value.halls.firstOrNull { it.id == hall.id } ?: return false
         require(existing.cinemaId == hall.cinemaId) { "Moving a hall to another cinema is not supported" }
+        // Like Room: changed values must fit the limits, values the hall already has are kept.
+        require(cleanName == existing.name || TextLimits.fits(cleanName, TextLimits.MAX_NAME_LENGTH)) { "Name is too long" }
+        require(cleanNotes == existing.notes || TextLimits.fits(cleanNotes, LONG)) { "Notes are too long" }
+        require(hall.screenWidth == existing.screenWidth || ScreenSizeRules.isValidWidth(hall.screenWidth)) {
+            "Invalid screen width ${hall.screenWidth}"
+        }
+        require(hall.screenDistance == existing.screenDistance || ScreenSizeRules.isValidDistance(hall.screenDistance)) {
+            "Invalid screen distance ${hall.screenDistance}"
+        }
+        hall.layout?.let { layout ->
+            // By label, not by row, like Room.
+            val storedLabels = existing.layout?.rows?.mapNotNullTo(HashSet()) { it.label }.orEmpty()
+            require(layout.rows.all { TextLimits.fits(it.label, TextLimits.MAX_ROW_LABEL_LENGTH) || it.label in storedLabels }) {
+                "Row label is too long"
+            }
+        }
         val stored = existing.layout
         val mark = maxOf(existing.nextSeatId, stored?.nextSeatId ?: SeatLayout.FIRST_SEAT_ID)
         val newLayout = hall.layout
@@ -243,7 +259,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
             screenDistance = hall.screenDistance,
             screenOffset = hall.screenOffset + 0f,
             referenceImagePath = hall.referenceImagePath.clean(),
-            notes = hall.notes.clean(LONG),
+            notes = cleanNotes,
             nextSeatId = maxOf(mark, newLayout?.nextSeatId ?: 0),
             layoutUnreadable = keepUnreadable,
         )
