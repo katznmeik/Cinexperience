@@ -240,7 +240,10 @@ Don't duplicate config in module build files.
   `SeatLayout` limits and their JSON ≤ `LayoutJson.MAX_JSON_LENGTH` and not
   padded beyond twice their own encoding (`LayoutJson.isPadded`), seat ids below
   `MAX_SEAT_ID`, the screen within `ScreenSizeRules`) keep every row far below
-  Android's 2 MB per row. The repositories' writers enforce the same limits on
+  Android's 2 MB per row; a backup holds at most `DataLimits.MAX_HALLS` (1,000)
+  halls, `createHall` refuses more (`HallLimitReachedException`, its message
+  shown), and the seeder skips seed halls beyond it (a later seed version adds
+  them once there is room). The repositories' writers enforce the same limits on
   every value they change (`updateHall` keeps a value the hall already has, e.g.
   one an older build stored, so it can't block a save), so nothing this version
   writes fails an export; for file paths they only cap the length, the stores create
@@ -258,7 +261,9 @@ Don't duplicate config in module build files.
   (`BackupRestorer`: imported files are added under names no existing file
   has, and removed again if the transaction fails). While
   `BackupRepository.isImporting` is true the UI blocks every other write
-  (tabs, Back, Settings rows). Once the transaction has committed, nothing
+  (tabs, Back, Settings rows); Back is also blocked while an export runs (it
+  runs in the Settings ViewModel, which Back would clear). Once the
+  transaction has committed, nothing
   (progress callbacks, file clean-up, pruning, seeding, even Errors) can turn
   the import into a failure or delete its safety copy (`onCommitted`). Failures
   are `BackupException`s with user-facing messages. The layout JSON inside is
@@ -267,7 +272,9 @@ Don't duplicate config in module build files.
   "can't be read by this app version". Tests:
   `core/data/src/test/.../backup/`. Known limitation: if the current data fails
   validation (e.g. a layout from a newer app), import is refused; there is no
-  "Replace anyway".
+  "Replace anyway". Data with more than `MAX_HALLS` halls (only possible from
+  v1.0/v1.1, which had no cap on creating or importing halls) fails export and
+  import that way too; the remedy is to delete halls first.
 - **Row and seat labels:** Yorck mostly numbers rows and seats, which is the
   default labelling; some rows are letters ("C") or balcony rows ("R1"), and a
   row's first seat is often 2, 3 or 4. Keep fixtures, examples and UI texts
@@ -275,7 +282,9 @@ Don't duplicate config in module build files.
 - **App-private files:** reference screenshots (`ReferenceImageStore`,
   `files/reference/`) and visit photos (`VisitPhotoStore`, `files/photos/`) live
   in `core:data`. Entities store paths relative to `filesDir`; the stores ignore
-  paths outside their folder. Files are copied in when picked; a replaced or
+  paths outside their folder and decode images subsampled (a reference
+  screenshot to at most 2048 px, also one from a backup), `null` on out of
+  memory. Files are copied in when picked; a replaced or
   removed file is deleted only after a successful save, discarding deletes the
   files added in that session, deleting a visit deletes its photo. The startup
   sweep (`DataContainer.sweepOrphanFiles`) deletes unreferenced visit photos
