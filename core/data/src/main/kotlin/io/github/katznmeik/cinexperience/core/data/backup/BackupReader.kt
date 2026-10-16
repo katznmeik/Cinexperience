@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.core.data.backup
 
+import android.annotation.SuppressLint
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
@@ -246,6 +247,9 @@ internal object BackupValidator {
  *   discarded. Entry count and sizes are capped by [BackupLimits] while reading
  *   (the sizes a zip declares are not trusted), for skipped entries too; a folder
  *   entry may hold no data at all.
+ * - **Free storage:** a file is staged only while the staging folder has room for
+ *   [BackupLimits.maxFileBytes] plus [BackupLimits.minFreeBytes]; otherwise the
+ *   import stops with a message before the device's storage runs full.
  * - **Manifest:** `format` must match; a newer `backupVersion` is reported as such;
  *   older versions go through [BackupMigrations].
  * - **Data:** strict JSON, decoded straight into the DTOs (no generic JSON tree,
@@ -363,6 +367,9 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
                         if (!target.canonicalPath.startsWith(File(dir, FILES_DIR).canonicalPath + File.separator)) {
                             throw unsafe("It contains an unsafe file name.")
                         }
+                        // A zip doesn't reliably say how large an entry is (and may lie), so there must be
+                        // room for the largest allowed file, and the reserve stays free whatever it holds.
+                        if (freeBytes(dir) < limits.maxFileBytes + limits.minFreeBytes) throw noRoom()
                         files[name] = StagedFile(target, copyEntry(zip, target, limits.maxFileBytes, budget))
                     } else {
                         drainEntry(zip, limits.maxFileBytes, budget)
@@ -421,6 +428,14 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
             size
         }
     }
+
+    /**
+     * The free storage of [dir]'s file system. Deliberately not StorageManager's
+     * allocatable bytes (lint's UsableSpace hint): those count cached files the
+     * system may delete as free, and staged files are such cache files themselves.
+     */
+    @SuppressLint("UsableSpace")
+    private fun freeBytes(dir: File): Long = dir.usableSpace
 
     /** Reads and discards the current entry, under the same limits as a staged one. */
     private fun drainEntry(zip: ZipInputStream, maxBytes: Long, budget: Budget) {
@@ -531,6 +546,11 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
 
     private fun writeFailed(cause: Throwable?) =
         BackupException(BackupError.WRITE_FAILED, "Couldn't unpack the backup. Is there enough free storage?", cause)
+
+    private fun noRoom() = BackupException(
+        BackupError.WRITE_FAILED,
+        "There isn't enough free storage to unpack this backup. Free up some space and try again.",
+    )
 
     private companion object {
         const val BUFFER_SIZE = 64 * 1024

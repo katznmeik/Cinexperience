@@ -100,6 +100,12 @@ internal data class BackupLimits(
     /** Per photo or reference image; stored images are at most 2048 px JPEGs. */
     val maxFileBytes: Long = 64L * 1024 * 1024,
     val maxTotalBytes: Long = 8L * 1024 * 1024 * 1024,
+    /**
+     * Free storage an import leaves at least: a photo or reference image is staged
+     * only while the staging folder has room for [maxFileBytes] plus this, so a
+     * backup can't fill the device before the import stops with a message.
+     */
+    val minFreeBytes: Long = 64L * 1024 * 1024,
 )
 
 @Serializable
