@@ -144,7 +144,7 @@ internal class RoomBackupRepository(
                     // Another screen deleted it after the data was read; the next try reads the new data.
                     throw BackupException(
                         BackupError.DATA_CHANGED,
-                        "A photo or reference image was changed while the backup was being written. " +
+                        "A photo or reference image was changed or deleted while the backup was being written. " +
                             "Nothing was exported; please try again.",
                         e,
                     )

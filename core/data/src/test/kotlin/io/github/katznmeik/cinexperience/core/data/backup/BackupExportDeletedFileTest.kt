@@ -36,7 +36,8 @@ internal class BackupExportDeletedFileTest : BackupTestBase() {
         }
         assertEquals(e.message, BackupError.DATA_CHANGED, e.error)
         assertEquals(
-            "A photo or reference image was changed while the backup was being written. Nothing was exported; please try again.",
+            "A photo or reference image was changed or deleted while the backup was being written. " +
+                "Nothing was exported; please try again.",
             e.message,
         )
         // No partial backup is left behind, and none is recorded.
