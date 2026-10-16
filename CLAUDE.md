@@ -31,7 +31,8 @@ python3 -I -B -m unittest discover -s scripts/seed -p 'test_*.py'   # seed gener
 ```
 
 CI (`.github/workflows/android.yml`) first runs the seed generator tests, then
-`testDebugUnitTest recordRoborazziDebug`, then `lintDebug`. If the `CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
+`testDebugUnitTest recordRoborazziDebug`, then `lintDebug`. If the
+`CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
 `CINEX_REQUIRE_RELEASE_SIGNING=true`, so a missing or blank signing value fails
 the build instead of falling back to the debug key, and
 `scripts/verify-release-apk.sh` requires the APK's only signer to be the release
