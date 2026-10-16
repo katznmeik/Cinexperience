@@ -13,6 +13,7 @@ import io.github.katznmeik.cinexperience.core.data.db.toModel
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.CinemaSummary
+import io.github.katznmeik.cinexperience.core.model.DataLimits
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
@@ -180,6 +181,8 @@ internal class RoomHallRepository(
         val cleanName = name.requireName()
         return db.withTransaction {
             requireNotNull(db.cinemaDao().get(cinemaId)) { "No cinema $cinemaId" }
+            // Counted in the transaction, so two concurrent creates can't both take the last place.
+            if (hallDao.count() >= DataLimits.MAX_HALLS) throw HallLimitReachedException()
             hallDao.insert(
                 HallEntity(
                     cinemaId = cinemaId,

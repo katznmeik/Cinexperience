@@ -2,6 +2,7 @@ package io.github.katznmeik.cinexperience.feature.cinemas.edit
 
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.DeleteResult
+import io.github.katznmeik.cinexperience.core.data.repository.HallLimitReachedException
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.Hall
@@ -247,7 +248,10 @@ internal class CinemaEditor(
         }
     }
 
-    /** Closes the dialog and runs [block]; any failure becomes [failureMessage]. */
+    /**
+     * Closes the dialog and runs [block]; any failure becomes [failureMessage],
+     * except the hall limit, which says why.
+     */
     private fun runWrite(failureMessage: String, onFailure: () -> Unit = {}, block: suspend () -> Unit) {
         _dialog.value = null
         scope.launch {
@@ -255,6 +259,9 @@ internal class CinemaEditor(
                 block()
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: HallLimitReachedException) {
+                onFailure()
+                _message.value = HallLimitReachedException.MESSAGE
             } catch (e: Exception) {
                 onFailure()
                 _message.value = failureMessage

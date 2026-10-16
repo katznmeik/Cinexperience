@@ -32,7 +32,11 @@ interface ReferenceImageStore {
      */
     suspend fun importImage(hallId: Long, sourceUri: String): String
 
-    /** Decodes a stored image; `null` if it is missing or unreadable. */
+    /**
+     * Decodes a stored image, subsampled so that its longer side is at most
+     * [MAX_DIMENSION] px (an image from a backup may be larger); `null` if it is
+     * missing, unreadable or too large for memory.
+     */
     suspend fun loadImage(relativePath: String): Bitmap?
 
     /** Deletes a stored image; a missing file or a path outside the folder is ignored. */
@@ -105,7 +109,8 @@ internal class FileReferenceImageStore(
     }
 
     override suspend fun loadImage(relativePath: String): Bitmap? = withContext(ioDispatcher) {
-        resolve(relativePath)?.takeIf { it.isFile }?.let { BitmapFactory.decodeFile(it.path) }
+        // Bounded like on import: a backup can bring any image up to its file size limit.
+        resolve(relativePath)?.takeIf { it.isFile }?.let { decodeWithin(it.path, ReferenceImageStore.MAX_DIMENSION) }
     }
 
     override suspend fun delete(relativePath: String) {
@@ -130,4 +135,43 @@ internal class FileReferenceImageStore(
     private companion object {
         const val JPEG_QUALITY = 90
     }
+}
+
+/**
+ * The smallest power of two that, as `inSampleSize`, brings an image whose longer
+ * side is [longer] px to at most [max] px. Some decoders (JPEG) round a sampled
+ * size up (4,097 px with a sample of 2 gives 2,049), so this rounds up too. At most 2^30,
+ * which brings any `Int` size within any [max] ≥ 2.
+ */
+internal fun sampleSizeWithin(longer: Int, max: Int): Int {
+    require(max > 0) { "max must be positive" }
+    var sample = 1
+    while (sample < MAX_SAMPLE_SIZE && (longer.toLong() + sample - 1) / sample > max) sample *= 2
+    return sample
+}
+
+private const val MAX_SAMPLE_SIZE = 1 shl 30
+
+/**
+ * Decodes the image at [path] subsampled so that its longer side is at most
+ * [maxDimension] px: a bounds pass first, then [sampleSizeWithin]. `null` if the
+ * file is no decodable image or the bitmap doesn't fit in memory.
+ */
+internal fun decodeWithin(
+    path: String,
+    maxDimension: Int,
+    decode: (String, BitmapFactory.Options) -> Bitmap? = BitmapFactory::decodeFile,
+): Bitmap? = try {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    decode(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+        null
+    } else {
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sampleSizeWithin(max(bounds.outWidth, bounds.outHeight), maxDimension)
+        }
+        decode(path, options)
+    }
+} catch (e: OutOfMemoryError) { // e.g. a huge image from a backup; the editor shows none
+    null
 }

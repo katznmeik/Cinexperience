@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.core.data.seed
 
+import android.util.Log
 import androidx.room.withTransaction
 import io.github.katznmeik.cinexperience.core.data.db.CinemaEntity
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
@@ -9,6 +10,7 @@ import io.github.katznmeik.cinexperience.core.data.db.SeedSnapshotEntity
 import io.github.katznmeik.cinexperience.core.data.db.seatIdMark
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.data.json.SeedJson
+import io.github.katznmeik.cinexperience.core.model.DataLimits
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import java.util.Locale
@@ -100,6 +102,13 @@ import java.util.Locale
  *   a non-zero offset. Names, notes and the reference screenshot are never
  *   touched. Seeding the same seed again changes nothing: `appliedLayout` then
  *   holds the new layout.
+ * - **Hall limit.** The seeder never takes the database beyond
+ *   [DataLimits.MAX_HALLS] halls, the backup validator's limit, so seeded data
+ *   always exports: a new seed hall that doesn't fit is skipped (logged, nothing
+ *   recorded for it) and inserted by a later seed version once there is room.
+ *   A hall the user deleted stays deleted, at the limit or not ("Deleted stays
+ *   deleted" is checked first). Adopting a user-added hall adds none, so it
+ *   always happens.
  * - **Seat ids.** A seed layout's ids start at 1; when it fills or replaces the
  *   layout of an existing hall it is shifted above the hall's seat id mark, so
  *   ids are never reused. A hall whose mark leaves no room for them below
@@ -178,6 +187,12 @@ internal class Seeder(
                 if (matchedHall == null) {
                     // Seeded before and gone: the user deleted it (see the class doc).
                     if (snapshots.seen(HALL, key)) continue
+                    if (halls.size >= DataLimits.MAX_HALLS) {
+                        // Inserting it would make the data impossible to export. Nothing is recorded
+                        // for it, so a later seed version inserts it once there is room.
+                        Log.w(TAG, "Seed hall $key not added: the app already holds ${DataLimits.MAX_HALLS} halls")
+                        continue
+                    }
                     val entity = HallEntity(
                         cinemaId = cinemaId,
                         name = seedHall.name,
@@ -363,6 +378,7 @@ internal class Seeder(
 
     companion object {
         const val KEY_SEED_VERSION: String = "seed_version"
+        private const val TAG = "Seeder"
         private const val CINEMA = "cinema"
         private const val HALL = "hall"
         private const val LAYOUT = "layout"

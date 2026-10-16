@@ -1,7 +1,10 @@
 package io.github.katznmeik.cinexperience.core.data
 
+import androidx.room.withTransaction
+import io.github.katznmeik.cinexperience.core.data.db.HallEntity
 import io.github.katznmeik.cinexperience.core.data.repository.DeleteResult
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
+import io.github.katznmeik.cinexperience.core.model.DataLimits.MAX_HALLS
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -108,6 +111,46 @@ internal class SeedDeletedItemsTest : DatabaseTest() {
         val gammaHalls = db.hallDao().getAll().filter { it.cinemaId == again }
         assertEquals(listOf("gamma/2"), gammaHalls.map { it.seedKey }) // gamma/1 was deleted with the cinema
         assertFalse(gammaHalls.single().isPreloaded)
+    }
+
+    @Test
+    fun aDeletedHallStaysDeletedWithRoomBelowTheHallLimitWhileAHallSkippedAtTheLimitIsAddedLater() = runTest {
+        // A user cinema "Kino" with all but two of the allowed halls.
+        val kino = cinemas.createCinema("Kino")
+        db.withTransaction {
+            repeat(MAX_HALLS - 2) { i ->
+                db.hallDao().insert(
+                    HallEntity(
+                        cinemaId = kino, name = "Mine ${i + 1}", layoutJson = null, screenWidth = null, screenDistance = null,
+                        referenceImagePath = null, notes = null, isPreloaded = false, seedKey = null,
+                    ),
+                )
+            }
+        }
+        fun kinoSeed(version: Int) = """
+            {"seedVersion": $version, "cinemas": [
+              {"seedKey": "kino", "name": "Kino", "halls": [
+                {"seedKey": "kino/a", "name": "Saal A"},
+                {"seedKey": "kino/b", "name": "Saal B"},
+                {"seedKey": "kino/c", "name": "Saal C"}
+              ]}
+            ]}
+        """
+        seeder(kinoSeed(1)).seedIfNeeded()
+        assertEquals(setOf("kino/a", "kino/b"), hallKeys()) // C doesn't fit
+
+        // The user deletes A: there is room again, but only C, never seen before, is added.
+        assertEquals(DeleteResult.DELETED, halls.deleteHall(db.hallDao().getAll().single { it.seedKey == "kino/a" }.id))
+        seeder(kinoSeed(2)).seedIfNeeded()
+        assertEquals(setOf("kino/b", "kino/c"), hallKeys())
+        assertEquals(MAX_HALLS, db.hallDao().getAll().size)
+        assertTrue(db.hallDao().getAll().none { it.isPreloaded }) // halls of the user's cinema
+
+        // With room to spare, A still stays deleted.
+        assertEquals(DeleteResult.DELETED, halls.deleteHall(db.hallDao().getAll().first { it.seedKey == null }.id))
+        seeder(kinoSeed(3)).seedIfNeeded()
+        assertEquals(setOf("kino/b", "kino/c"), hallKeys())
+        assertEquals(MAX_HALLS - 1, db.hallDao().getAll().size)
     }
 
     @Test
