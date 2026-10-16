@@ -56,7 +56,7 @@ class SeatMapViewStateTest {
         val state = SeatMapViewState()
         val zoomed = ViewTransform(4f, Offset(-100f, -100f))
         state.userTransform = zoomed
-        state.hold(bounds.fitted()) // ignored: the user's view is held anyway
+        state.hold(state.transformFor(bounds)) // the user's view, as drawn
         assertEquals(bounds.clamp(zoomed), state.transformFor(bounds))
         state.release()
         assertTrue(state.isAdjusted)

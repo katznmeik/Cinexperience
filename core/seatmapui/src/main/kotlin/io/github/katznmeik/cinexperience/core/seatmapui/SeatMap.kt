@@ -66,8 +66,8 @@ class SeatMapViewState {
     /**
      * The view held still during a drag that changes the content's size (e.g. the
      * layout editor's screen handles), so the dragged thing stays under the finger.
-     * It is not a zoom by the user: [isAdjusted] stays false, and after [release]
-     * the map follows its fitted view again.
+     * It is not a zoom by the user: [isAdjusted] doesn't change, and after [release]
+     * the map follows its fitted view (or the user's zoom) again.
      */
     private var heldTransform: ViewTransform? by mutableStateOf(null)
 
@@ -78,16 +78,28 @@ class SeatMapViewState {
         userTransform = null
     }
 
-    /** Holds [transform] (the view as drawn) until [release], unless the user has zoomed anyway. */
+    /** Holds [transform] (the view as drawn, from [transformFor]) until [release]. */
     fun hold(transform: ViewTransform) {
-        if (userTransform == null) heldTransform = transform
+        heldTransform = transform
     }
 
     fun release() {
         heldTransform = null
     }
 
-    fun transformFor(bounds: ViewBounds): ViewTransform = (userTransform ?: heldTransform)?.let(bounds::clamp) ?: bounds.fitted()
+    /**
+     * The view to draw within [bounds]: the held view, else the user's zoom, else
+     * the fitted view. The zoom limits follow the content, so a held view's scale
+     * is allowed whatever the limits are now (the content changes under it): it
+     * keeps its zoom exactly, only its offset is kept within the content's edges.
+     */
+    fun transformFor(bounds: ViewBounds): ViewTransform {
+        heldTransform?.let { held ->
+            val limits = bounds.copy(minScale = min(bounds.minScale, held.scale), maxScale = max(bounds.maxScale, held.scale))
+            return limits.clamp(held)
+        }
+        return userTransform?.let(bounds::clamp) ?: bounds.fitted()
+    }
 }
 
 @Composable
