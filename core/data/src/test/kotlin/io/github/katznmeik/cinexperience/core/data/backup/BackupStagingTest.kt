@@ -58,6 +58,19 @@ internal class BackupStagingTest : BackupTestBase() {
     }
 
     @Test
+    fun folderEntriesMayComeFirstOrLastButMustBeEmpty() = runTest {
+        exportValid()
+        // First (before the manifest) and last (after every file), as some zip tools write them.
+        val empty = modified("folders-first-last.zip") { add(0, "photos/" to ByteArray(0)); add("reference/" to ByteArray(0)) }
+        val preview = deviceA.repository.prepareImport(empty)
+        assertEquals(deviceA.snapshot().counts(), preview.counts)
+        deviceA.repository.discardImport(preview)
+
+        assertRefused(modified("folder-first.zip") { add(0, "photos/" to ByteArray(1_000)) }, BackupError.TOO_LARGE)
+        assertRefused(modified("folder-last.zip") { add("reference/" to ByteArray(1_000)) }, BackupError.TOO_LARGE)
+    }
+
+    @Test
     fun noFileIsStagedWithoutRoomForIt() = runTest {
         exportValid()
         // A reserve larger than any disk: as if the device were full.
