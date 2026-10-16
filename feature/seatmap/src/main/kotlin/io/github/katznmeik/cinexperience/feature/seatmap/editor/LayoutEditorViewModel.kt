@@ -137,6 +137,10 @@ class LayoutEditorViewModel(
     /** The draft before the running gesture (stroke, handle drag), `null` without one. */
     private var gestureBase: LayoutDraft? = null
 
+    /** The draft before the running paint stroke, `null` without one, and the stroke's cells so far. */
+    private var strokeBase: LayoutDraft? = null
+    private val strokeCells = LinkedHashSet<CellPosition>()
+
     /** Screenshots imported in this session; they're deleted unless saved. */
     private val sessionImports = LinkedHashSet<String>()
 
@@ -169,6 +173,7 @@ class LayoutEditorViewModel(
         val (detail, start) = loaded
         baseline = start
         gestureBase = null
+        endStroke()
         pendingSave = null
         history.clear()
         _uiState.update {
@@ -196,7 +201,10 @@ class LayoutEditorViewModel(
 
     /** Starts a gesture (paint stroke, handle drag) that becomes one undo step. */
     fun beginGesture() {
-        if (gestureBase == null) gestureBase = draft
+        if (gestureBase == null) {
+            gestureBase = draft
+            endStroke()
+        }
         history.breakCoalescing()
     }
 
@@ -204,6 +212,7 @@ class LayoutEditorViewModel(
     fun endGesture() {
         val base = gestureBase ?: return
         gestureBase = null
+        endStroke()
         val current = draft ?: return
         if (!current.hasSameContentAs(base)) history.record(base)
         publishHistory()
@@ -212,12 +221,29 @@ class LayoutEditorViewModel(
     /**
      * Paints [cells] with the current tool (part of the running gesture, or one step
      * on its own). Painting deselects the screen.
+     *
+     * Within a gesture, the stroke is painted again from the draft before it with all
+     * its cells so far ([LayoutDraft.paintStroke]), so the result doesn't depend on
+     * the direction of the stroke (spec §4.3: seats painted in front of a block keep
+     * the block's numbers whichever way the finger moves).
      */
     fun paintCells(cells: List<CellPosition>) {
         deselectScreen()
         val tool = state.tool
         val kind = state.seatKind
-        edit { draft -> cells.fold(draft) { acc, cell -> acc.paint(cell.row, cell.column, tool, kind) } }
+        if (gestureBase == null) {
+            edit { draft -> draft.paintStroke(cells, tool, kind) }
+            return
+        }
+        val base = strokeBase ?: draft?.also { strokeBase = it } ?: return
+        strokeCells += cells
+        val stroke = strokeCells.toList()
+        edit { base.paintStroke(stroke, tool, kind) }
+    }
+
+    private fun endStroke() {
+        strokeBase = null
+        strokeCells.clear()
     }
 
     /** A tap on a cell: paints it as one undo step (and deselects the screen). */

@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.seatmap.editor
 
+import io.github.katznmeik.cinexperience.core.model.CellPosition
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.LayoutCell
@@ -59,6 +60,27 @@ data class LayoutDraft(
             CellType.GAP, CellType.AISLE -> session.setCellType(row, column, type)
         }
         return if (edited === session) this else copy(session = edited)
+    }
+
+    /**
+     * Paints [cells] as one stroke ([paint] each, cells outside the grid ignored),
+     * in an order that doesn't depend on the order of [cells]: row by row and, in
+     * each row, in the order that keeps block starts (spec §4.3). Seats are painted
+     * from a block outwards (right to left in a left-to-right row), so each new
+     * seat in front of a block takes the number before the last; gaps and aisles in
+     * numbering order (left to right there), so each removed seat at a block's
+     * front hands the start on to the next one.
+     */
+    fun paintStroke(cells: Collection<CellPosition>, type: CellType, kind: SeatKind = SeatKind.STANDARD): LayoutDraft {
+        val ordered = cells.distinct().sortedWith(
+            compareBy<CellPosition> { it.row }.thenBy { cell ->
+                val rightToLeft = layout.rows.getOrNull(cell.row)?.numberingDirection == NumberingDirection.RIGHT_TO_LEFT
+                // Numbering order: ascending columns left to right, descending right to left.
+                val inNumberingOrder = if (rightToLeft) -cell.column else cell.column
+                if (type == CellType.SEAT) -inNumberingOrder else inNumberingOrder
+            },
+        )
+        return ordered.fold(this) { draft, cell -> draft.paint(cell.row, cell.column, type, kind) }
     }
 
     /** Grows (new rows copy the last row's cells) or shrinks at the back, within [1, [SeatLayout.MAX_ROWS]]. */
