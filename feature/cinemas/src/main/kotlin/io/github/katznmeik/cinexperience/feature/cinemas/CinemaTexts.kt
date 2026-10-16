@@ -29,3 +29,12 @@ internal fun hallMeta(hall: HallSummary): String {
     }
     return if (layout == null && hall.visitCount == 0) layoutText else "$layoutText · ${visitsText(hall.visitCount)}"
 }
+
+/**
+ * Hall row subtitle in Manage cinemas & halls: "Added by you · " before [hallMeta]
+ * only for a hall the user created (no seed key). Seed halls the seeder added to a
+ * user-added cinema aren't preloaded but weren't added by the user either; like
+ * adopted halls, they carry a seed key and get no origin label.
+ */
+internal fun manageHallMeta(hall: HallSummary): String =
+    if (hall.hall.seedKey == null) "Added by you · ${hallMeta(hall)}" else hallMeta(hall)
