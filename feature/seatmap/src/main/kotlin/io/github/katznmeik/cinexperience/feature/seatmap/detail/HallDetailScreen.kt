@@ -73,10 +73,8 @@ import io.github.katznmeik.cinexperience.core.seatmapui.seatStatesDescription
 import io.github.katznmeik.cinexperience.core.seatmapui.viewingAngleText
 import io.github.katznmeik.cinexperience.core.seatmapui.windowSeatMapMaxHeight
 import io.github.katznmeik.cinexperience.core.ui.component.BackMessageContent
-import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
-import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
-import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
@@ -84,9 +82,11 @@ import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.StarRatingDisplay
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
+import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 @Composable
