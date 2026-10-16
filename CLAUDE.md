@@ -441,7 +441,9 @@ Don't duplicate config in module build files.
   <seed> <fixture>` rewrites the seed's layouts (labels, numbers and kinds from
   the plan; columns, spacer rows and aisles from the drawn seats; a balcony
   keeps the gap yorck.de draws above it; existing gaps/aisles kept where the seats are
-  unchanged; halls without a screen get columns × 1.5) and
+  unchanged; halls without a screen get columns × 1.5, a screen as wide as the
+  old grid follows the new one unless it was measured (delphi LUX),
+  `test_screen_width.py`) and
   `core/data/src/test/resources/seed/yorck-seat-numbers.json` (Yorck's row
   label, seat text and kind of every seat). Where Yorck's kinds are wrong, the
   tool's `KIND_OVERRIDES` (seedKey → kind of every place, with the reason) sets
