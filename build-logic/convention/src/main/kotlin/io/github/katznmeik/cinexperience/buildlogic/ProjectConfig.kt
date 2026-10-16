@@ -43,6 +43,7 @@ internal fun Project.configureAndroidCommon(extension: CommonExtension) {
         compileOptions.targetCompatibility = JAVA_TARGET
     }
     configureKotlinJvmTarget()
+    forbidFileDependencies()
 }
 
 internal fun Project.configureKotlinJvmTarget() {
