@@ -1,7 +1,6 @@
 package io.github.katznmeik.cinexperience.core.data.repository
 
 import androidx.room.withTransaction
-import io.github.katznmeik.cinexperience.core.data.DataRules
 import io.github.katznmeik.cinexperience.core.data.db.CinemaEntity
 import io.github.katznmeik.cinexperience.core.data.db.CinemaWithHalls
 import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
@@ -19,13 +18,16 @@ import io.github.katznmeik.cinexperience.core.model.HallDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.core.model.LayoutLabels
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
+import io.github.katznmeik.cinexperience.core.model.ScreenSizeRules
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatOverride
 import io.github.katznmeik.cinexperience.core.model.SeatOverrides
 import io.github.katznmeik.cinexperience.core.model.TextLimits
 import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_LONG_TEXT_LENGTH
 import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_NAME_LENGTH
+import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_ROW_LABEL_LENGTH
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
 import io.github.katznmeik.cinexperience.core.model.cinemaScores
@@ -203,12 +205,10 @@ internal class RoomHallRepository(
     }
 
     override suspend fun updateHall(hall: Hall): Boolean {
-        val cleanName = hall.name.requireName()
-        val cleanNotes = hall.notes.cleanText(MAX_LONG_TEXT_LENGTH, "Notes")
+        val cleanName = hall.name.trim().also { require(it.isNotEmpty()) { "Name must not be blank" } }
+        val cleanNotes = hall.notes?.trim()?.takeIf { it.isNotEmpty() }
         val cleanReference = hall.referenceImagePath.cleanText(MAX_NAME_LENGTH, "Reference image path")
         require(ScreenOffsetRules.isValid(hall.screenOffset)) { "Invalid screen offset ${hall.screenOffset}" }
-        require(DataRules.isValidScreenWidth(hall.screenWidth)) { "Invalid screen width ${hall.screenWidth}" }
-        require(DataRules.isValidScreenDistance(hall.screenDistance)) { "Invalid screen distance ${hall.screenDistance}" }
         val layoutJson = hall.layout?.let(LayoutJson::encode)
         require(layoutJson == null || layoutJson.length <= LayoutJson.MAX_JSON_LENGTH) {
             "Layout of hall ${hall.id} is too large (${layoutJson?.length} chars of JSON)"
@@ -217,6 +217,27 @@ internal class RoomHallRepository(
             val existing = hallDao.get(hall.id) ?: return@withTransaction false
             require(existing.cinemaId == hall.cinemaId) { "Moving a hall to another cinema is not supported" }
             val storedLayout = existing.layoutJson?.let(LayoutJson::decodeOrNull)
+            // A changed name, notes, row label or screen size must fit the limits. A value
+            // the hall already has is kept as it is: an older build may have stored one
+            // beyond today's limits, and it must not make every save of the hall fail.
+            require(cleanName == existing.name || TextLimits.fits(cleanName, MAX_NAME_LENGTH)) {
+                "Name is too long (at most $MAX_NAME_LENGTH code points)"
+            }
+            require(cleanNotes == existing.notes || TextLimits.fits(cleanNotes, MAX_LONG_TEXT_LENGTH)) {
+                "Notes are too long (at most $MAX_LONG_TEXT_LENGTH code points)"
+            }
+            require(hall.screenWidth == existing.screenWidth || ScreenSizeRules.isValidWidth(hall.screenWidth)) {
+                "Invalid screen width ${hall.screenWidth}"
+            }
+            require(hall.screenDistance == existing.screenDistance || ScreenSizeRules.isValidDistance(hall.screenDistance)) {
+                "Invalid screen distance ${hall.screenDistance}"
+            }
+            hall.layout?.let { layout ->
+                val storedLabels = storedLayout?.rows?.mapNotNullTo(HashSet()) { it.label }.orEmpty()
+                require(layout.rows.all { TextLimits.fits(it.label, MAX_ROW_LABEL_LENGTH) || it.label in storedLabels }) {
+                    "Row label is too long (at most $MAX_ROW_LABEL_LENGTH code points)"
+                }
+            }
             // A hall read with an unreadable layout comes back with layout = null; saving
             // its other fields must not wipe the stored layout.
             val keepStoredLayout = hall.layout == null && hall.layoutUnreadable &&
@@ -296,22 +317,23 @@ internal class RoomVisitRepository(
     private val db: CinexDatabase,
     private val dispatcher: CoroutineDispatcher,
     private val awaitReady: AwaitReady = {},
+    /** Reads a stored layout (`null` = unreadable); replaceable so tests can count the reads. */
+    private val decodeLayout: (String) -> SeatLayout? = LayoutJson::decodeOrNull,
 ) : VisitRepository {
     private val dao = db.visitDao()
 
     override fun observeAllVisits(): Flow<List<VisitListItem>> =
         dao.observeAllWithContext()
             .map { rows ->
-                val labelsByLayout = HashMap<String, LayoutLabels?>()
+                // Each hall's layout is read once and decoded once, however many visits it has.
+                val labelsByHall = HashMap<Long, LayoutLabels?>()
                 rows.map { row ->
                     val visit = row.visit.toModel()
-                    val labels = row.hallLayoutJson?.let { json ->
+                    val labels = if (visit.hallId in labelsByHall) {
+                        labelsByHall[visit.hallId]
+                    } else {
                         // Unreadable layouts give no labels instead of failing the list.
-                        if (json in labelsByLayout) {
-                            labelsByLayout[json]
-                        } else {
-                            LayoutJson.decodeOrNull(json)?.labels().also { labelsByLayout[json] = it }
-                        }
+                        row.hallLayout?.layoutJson?.let(decodeLayout)?.labels().also { labelsByHall[visit.hallId] = it }
                     }
                     VisitListItem(
                         visit = visit,

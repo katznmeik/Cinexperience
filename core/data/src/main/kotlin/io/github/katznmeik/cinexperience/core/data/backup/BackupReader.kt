@@ -1,12 +1,12 @@
 package io.github.katznmeik.cinexperience.core.data.backup
 
-import io.github.katznmeik.cinexperience.core.data.DataRules
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.data.json.LayoutTooLargeException
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
+import io.github.katznmeik.cinexperience.core.model.ScreenSizeRules
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
@@ -14,6 +14,7 @@ import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.TextLimits
 import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_LONG_TEXT_LENGTH
 import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_NAME_LENGTH
+import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_ROW_LABEL_LENGTH
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -77,8 +78,9 @@ internal class ValidationProblem(val detail: String, val missingFile: Boolean = 
  * one favourite per hall; every layout decodes with this app's layout reader (a
  * layout it can't read is rejected, never carried along silently); known enum
  * keys; ratings 1–5; valid dates; a seat id mark in 1..[SeatLayout.MAX_SEAT_ID]
- * and visit seat ids below it; a finite, positive screen width and a finite,
- * non-negative screen distance ([DataRules]); a screen offset that
+ * and visit seat ids below it; a screen width and distance that
+ * [ScreenSizeRules] accepts (positive and at most [ScreenSizeRules.MAX_WIDTH],
+ * 0 to [ScreenSizeRules.MAX_DISTANCE]); a screen offset that
  * [ScreenOffsetRules.isValid] accepts (finite, 0.5 steps, within
  * ±[ScreenOffsetRules.MAX_MAGNITUDE]); every referenced photo / reference image
  * has a safe name in its folder and is in [files].
@@ -86,11 +88,14 @@ internal class ValidationProblem(val detail: String, val missingFile: Boolean = 
  * Size limits, so no imported row is too large for Android to read (2 MB per
  * row) or slows every list down: names, addresses and keys at most
  * [TextLimits.MAX_NAME_LENGTH] code points, notes and film titles at most
- * [TextLimits.MAX_LONG_TEXT_LENGTH]; layouts within [SeatLayout.MAX_ROWS] ×
- * [SeatLayout.MAX_COLUMNS] and their JSON, seed record and metadata values at
- * most [LayoutJson.MAX_JSON_LENGTH] chars; file names are bounded by their
- * pattern. The repositories enforce the same rules (texts, screen geometry,
- * offset), so data saved by the app always exports.
+ * [TextLimits.MAX_LONG_TEXT_LENGTH], row labels at most
+ * [TextLimits.MAX_ROW_LABEL_LENGTH]; layouts within [SeatLayout.MAX_ROWS] ×
+ * [SeatLayout.MAX_COLUMNS], their JSON at most [LayoutJson.MAX_JSON_LENGTH]
+ * chars and not much longer than this app's own encoding of the layout
+ * ([LayoutJson.isPadded]); seed record and metadata values at most
+ * [LayoutJson.MAX_JSON_LENGTH] chars; file names are bounded by their pattern.
+ * The repositories enforce the same rules for every value they write (texts,
+ * row labels, screen size and offset), so data saved by the app always exports.
  */
 internal object BackupValidator {
 
@@ -125,12 +130,12 @@ internal object BackupValidator {
             }
             if (!fitsLongText(hall.notes)) problem("the notes of $label are too long.")
             if (hall.nextSeatId !in SeatLayout.FIRST_SEAT_ID..SeatLayout.MAX_SEAT_ID) problem("$label has an invalid seat id mark.")
-            if (!DataRules.isValidScreenWidth(hall.screenWidth) || !DataRules.isValidScreenDistance(hall.screenDistance)) {
+            if (!ScreenSizeRules.isValidWidth(hall.screenWidth) || !ScreenSizeRules.isValidDistance(hall.screenDistance)) {
                 problem("$label has an invalid screen size.")
             }
             if (!ScreenOffsetRules.isValid(hall.screenOffset)) problem("$label has an invalid screen position.")
             layouts[hall.id] = hall.layoutJson?.let { json ->
-                try {
+                val layout = try {
                     LayoutJson.decode(json)
                 } catch (e: LayoutTooLargeException) { // JSON, grid or seat ids beyond the limits
                     problem("the seat layout of $label is too large.", e)
@@ -139,6 +144,11 @@ internal object BackupValidator {
                 } catch (e: StackOverflowError) {
                     problem("the seat layout of $label can't be read by this app version.")
                 }
+                if (LayoutJson.isPadded(json, layout)) problem("the seat layout of $label is too large.")
+                if (layout.rows.any { !TextLimits.fits(it.label, MAX_ROW_LABEL_LENGTH) }) {
+                    problem("a row label in the seat layout of $label is too long.")
+                }
+                layout
             }
             hall.referenceImagePath?.let { checkFile(it, ReferenceImageStore.FOLDER, files, "the reference image of $label") }
         }
