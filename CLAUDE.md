@@ -306,14 +306,18 @@ Don't duplicate config in module build files.
   `core:program` is the only module with network code and the only manifest
   with `INTERNET`; inside it only the `net/` package (`HttpsProgramTransport`,
   `ProgramDownloader`). Three checks fail the build otherwise:
-  `NetworkConfinementTest` (core:program) scans every module's sources (non-test
-  sets: no `java.net` except `URI`, `javax.net`, `URLConnection`,
-  `openConnection`/`openStream`/`.toURL(`, WebView, MediaPlayer, VideoView,
-  ExoPlayer/media3, `DownloadManager`, OkHttp, Retrofit, Ktor, …), manifests and
+  `NetworkConfinementTest` (core:program) scans every module's sources (all sets
+  but `test`, `androidTest` and their `<Variant>` sets: no `java.net` except `URI`,
+  `javax.net`, `URLConnection`, `openConnection`/`openStream`/`.toURL(`, WebView,
+  MediaPlayer, VideoView, ExoPlayer/media3, `DownloadManager`, OkHttp, Retrofit,
+  Ktor, …, `loadLibrary`, `exec(`/`ProcessBuilder`, `dalvik.system`), manifests and
   resources of all sets (INTERNET, cleartext, `src="user"`, `debug-overrides`,
-  network security configs outside `app/src/main/res/xml/`, WebView layouts) and
-  build files (network, image, media, WebView, Firebase, Sentry, Play services
-  libraries); `AppPermissionsTest` (app) pins the merged manifest's permissions;
+  network security configs outside `app/src/main/res/xml/`, WebView layouts),
+  build files (`*.gradle(.kts)`, `*.toml`, build-logic: network, image, media,
+  WebView, Firebase, Sentry, Play services libraries, file dependencies,
+  `externalNativeBuild`) and allows no `.jar`/`.aar`/`.so`/`.dex`/`.class` but the
+  Gradle wrapper; `AppPermissionsTest` (app) pins the merged manifest's permissions,
+  debug and release (the build passes both merged manifests to the unit tests);
   `:app:checkReleaseDependencyGroups` (runs before every build) allows release
   dependencies only from `androidx.*` (not webkit, media3, browser),
   `org.jetbrains*`, `org.jspecify` and `com.google.guava`; review a new group
@@ -336,9 +340,11 @@ Don't duplicate config in module build files.
   `ProgramRepository` per process (`AppContainer`). The page is untrusted:
   `ProgramPageParser` cuts out the `__NEXT_DATA__` block by text search, bounds
   it (500,000 JSON values, depth 64), decodes only the used fields into its own
-  types (unknown parts are skipped, not built) and checks every field
-  (`ProgramRules`; the model types' `init` blocks check again); texts are cleaned
-  plain text (`ProgramText`), never HTML. Films and specials are keyed by
+  types (unknown parts are skipped, not built; only if an entry or its `fields`
+  isn't an object are the two lists read as trees, that entry skipped) and
+  checks every field (`ProgramRules`; the model types' `init` blocks check
+  again); texts are cleaned plain text (`ProgramText`), never HTML. Films and
+  specials are keyed by
   `FilmKey` (kind + slug); a showing a film and specials both list belongs to the
   film and names the specials (`Showing.specialKeys`, `Program.showingsOf(key)`).
   Start times are Berlin wall-clock: only `+01:00`, `+02:00` or no offset is
