@@ -10,11 +10,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
@@ -58,9 +61,14 @@ fun StarRatingInput(
     }
 }
 
-/** Five small display-only stars for a rating; nothing is filled for `null`. */
+/**
+ * Five small display-only stars for a rating; nothing is filled for `null`.
+ * [starSize] is in sp, so the stars grow with the font size like the text beside
+ * them (put them under that text with large text, see [isLargeText]).
+ */
 @Composable
-fun StarRatingDisplay(rating: Int?, modifier: Modifier = Modifier, starSize: Dp = 13.dp) {
+fun StarRatingDisplay(rating: Int?, modifier: Modifier = Modifier, starSize: TextUnit = 13.sp) {
+    val size = with(LocalDensity.current) { starSize.toDp() }
     Row(
         modifier.semantics { contentDescription = rating?.let { "Rated ${starsText(it)}" } ?: "Not rated" },
         horizontalArrangement = Arrangement.spacedBy(1.dp),
@@ -71,7 +79,7 @@ fun StarRatingDisplay(rating: Int?, modifier: Modifier = Modifier, starSize: Dp 
                 imageVector = if (filled) CinexIcons.Star else CinexIcons.StarOutline,
                 contentDescription = null,
                 tint = if (filled) CinexTheme.colors.text else CinexTheme.colors.textMuted,
-                modifier = Modifier.size(starSize),
+                modifier = Modifier.size(size),
             )
         }
     }

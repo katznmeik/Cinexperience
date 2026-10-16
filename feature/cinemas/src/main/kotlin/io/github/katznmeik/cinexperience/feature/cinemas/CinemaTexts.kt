@@ -2,10 +2,18 @@ package io.github.katznmeik.cinexperience.feature.cinemas
 
 import io.github.katznmeik.cinexperience.core.model.Cinema
 import io.github.katznmeik.cinexperience.core.model.HallSummary
+import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 
 /** "no visits", "1 visit", "8 visits". */
 internal fun visitsText(count: Int): String = if (count == 0) "no visits" else countText(count, "visit")
+
+/**
+ * A score for screen readers: "score 4.2" or "not rated", instead of the shown
+ * "4.2", "★ 4.2" or "–". Used on its own (list rows) and after a name ("Overall
+ * score 4.1", "Popcorn quality not rated"), like the Rankings and Program texts.
+ */
+internal fun scoreDescription(score: Double?): String = score?.let { "score ${formatScore(it)}" } ?: "not rated"
 
 /** Street part of the address ("Kantstraße 10" of "Kantstraße 10, 10623 Berlin"), or `null`. */
 internal val Cinema.shortAddress: String?
@@ -25,3 +33,16 @@ internal fun hallMeta(hall: HallSummary): String {
     }
     return if (layout == null && hall.visitCount == 0) layoutText else "$layoutText · ${visitsText(hall.visitCount)}"
 }
+
+/**
+ * Hall row subtitle in Manage cinemas & halls: "Added by you · " before [hallMeta]
+ * only for a hall the user created (not preloaded, no seed key). Seed halls the
+ * seeder added to a user-added cinema aren't preloaded but weren't added by the
+ * user either; they carry a seed key and get no origin label. An adopted hall
+ * (created by the user, then matched to a seed hall) carries one too, so it loses
+ * the label: accepted, the subtitle stays neutral rather than wrong. A preloaded
+ * hall without a seed key (only from a crafted backup) is never "Added by you"
+ * next to its disabled Delete.
+ */
+internal fun manageHallMeta(hall: HallSummary): String =
+    if (!hall.hall.isPreloaded && hall.hall.seedKey == null) "Added by you · ${hallMeta(hall)}" else hallMeta(hall)

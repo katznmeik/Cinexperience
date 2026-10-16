@@ -1,9 +1,5 @@
 package io.github.katznmeik.cinexperience.feature.seatmap
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RectF
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -436,32 +432,11 @@ class SeatMapScreenshotTest {
         vm.onReferenceImagePicked("content://test/plan.png")
         val state = vm.uiState.value
         check(state.referenceMode && state.draft?.referenceImagePath != null)
-        val image = testHallPlan().asImageBitmap()
+        val image = ReferencePlanFixture.hallPlan().asImageBitmap()
         capture("layout_editor_reference") { LayoutEditorScreen(state, referenceImage = image, actions = noActions) }
     }
 
     private companion object {
         const val WIDE_HALL = 9_100L
-    }
-
-    /** A generated stand-in for a Yorck-app seat plan screenshot: light background, rows of grey seats. */
-    private fun testHallPlan(): Bitmap {
-        val bitmap = Bitmap.createBitmap(540, 420, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(0xFFF2F2F2.toInt())
-        val seat = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF8E8E8E.toInt() }
-        val screen = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF555555.toInt() }
-        canvas.drawRoundRect(RectF(110f, 30f, 430f, 44f), 7f, 7f, screen)
-        val pitch = 22f
-        for (row in 0 until 10) {
-            val shift = if (row == 3) pitch / 2 else 0f
-            for (column in 0 until 22) {
-                if (column == 4 || column == 17) continue // aisles
-                val x = 28f + column * pitch + shift
-                val y = 100f + row * 28f
-                canvas.drawRoundRect(RectF(x, y, x + 17f, y + 17f), 4f, 4f, seat)
-            }
-        }
-        return bitmap
     }
 }

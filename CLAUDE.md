@@ -101,7 +101,7 @@ Don't duplicate config in module build files.
   `minimumInteractiveComponentSize()` or a 48 dp min height; nothing has a
   fixed height that text must fit in (`heightIn(min = …)`), rows of chips wrap
   (`ChoiceChipRow` is a `FlowRow`), and two-column layouts become one column
-  when `LocalDensity.current.fontScale > 1.3f` instead of breaking words. Text
+  when `isLargeText()` (core:ui: font scale > 1.3) instead of breaking words. Text
   drawn inside a zoomable canvas (row labels, seat numbers, the screen caption,
   in the seat map and the editor) is sized in dp, not sp: it grows with zoom,
   not with the system font size.

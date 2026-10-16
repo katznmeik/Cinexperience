@@ -152,7 +152,7 @@ private val noDialogActions = object : EditDialogActions {
 }
 
 @androidx.compose.runtime.Composable
-private fun DetailWith(
+internal fun DetailWith(
     nowShowing: NowShowing,
     detail: CinemaDetail = NowShowingFixtures.detail(),
     onOpenFilm: (FilmKind, String) -> Unit = { _, _ -> },

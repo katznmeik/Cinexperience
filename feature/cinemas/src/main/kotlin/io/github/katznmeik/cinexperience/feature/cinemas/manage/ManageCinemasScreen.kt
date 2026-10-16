@@ -44,7 +44,7 @@ import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialogActions
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialogHost
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.ItemMenu
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.MenuEntry
-import io.github.katznmeik.cinexperience.feature.cinemas.hallMeta
+import io.github.katznmeik.cinexperience.feature.cinemas.manageHallMeta
 import io.github.katznmeik.cinexperience.feature.cinemas.shortAddress
 
 @Composable
@@ -218,7 +218,7 @@ private fun CinemaRow(cinema: CinemaDetail, onOpen: () -> Unit, menu: List<MenuE
 private fun HallRow(hall: HallSummary, menu: List<MenuEntry>) {
     ManageRow(
         title = hall.hall.name,
-        subtitle = (if (hall.hall.isPreloaded) "" else "Added by you · ") + hallMeta(hall),
+        subtitle = manageHallMeta(hall),
         isCinema = false,
         onClick = null,
         menu = menu,

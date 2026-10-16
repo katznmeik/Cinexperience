@@ -66,15 +66,16 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.model.CellPosition
@@ -91,6 +92,7 @@ import io.github.katznmeik.cinexperience.core.seatmapui.rememberSeatMapViewState
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.SegmentChipShape
+import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import kotlinx.coroutines.CancellationException
@@ -288,7 +290,7 @@ private fun EditorTopBar(hallName: String, canSave: Boolean, canDiscard: Boolean
             }
             Text(
                 text = "${hallName.uppercase()} · LAYOUT",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold, fontSize = 18.sp),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
                 color = CinexTheme.colors.text,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -543,13 +545,15 @@ private fun ReferenceToggle(selected: Boolean, hasImage: Boolean, onClick: () ->
 
 @Composable
 private fun SeatKindRow(selected: SeatKind, actions: LayoutEditorActions) {
-    // Wraps onto a second line when the chips don't fit (large text).
+    // Wraps onto a second line when the chips don't fit (large text), with the
+    // seat picker's gap between the lines.
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text("Seat type", style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.textMuted)
         SeatKind.entries.forEach { kind ->
@@ -636,7 +640,7 @@ private fun PanelCard(content: @Composable () -> Unit) {
 private fun PanelTitle(text: String, modifier: Modifier = Modifier) {
     Text(
         text.uppercase(),
-        style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+        style = MaterialTheme.typography.titleSmall,
         color = CinexTheme.colors.text,
         modifier = modifier.semantics { heading() },
     )
@@ -828,11 +832,13 @@ private fun ReferencePanel(state: LayoutEditorUiState, hasImage: Boolean, action
                     .weight(1f)
                     .semantics { contentDescription = "Screenshot opacity" },
             )
+            val valueStyle = MaterialTheme.typography.labelMedium
             Text(
                 "${(state.referenceOpacity * 100).roundToInt()} %",
-                style = MaterialTheme.typography.labelMedium,
+                style = valueStyle,
                 color = CinexTheme.colors.text,
-                modifier = Modifier.width(40.dp),
+                // At least as wide as "100 %" at the current text size, so the slider keeps its width while dragging.
+                modifier = Modifier.widthIn(min = textWidth("100 %", valueStyle).coerceAtLeast(40.dp)),
                 textAlign = TextAlign.End,
             )
         }
@@ -851,6 +857,16 @@ private fun ReferencePanel(state: LayoutEditorUiState, hasImage: Boolean, action
             OutlinedPillButton(text = "Reset position", onClick = actions::onResetReferencePosition, icon = CinexIcons.Fit)
             OutlinedPillButton(text = "Remove", onClick = actions::onRemoveReference, icon = CinexIcons.Delete)
         }
+    }
+}
+
+/** Width of [text] on one line in [style] at the current text size. */
+@Composable
+private fun textWidth(text: String, style: TextStyle): Dp {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(text, style, density) {
+        with(density) { measurer.measure(text, style, softWrap = false).size.width.toDp() }
     }
 }
 
@@ -907,7 +923,7 @@ private fun Steppers(draft: LayoutDraft, actions: LayoutEditorActions, includeSc
         ),
     ) + if (includeScreen) screenSteppers(draft, actions) else emptyList()
     // Two per row; one per row with large text, so the labels aren't broken mid-word.
-    val perRow = if (LocalDensity.current.fontScale > 1.3f) 1 else 2
+    val perRow = if (isLargeText()) 1 else 2
     Column(
         modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
