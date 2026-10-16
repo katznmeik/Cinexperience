@@ -2,6 +2,7 @@ package io.github.katznmeik.cinexperience.core.testing
 
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.DeleteResult
+import io.github.katznmeik.cinexperience.core.data.repository.HallLimitReachedException
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.NameOrder
 import io.github.katznmeik.cinexperience.core.data.repository.SaveVisitResult
@@ -10,6 +11,7 @@ import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.model.Cinema
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.CinemaSummary
+import io.github.katznmeik.cinexperience.core.model.DataLimits
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
@@ -204,6 +206,8 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         write()
         val cleanName = name.requireName()
         require(store.value.cinemas.any { it.id == cinemaId }) { "No cinema $cinemaId" }
+        // Like Room: at most DataLimits.MAX_HALLS halls in all cinemas together.
+        if (store.value.halls.size >= DataLimits.MAX_HALLS) throw HallLimitReachedException()
         val id = nextId++
         store.update { it.copy(halls = it.halls + Hall(id = id, cinemaId = cinemaId, name = cleanName)) }
         return id
