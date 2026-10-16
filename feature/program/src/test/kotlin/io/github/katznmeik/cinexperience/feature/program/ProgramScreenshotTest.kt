@@ -24,6 +24,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
@@ -243,16 +244,19 @@ class ProgramAccessibilityTest(private val fontScale: Float) {
     fun offWithAProgram() = check("program_off_cached") { ProgramScreen(F.state(mode = ProgramMode.OFF), ProgramActions.None) }
 
     /**
-     * A dialog over the tab. The clock is held, so the dialog's animations and a
-     * text cursor can't keep Compose busy; the screen capture includes the dialog.
+     * A dialog over the tab. The font scale is set through the configuration (not
+     * ScreenshotSurface), so the dialog window gets it too. The clock is held, so
+     * the dialog's animations can't keep Compose busy; the screen capture
+     * includes the dialog.
      */
     @OptIn(ExperimentalRoborazziApi::class)
-    private fun checkDialog(name: String, dialog: ProgramDialog, state: ProgramUiState = F.state()) {
+    private fun checkDialog(name: String, dialog: ProgramDialog, state: ProgramUiState = F.state(), allowRepeated: Set<String> = emptySet()) {
+        RuntimeEnvironment.setFontScale(fontScale)
         composeRule.mainClock.autoAdvance = false
-        composeRule.setContent { ScreenshotSurface(fontScale) { ProgramScreen(state.copy(dialog = dialog), ProgramActions.None) } }
+        composeRule.setContent { ScreenshotSurface { ProgramScreen(state.copy(dialog = dialog), ProgramActions.None) } }
         composeRule.mainClock.advanceTimeBy(2_000)
         captureScreenRoboImage("build/outputs/roborazzi/${name}_${fontScaleSuffix(fontScale)}.png")
-        composeRule.assertAccessible()
+        composeRule.assertAccessible(allowRepeated = allowRepeated)
     }
 
     @Test
@@ -280,6 +284,14 @@ class ProgramAccessibilityTest(private val fontScale: Float) {
         if (fontScale != 1f) composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/program_save_filter_${fontScaleSuffix(fontScale)}.png")
         composeRule.assertAccessible(requireHeading = false)
     }
+
+    @Test
+    fun fromTimeDialog() = checkDialog("program_from_time", ProgramDialog.FROM_TIME)
+
+    @Test
+    fun dateDialog() =
+        // Material's date picker reads its month header and its year-switch button with the same text.
+        checkDialog("program_pick_date", ProgramDialog.PICK_DATE, allowRepeated = setOf("october 2026"))
 
     @Test
     fun replaceFilterDialog() = checkDialog("program_replace_filter", ProgramDialog.CONFIRM_REPLACE, F.state().copy(pendingReplace = "After work"))

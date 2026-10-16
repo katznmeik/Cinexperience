@@ -56,9 +56,12 @@ val MIN_TOUCH_TARGET: Dp = 48.dp
  * - no element announces the same text twice (e.g. an icon described with its button's label),
  * - the screen has at least one heading to navigate by (unless [requireHeading] is false).
  *
+ * [allowRepeated] names texts (lower case) a Material component itself announces twice and the
+ * app can't change, e.g. the date picker's "October 2026" header and its year-switch button.
+ *
  * Fails with a list of all problems found.
  */
-fun SemanticsNodeInteractionsProvider.assertAccessible(requireHeading: Boolean = true) {
+fun SemanticsNodeInteractionsProvider.assertAccessible(requireHeading: Boolean = true, allowRepeated: Set<String> = emptySet()) {
     val problems = mutableListOf<String>()
     val clickable = onAllNodes(hasClickAction()).fetchSemanticsNodes(atLeastOneRootRequired = true)
     // Skips elements clipped away completely (e.g. lazy list items composed beyond the viewport).
@@ -76,7 +79,7 @@ fun SemanticsNodeInteractionsProvider.assertAccessible(requireHeading: Boolean =
     onAllNodes(hasAnyLabel()).fetchSemanticsNodes(atLeastOneRootRequired = true).forEach { node ->
         val spoken = node.spokenTexts().map { it.trim().lowercase() }.filter { it.isNotEmpty() }
         // Words only: the same score or "–" in two columns is legitimate.
-        val repeated = spoken.filter { text -> text.count { it.isLetter() } > 2 }.groupBy { it }.filterValues { it.size > 1 }.keys
+        val repeated = spoken.filter { text -> text.count { it.isLetter() } > 2 }.groupBy { it }.filterValues { it.size > 1 }.keys - allowRepeated
         if (repeated.isNotEmpty()) problems += "Announced twice: ${repeated.joinToString()} in \"${spoken.joinToString(" / ")}\""
     }
     if (requireHeading && onAllNodes(isHeading()).fetchSemanticsNodes(atLeastOneRootRequired = true).isEmpty()) {
