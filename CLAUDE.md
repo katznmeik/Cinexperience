@@ -228,7 +228,9 @@ Don't duplicate config in module build files.
   distance 0–15), shared by the editor's `ScreenRules`, the repositories and the
   backup validator. The editor sets distances of at least 0.5
   (`ScreenRules.MIN_DISTANCE`), so the bar never lies on row 0; a stored 0 stays
-  until the distance is changed.
+  until the distance is changed. `LayoutDraft.start` snaps a stored width or
+  distance within the editor's range to its 0.5 steps (e.g. from a backup);
+  values outside it are kept, like an offset beyond the grid.
 - **Schema changes:** the database is at version 2 (`MIGRATION_1_2` added
   `cinema.is_favourite` and `hall.screen_offset`). Bump the `CinexDatabase`
   version, add a migration to `ALL_MIGRATIONS`, commit the exported

@@ -184,17 +184,29 @@ data class LayoutDraft(
          * The draft for [hall] as stored. A hall without a (readable) layout starts
          * with a [DEFAULT_ROWS] × [DEFAULT_COLUMNS] grid of new seats (ids from the
          * hall's mark); missing screen geometry starts as wide as the grid and
-         * [DEFAULT_SCREEN_DISTANCE] rows away. The stored offset is kept (made
-         * valid if it isn't; the steppers then keep it within the grid).
+         * [DEFAULT_SCREEN_DISTANCE] rows away.
+         *
+         * A stored width or distance within the editor's range is snapped to its
+         * steps ([ScreenRules.width], [ScreenRules.distance]; a distance below
+         * [ScreenRules.MIN_DISTANCE] stays below it), so the first step moves it by
+         * one step instead of jumping, and a screen as wide as the grid keeps
+         * following it. The app only stores such values, but a backup may hold
+         * others: e.g. a width of 10.3 starts as 10.5. Loading is no change; saving
+         * writes the snapped values. A value outside the range (an older build's,
+         * or wider than this grid allows) is kept as it is, as is a stored offset
+         * beyond the grid; the controls limit them once they're changed. The
+         * offset is only made valid (half-seat steps) if it isn't.
          */
         fun start(hall: Hall): LayoutDraft {
             val started = hall.startLayoutEdit()
             val session = if (started.layout == null) started.newGrid(DEFAULT_ROWS, DEFAULT_COLUMNS) else started
             val columns = session.layout!!.columnCount
+            val width = hall.screenWidth?.takeIf { it > 0f } ?: columns.toFloat()
+            val distance = hall.screenDistance?.takeIf { it >= 0f } ?: DEFAULT_SCREEN_DISTANCE
             return LayoutDraft(
                 session = session,
-                screenWidth = hall.screenWidth?.takeIf { it > 0f } ?: columns.toFloat(),
-                screenDistance = hall.screenDistance?.takeIf { it >= 0f } ?: DEFAULT_SCREEN_DISTANCE,
+                screenWidth = if (width in ScreenRules.MIN_WIDTH..ScreenRules.maxWidth(columns)) ScreenRules.width(width, columns) else width,
+                screenDistance = if (distance <= ScreenRules.MAX_DISTANCE) ScreenRules.distance(distance, current = distance) else distance,
                 referenceImagePath = hall.referenceImagePath,
                 screenOffset = ScreenOffsetRules.snap(hall.screenOffset),
             )
