@@ -242,7 +242,8 @@ data class LayoutRow(
      * automatic): the block's first numbered seat in numbering order, whose number
      * the start is (spec §4.3). Seats with a [LayoutCell.Seat.fixedLabel] use no
      * number and don't count; a block with only such seats (its start is unused)
-     * keys it on its first seat, so the stored value is kept as long as that seat is.
+     * keys it on its first seat, so the stored value is kept as long as that block
+     * gets no numbered seat.
      */
     internal fun blockStartAnchors(): Map<SeatId, Int?> {
         val anchors = LinkedHashMap<SeatId, Int?>()
@@ -257,28 +258,42 @@ data class LayoutRow(
      * This row with its [blockStartNumbers] re-keyed after a cell change, so that
      * every start stays with the seat it was keyed on ([blockStartAnchors] of the
      * row before the change, plus any restored seat's start): each block gets the
-     * start of the first of its seats, in numbering order, that carries one.
+     * start of the first of its numbered seats, in numbering order, that carries
+     * one (a block without numbered seats: of the first of its seats that does).
      *
      * So a split-off part without that seat gets `null` (it counts on with
      * [SeatNumbering.CONTINUOUS] or restarts with [SeatNumbering.RESTART_PER_BLOCK]);
      * when blocks merge, the start of the one whose first numbered seat comes first
-     * in numbering order is kept and the other is dropped; a start whose seat is
-     * gone is dropped; and a row whose blocks hold the same seats as before comes
-     * out with the same starts. The list is normalised (no entries beyond the blocks,
-     * no trailing `null`s).
+     * in numbering order is kept and the other is dropped (the unused start of a
+     * block of fixed-label seats never wins against numbered seats); a start whose
+     * seat is gone is dropped; and a row whose blocks hold the same seats as before
+     * comes out with the same starts. The list is normalised (no entries beyond the
+     * blocks, no trailing `null`s).
      */
     internal fun withBlockStartsKeyedOn(anchors: Map<SeatId, Int?>): LayoutRow {
-        val starts = blockSeatsInNumberingOrder.map { seats -> seats.firstOrNull { it.id in anchors }?.let { anchors[it.id] } }
+        val starts = blockSeatsInNumberingOrder.map { seats ->
+            val candidates = seats.filter { it.fixedLabel == null }.ifEmpty { seats }
+            candidates.firstOrNull { it.id in anchors }?.let { anchors[it.id] }
+        }
         return copy(blockStartNumbers = starts.dropLastWhile { it == null })
     }
 
     /**
      * This row with [newCells] and its block starts re-keyed from this row's seats
      * (see [withBlockStartsKeyedOn]); [restored] adds the start a seat put back by
-     * [SeatLayout.withSeat] was keyed on.
+     * [SeatLayout.withSeat] was keyed on. When the change leaves the number of
+     * blocks and every block's start as they were, the stored list is kept as it is
+     * (even with trailing `null`s or entries beyond the blocks, as older data may
+     * hold), so an edit that doesn't touch the row's blocks leaves it identical.
      */
-    internal fun withCells(newCells: List<LayoutCell>, restored: Map<SeatId, Int?> = emptyMap()): LayoutRow =
-        copy(cells = newCells).withBlockStartsKeyedOn(blockStartAnchors() + restored)
+    internal fun withCells(newCells: List<LayoutCell>, restored: Map<SeatId, Int?> = emptyMap()): LayoutRow {
+        val changed = copy(cells = newCells)
+        val reKeyed = changed.withBlockStartsKeyedOn(blockStartAnchors() + restored)
+        val blockCount = changed.blocks.size
+        val sameStarts = blockCount == blocks.size &&
+            (0 until blockCount).all { reKeyed.blockStartNumbers.getOrNull(it) == blockStartNumbers.getOrNull(it) }
+        return if (sameStarts) changed else reKeyed
+    }
 
     companion object {
         /** The stored [label] of a row without a name: "-", as in Yorck's booking data. */

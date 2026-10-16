@@ -155,8 +155,10 @@ Don't duplicate config in module build files.
   to left). `CONTINUOUS` counts on across blocks, `RESTART_PER_BLOCK` restarts.
   When aisles are painted or removed, a block start stays with its block's
   first numbered seat (`LayoutRow.withBlockStartsKeyedOn`, applied by every
-  cell-changing `SeatLayout` operation; a split-off part gets none, a start
-  whose seat is painted away is dropped and comes back with the seat).
+  cell-changing `SeatLayout` operation): a split-off part gets none, merged
+  blocks keep the start of the one numbered first, a start whose seat is
+  painted away is dropped (`LayoutEditSession` gives it back with the seat),
+  and a row whose starts don't change keeps its stored list.
   A seat can have a `fixedLabel` (1–4 characters, no surrounding spaces, no
   control or format characters, e.g. "R"): it is shown instead of a number and
   uses up no number. It moves with its seat and survives a change of kind; a
