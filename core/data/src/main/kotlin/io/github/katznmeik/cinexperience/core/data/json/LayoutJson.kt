@@ -85,6 +85,15 @@ internal data class RowJson(
     val halfSeatOffset: Boolean = false,
 )
 
+/**
+ * A layout beyond this app's limits: JSON longer than [LayoutJson.MAX_JSON_LENGTH],
+ * more than [SeatLayout.MAX_ROWS] rows or [SeatLayout.MAX_COLUMNS] columns, or
+ * seat ids that reach [SeatLayout.MAX_SEAT_ID]. Only damaged or crafted data has
+ * one; the backup validator reports it as "too large" rather than as "can't be
+ * read by this app version".
+ */
+internal class LayoutTooLargeException(message: String) : IllegalArgumentException(message)
+
 private const val NUMBERING_CONTINUOUS = "CONTINUOUS"
 private const val NUMBERING_RESTART = "RESTART_PER_BLOCK"
 private const val DIRECTION_LEFT_TO_RIGHT = "LEFT_TO_RIGHT"
@@ -103,6 +112,16 @@ internal object LayoutJson {
     /** Version 3 added the row's `direction` and the seats' fixed `seatLabels`. */
     const val FORMAT_VERSION_NUMBERING: Int = 3
 
+    /**
+     * Longest layout JSON (in chars) that [decode] reads, the repositories store
+     * and the backup validator accepts (also for the layouts in seed records). The
+     * largest seed layout has about 3,300 chars; a [SeatLayout.MAX_ROWS] ×
+     * [SeatLayout.MAX_COLUMNS] grid with ten-digit seat ids, fixed labels on every
+     * seat and every row setting has under 100,000. At most 3 bytes per char, its
+     * row stays far below Android's 2 MB limit per database row.
+     */
+    const val MAX_JSON_LENGTH: Int = 256 * 1024
+
     val json: Json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
@@ -111,12 +130,23 @@ internal object LayoutJson {
 
     fun encode(layout: SeatLayout): String = json.encodeToString(SeatLayoutJson.serializer(), toJson(layout))
 
-    fun decode(text: String): SeatLayout = fromJson(json.decodeFromString(SeatLayoutJson.serializer(), text))
+    /**
+     * Reads a layout. Text longer than [MAX_JSON_LENGTH] is refused before it is
+     * parsed.
+     * @throws LayoutTooLargeException for a layout beyond the limits (see [fromJson]).
+     * @throws IllegalArgumentException (incl. SerializationException) for any other unreadable layout.
+     */
+    fun decode(text: String): SeatLayout {
+        if (text.length > MAX_JSON_LENGTH) {
+            throw LayoutTooLargeException("Layout JSON has ${text.length} chars, more than $MAX_JSON_LENGTH")
+        }
+        return fromJson(json.decodeFromString(SeatLayoutJson.serializer(), text))
+    }
 
     /**
-     * Like [decode], but returns `null` for an unreadable layout (corrupt, or a
-     * newer format version) instead of throwing. Use wherever a single bad row
-     * must not break a whole list or Flow.
+     * Like [decode], but returns `null` for an unreadable layout (corrupt, too
+     * large, or a newer format version) instead of throwing. Use wherever a single
+     * bad row must not break a whole list or Flow.
      */
     fun decodeOrNull(text: String): SeatLayout? =
         try {
@@ -163,17 +193,28 @@ internal object LayoutJson {
     /**
      * Converts and validates. Rows without `seatIds` get ids after the highest id
      * seen so far (row-major), and a missing `nextSeatId` becomes highest id + 1.
+     * The size is checked before any cell is built.
+     * @throws LayoutTooLargeException for more than [SeatLayout.MAX_ROWS] rows or
+     *   [SeatLayout.MAX_COLUMNS] cells in a row, or seat ids that reach
+     *   [SeatLayout.MAX_SEAT_ID] (a `nextSeatId` above it).
      * @throws IllegalArgumentException for an unknown version or an invalid layout.
      */
     fun fromJson(dto: SeatLayoutJson): SeatLayout {
         require(dto.formatVersion in 1..FORMAT_VERSION) {
             "Unsupported layout formatVersion ${dto.formatVersion} (this app reads up to $FORMAT_VERSION)"
         }
+        checkLimits(dto)
+        // Explicit ids are below MAX_SEAT_ID (checked), so assigning at most
+        // MAX_ROWS × MAX_COLUMNS more can't overflow.
         var maxId = dto.rows.flatMap { it.seatIds.orEmpty() }.maxOrNull() ?: 0
+        val rowIds = dto.rows.map { row -> row.seatIds ?: List(LayoutPattern.seatCount(row.cells)) { ++maxId } }
+        val nextSeatId = dto.nextSeatId ?: (maxId + 1)
+        if (nextSeatId > SeatLayout.MAX_SEAT_ID) {
+            throw LayoutTooLargeException("Seat ids reach $nextSeatId, above ${SeatLayout.MAX_SEAT_ID}")
+        }
         val rows = dto.rows.mapIndexed { index, row ->
-            val ids = row.seatIds ?: List(LayoutPattern.seatCount(row.cells)) { ++maxId }
             LayoutRow(
-                cells = withFixedLabels(LayoutPattern.decode(row.cells, ids.map(::SeatId)), row.seatLabels, index),
+                cells = withFixedLabels(LayoutPattern.decode(row.cells, rowIds[index].map(::SeatId)), row.seatLabels, index),
                 label = row.label,
                 numbering = when (row.numbering) {
                     NUMBERING_CONTINUOUS -> SeatNumbering.CONTINUOUS
@@ -189,7 +230,23 @@ internal object LayoutJson {
                 halfSeatOffset = row.halfSeatOffset,
             )
         }
-        return SeatLayout(rows, dto.nextSeatId ?: (maxId + 1))
+        return SeatLayout(rows, nextSeatId)
+    }
+
+    /** Refuses a layout beyond the model's size and seat id limits, before its cells are read. */
+    private fun checkLimits(dto: SeatLayoutJson) {
+        if (dto.rows.size > SeatLayout.MAX_ROWS) {
+            throw LayoutTooLargeException("${dto.rows.size} rows, more than ${SeatLayout.MAX_ROWS}")
+        }
+        dto.rows.forEachIndexed { index, row ->
+            if (row.cells.length > SeatLayout.MAX_COLUMNS) {
+                throw LayoutTooLargeException("Row ${index + 1} has ${row.cells.length} cells, more than ${SeatLayout.MAX_COLUMNS}")
+            }
+            if (row.seatIds.orEmpty().any { it >= SeatLayout.MAX_SEAT_ID }) {
+                throw LayoutTooLargeException("Row ${index + 1} has a seat id of at least ${SeatLayout.MAX_SEAT_ID}")
+            }
+        }
+        dto.nextSeatId?.let { if (it > SeatLayout.MAX_SEAT_ID) throw LayoutTooLargeException("nextSeatId $it is above ${SeatLayout.MAX_SEAT_ID}") }
     }
 
     /** [cells] with the row's `seatLabels` (one per seat, left to right) on their seats. */
