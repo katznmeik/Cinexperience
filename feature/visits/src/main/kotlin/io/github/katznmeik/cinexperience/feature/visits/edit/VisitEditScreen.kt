@@ -51,7 +51,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -65,7 +64,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
@@ -99,15 +97,16 @@ import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.StarRatingInput
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
+import io.github.katznmeik.cinexperience.core.ui.component.rememberLoadedImage
 import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.component.toPickerDate
 import io.github.katznmeik.cinexperience.core.ui.component.toPickerMillis
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.navigation.CloseOnce
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.visits.chipText
 import io.github.katznmeik.cinexperience.feature.visits.formLabel
-import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 
 /** Everything the form can do; the defaults do nothing (screenshots, previews). */
@@ -197,25 +196,8 @@ internal fun VisitEditEntry(
         }
     }
     val path = state.form.photoPath
-    val photo by produceState<ImageBitmap?>(null, path) {
-        value = path?.let {
-            try {
-                photoStore.loadPhoto(it, THUMBNAIL_DECODE_SIZE)?.asImageBitmap()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
-    // Close exactly once, also if the screen is recreated while it leaves.
-    var closeHandled by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(state.isClosed) {
-        if (state.isClosed && !closeHandled) {
-            closeHandled = true
-            onClose()
-        }
-    }
+    val photo by rememberLoadedImage(path) { photoStore.loadPhoto(it, THUMBNAIL_DECODE_SIZE) }
+    CloseOnce(state.isClosed, onClose)
     // Stays enabled while saving: Back is then swallowed instead of leaving mid-save.
     BackHandler(enabled = !state.isClosed) { actions.onClose() }
     VisitEditScreen(state, photo, actions)

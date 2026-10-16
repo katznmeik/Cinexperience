@@ -41,14 +41,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -56,7 +51,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.Role
@@ -64,12 +58,10 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -94,10 +86,12 @@ import io.github.katznmeik.cinexperience.core.ui.component.MutedText
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.SegmentChipShape
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
+import io.github.katznmeik.cinexperience.core.ui.component.rememberLoadedImage
 import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
+import io.github.katznmeik.cinexperience.core.ui.component.rememberTextWidth
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.navigation.CloseOnce
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
-import kotlinx.coroutines.CancellationException
 import kotlin.math.roundToInt
 
 /** Everything the editor screen can ask for; no-op defaults make previews and screenshots easy. */
@@ -208,25 +202,8 @@ internal fun LayoutEditorEntry(
         })
     }
     val path = state.draft?.referenceImagePath
-    val referenceBitmap by produceState<ImageBitmap?>(null, path) {
-        value = path?.let {
-            try {
-                referenceImages.loadImage(it)?.asImageBitmap()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
-    // Close exactly once, also if the screen is recreated while it leaves.
-    var closeHandled by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(state.isClosed) {
-        if (state.isClosed && !closeHandled) {
-            closeHandled = true
-            onClose()
-        }
-    }
+    val referenceBitmap by rememberLoadedImage(path) { referenceImages.loadImage(it) }
+    CloseOnce(state.isClosed, onClose)
     // Stays enabled while saving: Back is then swallowed (the ViewModel ignores it)
     // instead of leaving mid-save.
     BackHandler(enabled = !state.isClosed) { actions.onDiscard() }
@@ -834,7 +811,7 @@ private fun ReferencePanel(state: LayoutEditorUiState, hasImage: Boolean, action
                 style = valueStyle,
                 color = CinexTheme.colors.text,
                 // At least as wide as "100 %" at the current text size, so the slider keeps its width while dragging.
-                modifier = Modifier.widthIn(min = textWidth("100 %", valueStyle).coerceAtLeast(40.dp)),
+                modifier = Modifier.widthIn(min = rememberTextWidth("100 %", valueStyle).coerceAtLeast(40.dp)),
                 textAlign = TextAlign.End,
             )
         }
@@ -853,16 +830,6 @@ private fun ReferencePanel(state: LayoutEditorUiState, hasImage: Boolean, action
             OutlinedPillButton(text = "Reset position", onClick = actions::onResetReferencePosition, icon = CinexIcons.Fit)
             OutlinedPillButton(text = "Remove", onClick = actions::onRemoveReference, icon = CinexIcons.Delete)
         }
-    }
-}
-
-/** Width of [text] on one line in [style] at the current text size. */
-@Composable
-private fun textWidth(text: String, style: TextStyle): Dp {
-    val measurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    return remember(text, style, density) {
-        with(density) { measurer.measure(text, style, softWrap = false).size.width.toDp() }
     }
 }
 
