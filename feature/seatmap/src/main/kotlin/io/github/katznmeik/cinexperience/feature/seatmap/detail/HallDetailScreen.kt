@@ -83,6 +83,7 @@ import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.StarRatingDisplay
+import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
@@ -440,7 +441,7 @@ internal fun colourOptionDescription(label: String, colour: SeatColour?): String
  */
 @Composable
 private fun ColourChoice(active: SeatColour?, onSetColour: (SeatColour?) -> Unit) {
-    val perRow = if (LocalDensity.current.fontScale >= 1.5f) 2 else 4
+    val perRow = if (isLargeText()) 2 else 4
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             "Seat colour",

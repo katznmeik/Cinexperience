@@ -36,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +53,7 @@ import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
+import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialogActions
@@ -287,7 +287,7 @@ private fun ScoreCard(detail: CinemaDetail, modifier: Modifier = Modifier) {
             color = CinexTheme.colors.divider,
         )
         // Two columns; one with large text, so the category names aren't broken mid-word.
-        val perRow = if (LocalDensity.current.fontScale > 1.3f) 1 else 2
+        val perRow = if (isLargeText()) 1 else 2
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             CinemaCategory.entries.chunked(perRow).forEach { pair ->
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

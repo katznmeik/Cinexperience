@@ -91,6 +91,7 @@ import io.github.katznmeik.cinexperience.core.seatmapui.rememberSeatMapViewState
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.SegmentChipShape
+import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import kotlinx.coroutines.CancellationException
@@ -901,7 +902,7 @@ private fun Steppers(draft: LayoutDraft, actions: LayoutEditorActions, includeSc
         ),
     ) + if (includeScreen) screenSteppers(draft, actions) else emptyList()
     // Two per row; one per row with large text, so the labels aren't broken mid-word.
-    val perRow = if (LocalDensity.current.fontScale > 1.3f) 1 else 2
+    val perRow = if (isLargeText()) 1 else 2
     Column(
         modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),

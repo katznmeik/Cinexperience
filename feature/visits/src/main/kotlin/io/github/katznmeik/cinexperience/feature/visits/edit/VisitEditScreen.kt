@@ -69,7 +69,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -96,6 +95,7 @@ import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.StarRatingInput
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
+import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
@@ -462,7 +462,7 @@ private fun FieldPair(
     first: @Composable (Modifier) -> Unit,
     second: @Composable (Modifier) -> Unit,
 ) {
-    if (LocalDensity.current.fontScale > 1.3f) {
+    if (isLargeText()) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             first(Modifier.fillMaxWidth())
             second(Modifier.fillMaxWidth())
@@ -705,7 +705,7 @@ private fun SeatCard(state: VisitEditUiState, actions: VisitEditActions) {
 @Composable
 private fun StarRow(label: String, rating: Int?, onRate: (Int) -> Unit) {
     // With large text the label goes above the stars, so it isn't broken mid-word.
-    if (LocalDensity.current.fontScale > 1.3f) {
+    if (isLargeText()) {
         Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 4.dp)) {
             Text(label, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text)
             StarRatingInput(rating = rating, onRate = onRate, label = label, modifier = Modifier.align(Alignment.End))
