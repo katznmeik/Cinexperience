@@ -8,8 +8,12 @@ import io.github.katznmeik.cinexperience.core.ui.text.countText
 /** "no visits", "1 visit", "8 visits". */
 internal fun visitsText(count: Int): String = if (count == 0) "no visits" else countText(count, "visit")
 
-/** A list row's score for screen readers: "Score 4.2" or "Not rated", instead of the bare "4.2" or "–". */
-internal fun scoreDescription(score: Double?): String = score?.let { "Score ${formatScore(it)}" } ?: "Not rated"
+/**
+ * A score for screen readers: "score 4.2" or "not rated", instead of the shown
+ * "4.2", "★ 4.2" or "–". Used on its own (list rows) and after a name ("Overall
+ * score 4.1", "Popcorn quality not rated"), like the Rankings and Program texts.
+ */
+internal fun scoreDescription(score: Double?): String = score?.let { "score ${formatScore(it)}" } ?: "not rated"
 
 /** Street part of the address ("Kantstraße 10" of "Kantstraße 10, 10623 Berlin"), or `null`. */
 internal val Cinema.shortAddress: String?

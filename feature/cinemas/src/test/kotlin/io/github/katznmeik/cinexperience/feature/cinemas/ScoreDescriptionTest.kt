@@ -4,7 +4,10 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import io.github.katznmeik.cinexperience.core.model.CinemaCategory
+import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.SampleData
@@ -29,7 +32,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** A score in a list row is read "Score 4.2" or "Not rated", not as a bare "4.2" or "–", and only once. */
+/** A score is read "score 4.2" or "not rated", not as a bare "4.2" or "–", and only once. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = "w412dp-h2400dp-port-night-xxhdpi")
@@ -42,9 +45,9 @@ class ScoreDescriptionTest {
 
     @Test
     fun texts() {
-        assertEquals("Score 4.3", scoreDescription(4.25))
-        assertEquals("Score 4.0", scoreDescription(4.0))
-        assertEquals("Not rated", scoreDescription(null))
+        assertEquals("score 4.3", scoreDescription(4.25))
+        assertEquals("score 4.0", scoreDescription(4.0))
+        assertEquals("not rated", scoreDescription(null))
     }
 
     private fun SemanticsNode.descriptions(): List<String> = config.getOrNull(SemanticsProperties.ContentDescription).orEmpty()
@@ -70,11 +73,7 @@ class ScoreDescriptionTest {
         assertSpokenScore(unrated.cinema.name.uppercase(), null)
     }
 
-    @Test
-    fun hallRows() {
-        val detail = runBlocking { repository.observeCinemaDetail(SampleData.DELPHI_LUX).first()!! }
-        val rated = detail.halls.first { it.overallScore != null }
-        val unrated = detail.halls.first { it.overallScore == null }
+    private fun showDetail(detail: CinemaDetail) {
         composeRule.setContent {
             ScreenshotSurface {
                 CinemaDetailScreen(
@@ -98,7 +97,27 @@ class ScoreDescriptionTest {
             }
         }
         composeRule.waitForIdle()
+    }
+
+    @Test
+    fun hallRows() {
+        val detail = runBlocking { repository.observeCinemaDetail(SampleData.DELPHI_LUX).first()!! }
+        val rated = detail.halls.first { it.overallScore != null }
+        val unrated = detail.halls.first { it.overallScore == null }
+        showDetail(detail)
         assertSpokenScore(rated.hall.name, rated.overallScore)
         assertSpokenScore(unrated.hall.name, null)
+    }
+
+    /** The cinema page's score card uses the same wording: "Overall score 4.2", "Popcorn quality not rated". */
+    @Test
+    fun scoreCard() {
+        val detail = runBlocking { repository.observeCinemaDetail(SampleData.BABYLON).first()!! }
+        val rated = CinemaCategory.entries.first { detail.scores[it] != null }
+        val unrated = CinemaCategory.entries.first { detail.scores[it] == null }
+        showDetail(detail)
+        composeRule.onNodeWithContentDescription("Overall score ${formatScore(detail.scores.overall)}").assertExists()
+        composeRule.onNodeWithContentDescription("${rated.displayName} score ${formatScore(detail.scores[rated]!!.average)}").assertExists()
+        composeRule.onNodeWithContentDescription("${unrated.displayName} not rated").assertExists()
     }
 }

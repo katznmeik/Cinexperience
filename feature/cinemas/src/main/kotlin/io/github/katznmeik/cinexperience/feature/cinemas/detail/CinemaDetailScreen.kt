@@ -273,7 +273,7 @@ private fun ScoreCard(detail: CinemaDetail, modifier: Modifier = Modifier) {
         Column(
             modifier = Modifier
                 .widthIn(min = 72.dp)
-                .clearAndSetSemantics { contentDescription = "Overall score ${spokenScore(detail.scores.overall)}" },
+                .clearAndSetSemantics { contentDescription = "Overall ${scoreDescription(detail.scores.overall)}" },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -305,7 +305,7 @@ private fun ScoreCard(detail: CinemaDetail, modifier: Modifier = Modifier) {
 private fun CategoryScore(category: CinemaCategory, detail: CinemaDetail, modifier: Modifier = Modifier) {
     val score = detail.scores[category]
     Column(
-        modifier.clearAndSetSemantics { contentDescription = "${category.displayName} ${spokenScore(score?.average)}" },
+        modifier.clearAndSetSemantics { contentDescription = "${category.displayName} ${scoreDescription(score?.average)}" },
         verticalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         Text(category.displayName, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal), color = CinexTheme.colors.textMuted)
@@ -316,9 +316,6 @@ private fun CategoryScore(category: CinemaCategory, detail: CinemaDetail, modifi
         )
     }
 }
-
-/** "4.1" or "not rated" for screen readers (instead of "–" or "★ 4.1"). */
-private fun spokenScore(score: Double?): String = if (score == null) "not rated" else formatScore(score)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
