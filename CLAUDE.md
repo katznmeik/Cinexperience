@@ -345,9 +345,9 @@ Don't duplicate config in module build files.
   it (500,000 JSON values, depth 64), decodes only the used fields into its own
   types (unknown parts are skipped, not built; if that typed decoding fails, e.g.
   for an entry or its `fields` that isn't an object, it decodes again with the two
-  lists as trees and skips the entries that fail) and checks every field (`ProgramRules`; the model types' `init` blocks check
-  again); texts are cleaned plain text (`ProgramText`), never HTML. Films and
-  specials are keyed by
+  lists as trees and skips the entries that fail) and checks every field
+  (`ProgramRules`; the model types' `init` blocks check again); texts are cleaned
+  plain text (`ProgramText`), never HTML. Films and specials are keyed by
   `FilmKey` (kind + slug); a showing a film and specials both list belongs to the
   film and names the specials (`Showing.specialKeys`, `Program.showingsOf(key)`).
   Start times are Berlin wall-clock: only `+01:00`, `+02:00` or no offset is
