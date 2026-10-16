@@ -13,6 +13,7 @@ import io.github.katznmeik.cinexperience.core.model.ScreenSizeRules
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
+import io.github.katznmeik.cinexperience.core.ui.text.countText
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -349,11 +350,7 @@ data class RowSummary(
     /** "Row 3 · 3 blocks", "Row 4 · no seats", "Unnamed row · 1 block". */
     val title: String
         get() {
-            val blockText = when (blocks.size) {
-                0 -> "no seats"
-                1 -> "1 block"
-                else -> "${blocks.size} blocks"
-            }
+            val blockText = if (blocks.isEmpty()) "no seats" else countText(blocks.size, "block")
             val rowText = if (hasNoName) "Unnamed row" else "Row ${label ?: "–"}"
             return "$rowText · $blockText"
         }
