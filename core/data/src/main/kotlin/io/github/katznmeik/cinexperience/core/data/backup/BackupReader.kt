@@ -320,6 +320,8 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
         var manifest: BackupManifest? = null
         var dataFile: File? = null
         var data: BackupData? = null
+        // data.filePaths, computed once: it walks every visit and hall.
+        var referenced: Set<String>? = null
         var entries = 0
         val budget = Budget(limits.maxTotalBytes)
         val zip = ZipInputStream(BufferedInputStream(input, BUFFER_SIZE))
@@ -347,13 +349,15 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
                     dataFile = target
                 }
                 BackupFormat.isFilePath(name) -> {
-                    val current = data ?: run {
+                    val paths = referenced ?: run {
                         // The data must be known first, so only referenced files are staged.
                         val m = manifest ?: throw notABackup()
                         val file = dataFile ?: throw damaged("data.json must come before the photos.")
-                        parseData(file, m.backupVersion).also { data = it }
+                        val parsed = parseData(file, m.backupVersion)
+                        data = parsed
+                        parsed.filePaths.also { referenced = it }
                     }
-                    if (name in current.filePaths) {
+                    if (name in paths) {
                         val target = File(File(dir, FILES_DIR), name)
                         // Defence in depth: isFilePath already rules out anything that could escape.
                         if (!target.canonicalPath.startsWith(File(dir, FILES_DIR).canonicalPath + File.separator)) {
