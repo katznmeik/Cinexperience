@@ -6,12 +6,11 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The convention plugins in `build-logic` hold build code too: the release
- * dependency check's task type (`CheckDependencyGroupsTask`) and the build ID
- * (`GitBuildIdValueSource`) live there. [NetworkConfinementTest] scans them as
- * sources; here they must also pass the build-file rule (no network, image or
- * media library named), as they did inside `app/build.gradle.kts`. The check's
- * lists stay in that build file, with the one denylist line the scan accepts.
+ * The release dependency check's task type (`CheckDependencyGroupsTask`) lives in
+ * build-logic, which [NetworkConfinementTest] scans like a build file; its lists stay
+ * in `app/build.gradle.kts`. The build-file scan accepts a line that names a forbidden
+ * library only when it ends with the denylist marker, so the marker may appear on
+ * one line only: the release check's list of forbidden groups.
  */
 class BuildLogicScanTest {
 
@@ -19,21 +18,10 @@ class BuildLogicScanTest {
     private val scanned = NetworkScan.scan(root).scannedFiles.map { it.relativeTo(root).invariantSeparatorsPath }
 
     @Test
-    fun theBuildLogicSourcesAreScannedAndNameNoNetworkLibrary() {
-        val buildLogic = scanned.filter { it.startsWith("build-logic/") && it.endsWith(".kt") }
-        for (moved in listOf("CheckDependencyGroupsTask.kt", "GitBuildIdValueSource.kt")) {
-            assertTrue("$moved not scanned: $buildLogic", buildLogic.any { it.endsWith("/buildlogic/$moved") })
-        }
-        val violations = buildLogic.flatMap { path ->
-            NetworkScan.buildViolations(File(root, path).readText()).map { "$path:$it" }
-        }
-        assertEquals(violations.joinToString("\n"), emptyList<String>(), violations)
-    }
-
-    @Test
     fun theOnlyDenylistLineIsTheReleaseCheckInTheAppBuildFile() {
         val textFiles = scanned.filter { path -> TEXT_EXTENSIONS.any { path.endsWith(it) } }
         assertTrue(textFiles.toString(), "app/build.gradle.kts" in textFiles)
+        assertTrue(textFiles.toString(), textFiles.any { it.endsWith("/buildlogic/CheckDependencyGroupsTask.kt") })
         val marked = textFiles.flatMap { path ->
             File(root, path).readLines()
                 .filter { it.trimEnd().endsWith(DENYLIST_MARKER) }

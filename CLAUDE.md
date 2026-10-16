@@ -350,10 +350,10 @@ Don't duplicate config in module build files.
   dependencies only from `androidx.*` (not webkit, media3, browser),
   `org.jetbrains*`, `org.jspecify` and `com.google.guava`; review a new group
   before adding it there (its denylist line carries `// network-scan: denylist`,
-  the only line the build-file scan accepts). `BuildLogicScanTest` (core:program)
-  applies the build-file rule to the build-logic sources too (the check's task
-  type lives there) and allows the marker only on that line of
-  `app/build.gradle.kts`. The one request is `GET https://www.yorck.de/en/films`
+  the only line the build-file scan accepts; the task type,
+  `CheckDependencyGroupsTask`, is in build-logic). `BuildLogicScanTest`
+  (core:program) allows the marker on that line of `app/build.gradle.kts` only.
+  The one request is `GET https://www.yorck.de/en/films`
   over `HttpsURLConnection`: no query, body or cookies (no `CookieHandler`); the
   app sends `User-Agent: Cinexperience/<version> (Android; personal app)` and
   `Accept`, the HTTP client adds `Host`, `Connection` and `Accept-Encoding: gzip`;
