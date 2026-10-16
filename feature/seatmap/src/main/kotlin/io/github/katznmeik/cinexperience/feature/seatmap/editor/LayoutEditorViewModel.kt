@@ -118,7 +118,13 @@ data class LayoutEditorUiState(
  * or column is deleted (undo brings them back).
  *
  * Reference screenshots are copied into app storage when picked; on save the
- * replaced one is deleted, on discard the ones picked in this session are.
+ * replaced one is deleted, on discard the ones picked in this session are. While a
+ * screenshot is still being copied, saving is refused (the screen disables Save and
+ * shows "Loading…"), but Discard and Back work; a copy that lands after a discard
+ * deletes its file. That holds while this ViewModel lives: once the editor is
+ * closed and the ViewModel cleared, a copy still running in the store still writes
+ * its file, and the startup sweep deletes it (unreferenced, older than 1 h,
+ * `DataContainer.ORPHAN_MIN_AGE_MS`).
  */
 class LayoutEditorViewModel(
     private val hallId: Long,
@@ -142,6 +148,12 @@ class LayoutEditorViewModel(
 
     /** Screenshots imported in this session; they're deleted unless saved. */
     private val sessionImports = LinkedHashSet<String>()
+
+    /** Screenshot imports still running (the screen starts one at a time; counted anyway). */
+    private var runningImports = 0
+
+    /** [discard] was called: the editor closes without saving, so an import landing now is deleted. */
+    private var discarding = false
 
     /** The hall for a save waiting for the user's confirmation. */
     private var pendingSave: Hall? = null
@@ -182,6 +194,7 @@ class LayoutEditorViewModel(
                 tool = it.tool,
                 seatKind = it.seatKind,
                 referenceOpacity = it.referenceOpacity,
+                isImportingReference = runningImports > 0,
                 replacesUnreadableLayout = detail.hall.layoutUnreadable,
             ).withDraft(start, syncInputs = true)
         }
@@ -389,13 +402,24 @@ class LayoutEditorViewModel(
         _uiState.update { it.copy(referenceMode = !it.referenceMode, screenSelected = false) }
     }
 
-    /** Result of the photo picker; `null` if the user cancelled. */
+    /**
+     * Result of the photo picker; `null` if the user cancelled. Ignored while saving
+     * and once the editor is closing. The copy runs in the background; until it has
+     * landed, [save] is refused, and a copy that lands after a discard deletes its
+     * file (see the class doc for a copy that outlives this ViewModel).
+     */
     fun onReferenceImagePicked(uri: String?) {
-        if (uri == null || state.status != EditorStatus.Ready || state.isSaving) return
+        if (uri == null || state.status != EditorStatus.Ready || state.isSaving || state.isClosed || discarding) return
+        runningImports++
         _uiState.update { it.copy(isImportingReference = true) }
         viewModelScope.launch {
             try {
                 val path = referenceImages.importImage(hallId, uri)
+                if (discarding || state.isClosed) {
+                    // Nothing will ever point to it: the session's screenshots are already gone.
+                    deleteQuietly(path)
+                    return@launch
+                }
                 sessionImports += path
                 edit { it.withReferenceImage(path) }
                 _uiState.update { it.copy(referenceMode = true, screenSelected = false) }
@@ -404,7 +428,8 @@ class LayoutEditorViewModel(
             } catch (e: IOException) {
                 _uiState.update { it.copy(message = IMPORT_FAILED) }
             } finally {
-                _uiState.update { it.copy(isImportingReference = false) }
+                runningImports--
+                _uiState.update { it.copy(isImportingReference = runningImports > 0) }
             }
         }
     }
@@ -430,10 +455,15 @@ class LayoutEditorViewModel(
 
     // ---- Save / discard ----
 
-    /** Save: warns first if seats with data would disappear or an unreadable layout would be replaced. */
+    /**
+     * Save: warns first if seats with data would disappear or an unreadable layout
+     * would be replaced. Refused while a screenshot is still being copied (the
+     * screen disables Save then): the save would miss it, and waiting for a slow
+     * source would leave the user stuck on "Saving" with Discard and Back blocked.
+     */
     fun save() {
         endGesture()
-        if (state.status != EditorStatus.Ready || state.isSaving || draft == null) return
+        if (state.status != EditorStatus.Ready || state.isSaving || state.isImportingReference || draft == null) return
         _uiState.update { it.copy(isSaving = true) }
         viewModelScope.launch {
             val detail = try {
@@ -468,7 +498,9 @@ class LayoutEditorViewModel(
         }
     }
 
+    /** The confirmation dialog's Save; like [save], refused while a screenshot is being copied. */
     fun confirmSave() {
+        if (state.isImportingReference) return
         val hall = pendingSave ?: return
         pendingSave = null
         _uiState.update { it.copy(dialog = null, isSaving = true) }
@@ -533,12 +565,13 @@ class LayoutEditorViewModel(
     }
 
     /**
-     * Leaves without saving; screenshots picked in this session are deleted.
-     * Ignored while a save is running: deleting a just-saved screenshot would leave
-     * the hall pointing at a missing file.
+     * Leaves without saving; screenshots picked in this session are deleted, also
+     * one still being copied (when it lands). Ignored while a save is running:
+     * deleting a just-saved screenshot would leave the hall pointing at a missing file.
      */
     fun discard() {
         if (state.isSaving || state.isClosed) return
+        discarding = true
         _uiState.update { it.copy(dialog = null) }
         viewModelScope.launch {
             deleteImports(keep = null)

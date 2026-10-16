@@ -136,7 +136,9 @@ Don't duplicate config in module build files.
 - **DI:** manual (`app/.../di/AppContainer.kt`), no Hilt. `CinexApp` hands the
   repositories to the features' `xxxScreen(...)` functions; each ViewModel has a
   `factory(...)` and exposes a `StateFlow` UI state. Repository failures become
-  user-facing messages, never crashes.
+  user-facing messages, never crashes. The fake repositories in `core:testing`
+  re-implement the Room rules; `RepositoryContract` (core:data tests) runs the
+  same scenarios against both, so a changed rule gets a case there.
 - **Data:** no invented sample data in the app.
 - **Favourite cinemas:** `Cinema.isFavourite`, written only through
   `CinemaRepository.setFavourite` (detail's ☆/★ `IconToggleButton`, read as
@@ -402,11 +404,14 @@ Don't duplicate config in module build files.
   seeded before the field existed fall back to the previous seed's `layout`.
   So a replacement blocked by a favourite happens with a later seed version
   once the favourite is gone. The screen width and distance follow only while
-  they still hold the previous seed's values; a value the user changed is
-  kept. The screen offset is touched only when the new layout is narrower:
-  it is then snapped with `ScreenOffsetRules.snap(offset, newColumns)`, so the
-  screen stays over the grid. Names, notes and the reference screenshot are
-  never touched. A hall whose seat id mark leaves no room below `MAX_SEAT_ID`
+  they still hold what the seeder last wrote into the hall (snapshot fields
+  `appliedScreenWidth`/`appliedScreenDistance`, like `appliedLayout`; halls
+  seeded before them fall back to the previous seed's values); a value the
+  user changed is kept. The screen offset is touched only when the new
+  layout is narrower: it is then snapped with
+  `ScreenOffsetRules.snap(offset, newColumns)`, so the screen stays over the
+  grid. Names, notes and the reference screenshot are never touched. A hall
+  whose seat id mark leaves no room below `MAX_SEAT_ID`
   for the seed layout's ids (only damaged or crafted data) keeps its layout
   (or stays without one) and its `appliedLayout` stays as it was, so later seed
   versions try again (an empty layout, like any fill, only with a changed seed
