@@ -136,7 +136,9 @@ Don't duplicate config in module build files.
 - **DI:** manual (`app/.../di/AppContainer.kt`), no Hilt. `CinexApp` hands the
   repositories to the features' `xxxScreen(...)` functions; each ViewModel has a
   `factory(...)` and exposes a `StateFlow` UI state. Repository failures become
-  user-facing messages, never crashes.
+  user-facing messages, never crashes. The fake repositories in `core:testing`
+  re-implement the Room rules; `RepositoryContract` (core:data tests) runs the
+  same scenarios against both, so a changed rule gets a case there.
 - **Data:** no invented sample data in the app.
 - **Favourite cinemas:** `Cinema.isFavourite`, written only through
   `CinemaRepository.setFavourite` (detail's ☆/★ `IconToggleButton`, read as
@@ -226,7 +228,13 @@ Don't duplicate config in module build files.
   reach into row 0 (`hitTest`). Width and distance bounds live in
   `ScreenSizeRules` (core:model: width > 0 and ≤ 120 = 2 × `MAX_COLUMNS`,
   distance 0–15), shared by the editor's `ScreenRules`, the repositories and the
-  backup validator.
+  backup validator. The editor sets distances of at least 0.5
+  (`ScreenRules.MIN_DISTANCE`), so the bar's line stays half a row in front of
+  row 0, whose touches `hitTest` keeps for painting; a stored 0 stays until the
+  distance is changed. `LayoutDraft.start` snaps a stored width within the
+  editor's range and a stored distance up to 15 to the 0.5 steps (a distance
+  under 0.5 to 0 or 0.5); other widths and farther distances are kept, like an
+  offset beyond the grid.
 - **Schema changes:** the database is at version 2 (`MIGRATION_1_2` added
   `cinema.is_favourite` and `hall.screen_offset`). Bump the `CinexDatabase`
   version, add a migration to `ALL_MIGRATIONS`, commit the exported
@@ -396,11 +404,14 @@ Don't duplicate config in module build files.
   seeded before the field existed fall back to the previous seed's `layout`.
   So a replacement blocked by a favourite happens with a later seed version
   once the favourite is gone. The screen width and distance follow only while
-  they still hold the previous seed's values; a value the user changed is
-  kept. The screen offset is touched only when the new layout is narrower:
-  it is then snapped with `ScreenOffsetRules.snap(offset, newColumns)`, so the
-  screen stays over the grid. Names, notes and the reference screenshot are
-  never touched. A hall whose seat id mark leaves no room below `MAX_SEAT_ID`
+  they still hold what the seeder last wrote into the hall (snapshot fields
+  `appliedScreenWidth`/`appliedScreenDistance`, like `appliedLayout`; halls
+  seeded before them fall back to the previous seed's values); a value the
+  user changed is kept. The screen offset is touched only when the new
+  layout is narrower: it is then snapped with
+  `ScreenOffsetRules.snap(offset, newColumns)`, so the screen stays over the
+  grid. Names, notes and the reference screenshot are never touched. A hall
+  whose seat id mark leaves no room below `MAX_SEAT_ID`
   for the seed layout's ids (only damaged or crafted data) keeps its layout
   (or stays without one) and its `appliedLayout` stays as it was, so later seed
   versions try again (an empty layout, like any fill, only with a changed seed
@@ -437,7 +448,9 @@ Don't duplicate config in module build files.
   <seed> <fixture>` rewrites the seed's layouts (labels, numbers and kinds from
   the plan; columns, spacer rows and aisles from the drawn seats; a balcony
   keeps the gap yorck.de draws above it; existing gaps/aisles kept where the seats are
-  unchanged; halls without a screen get columns × 1.5) and
+  unchanged; halls without a screen get columns × 1.5, a screen as wide as the
+  old grid follows the new one unless it was measured (delphi LUX),
+  `test_screen_width.py`) and
   `core/data/src/test/resources/seed/yorck-seat-numbers.json` (Yorck's row
   label, seat text and kind of every seat). Where Yorck's kinds are wrong, the
   tool's `KIND_OVERRIDES` (seedKey → kind of every place, with the reason) sets

@@ -251,7 +251,8 @@ internal fun LayoutEditorScreen(
         Column(Modifier.fillMaxSize()) {
             EditorTopBar(
                 hallName = state.hallName,
-                canSave = state.status == EditorStatus.Ready && !state.isSaving,
+                // Not while a screenshot is still being copied (the panel shows "Loading…").
+                canSave = state.status == EditorStatus.Ready && !state.isSaving && !state.isImportingReference,
                 canDiscard = !state.isSaving,
                 actions = actions,
             )
@@ -847,7 +848,12 @@ private fun ReferencePanel(state: LayoutEditorUiState, hasImage: Boolean, action
             color = CinexTheme.colors.textMuted,
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedPillButton(text = if (state.isImportingReference) "Loading…" else "Replace", onClick = actions::onPickReference, icon = CinexIcons.Image)
+            // One import at a time, so the screenshot picked last is the one kept.
+            OutlinedPillButton(
+                text = if (state.isImportingReference) "Loading…" else "Replace",
+                onClick = { if (!state.isImportingReference) actions.onPickReference() },
+                icon = CinexIcons.Image,
+            )
             OutlinedPillButton(text = "Reset position", onClick = actions::onResetReferencePosition, icon = CinexIcons.Fit)
             OutlinedPillButton(text = "Remove", onClick = actions::onRemoveReference, icon = CinexIcons.Delete)
         }

@@ -27,9 +27,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
 /** One row of the hall's visit history (spec §6.3). */
@@ -123,12 +126,15 @@ sealed interface HallDetailUiState {
  */
 class HallDetailViewModel(
     private val hallId: Long,
-    hallRepository: HallRepository,
+    private val hallRepository: HallRepository,
     private val seatOverrideRepository: SeatOverrideRepository,
 ) : ViewModel() {
 
     private val selectedSeatId = MutableStateFlow<SeatId?>(null)
     private val message = MutableStateFlow<String?>(null)
+
+    /** Runs the seat writes one after another, in the order of the taps (see [toggleFavourite]). */
+    private val writes = Mutex()
 
     val uiState: StateFlow<HallDetailUiState> =
         combine(hallRepository.observeHallDetail(hallId), selectedSeatId, message) { detail, selected, message ->
@@ -159,10 +165,16 @@ class HallDetailViewModel(
     /**
      * Makes [seatId] the hall's favourite, or removes the favourite when it already
      * is. A favourite on another seat moves here (one per hall, spec §4.6).
+     *
+     * Taps can come faster than the database, before the map shows the last tap's
+     * write. So this toggles what the repository holds when the write runs (the
+     * writes run one at a time), not what the map showed: an on-off double tap ends off.
      */
     fun toggleFavourite(seatId: SeatId) {
-        val isFavourite = (uiState.value as? HallDetailUiState.Loaded)?.seatVisuals?.get(seatId)?.isFavourite == true
-        write(FAVOURITE_FAILED) { seatOverrideRepository.setFavouriteSeat(hallId, if (isFavourite) null else seatId) }
+        write(FAVOURITE_FAILED) {
+            val isFavourite = hallRepository.observeHallDetail(hallId).first()?.favouriteSeat == seatId
+            seatOverrideRepository.setFavouriteSeat(hallId, if (isFavourite) null else seatId)
+        }
     }
 
     /** The snackbar showed [HallDetailUiState.Loaded.message]. */
@@ -172,15 +184,17 @@ class HallDetailViewModel(
 
     private fun write(failure: String, block: suspend () -> Unit) {
         viewModelScope.launch {
-            try {
-                block()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: IllegalArgumentException) {
-                // The seat (or hall) was removed in the meantime, e.g. by a layout edit.
-                message.value = SEAT_GONE
-            } catch (e: Exception) {
-                message.value = failure
+            writes.withLock {
+                try {
+                    block()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: IllegalArgumentException) {
+                    // The seat (or hall) was removed in the meantime, e.g. by a layout edit.
+                    message.value = SEAT_GONE
+                } catch (e: Exception) {
+                    message.value = failure
+                }
             }
         }
     }
