@@ -401,10 +401,11 @@ Don't duplicate config in module build files.
   they still hold what the seeder last wrote into the hall (snapshot fields
   `appliedScreenWidth`/`appliedScreenDistance`, like `appliedLayout`; halls
   seeded before them fall back to the previous seed's values); a value the
-  user changed is kept. The screen offset is touched only when the new layout
-  is narrower: it is then snapped with `ScreenOffsetRules.snap(offset, newColumns)`,
-  so the screen stays over the grid. Names, notes and the reference screenshot are
-  never touched. A hall whose seat id mark leaves no room below `MAX_SEAT_ID`
+  user changed is kept. The screen offset is touched only when the new
+  layout is narrower: it is then snapped with
+  `ScreenOffsetRules.snap(offset, newColumns)`, so the screen stays over the
+  grid. Names, notes and the reference screenshot are never touched. A hall
+  whose seat id mark leaves no room below `MAX_SEAT_ID`
   for the seed layout's ids (only damaged or crafted data) keeps its layout
   (or stays without one) and its `appliedLayout` stays as it was, so later seed
   versions try again (an empty layout, like any fill, only with a changed seed
