@@ -244,7 +244,8 @@ internal object BackupValidator {
  *   rejected. `manifest.json` and `data.json` must come before any file entry, so
  *   only files the data refers to are staged; other entries are read and
  *   discarded. Entry count and sizes are capped by [BackupLimits] while reading
- *   (the sizes a zip declares are not trusted), for skipped entries too.
+ *   (the sizes a zip declares are not trusted), for skipped entries too; a folder
+ *   entry may hold no data at all.
  * - **Manifest:** `format` must match; a newer `backupVersion` is reported as such;
  *   older versions go through [BackupMigrations].
  * - **Data:** strict JSON, decoded straight into the DTOs (no generic JSON tree,
@@ -330,6 +331,9 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
             when {
                 entry.isDirectory -> {
                     if (name.removeSuffix("/") !in BackupFormat.FILE_FOLDERS) throw unsafe("It contains an unexpected folder.")
+                    // A folder holds no data: read it here under a limit of 0, or the next entry
+                    // would inflate and discard whatever it carries outside every limit.
+                    drainEntry(zip, 0, budget)
                 }
                 name == BackupFormat.MANIFEST -> {
                     val target = File(dir, MANIFEST_FILE)
