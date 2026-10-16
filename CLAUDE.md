@@ -136,7 +136,9 @@ Don't duplicate config in module build files.
 - **DI:** manual (`app/.../di/AppContainer.kt`), no Hilt. `CinexApp` hands the
   repositories to the features' `xxxScreen(...)` functions; each ViewModel has a
   `factory(...)` and exposes a `StateFlow` UI state. Repository failures become
-  user-facing messages, never crashes.
+  user-facing messages, never crashes. The fake repositories in `core:testing`
+  re-implement the Room rules; `RepositoryContract` (core:data tests) runs the
+  same scenarios against both, so a changed rule gets a case there.
 - **Data:** no invented sample data in the app.
 - **Favourite cinemas:** `Cinema.isFavourite`, written only through
   `CinemaRepository.setFavourite` (detail's ☆/★ `IconToggleButton`, read as
