@@ -75,10 +75,10 @@ sealed interface ProgramParseResult {
  * runtime of 0) is dropped; a film or showing with an invalid required value
  * (title, slug, ID, start, cinema) or of the wrong type is skipped, also an entry
  * or its `fields` that isn't an object. Such an entry fails the typed decoding;
- * only then are the two lists read as JSON trees (their unused parts too, within
- * the same limits) and decoded entry by entry. Only where the structure around
- * the entries breaks (e.g. a list of films that isn't a list) is the whole page
- * rejected.
+ * after any failed typed decoding, the block is decoded again with the two lists
+ * as JSON trees (their unused parts too, within the same limits) and the entries
+ * one by one. Only where the JSON or the structure around the entries breaks (e.g.
+ * a list of films that isn't a list) is the whole page rejected.
  *
  * Films and specials are keyed by [FilmKey] (kind + slug). Films come first: a
  * showing that Yorck lists under a film and under specials belongs to the film
@@ -166,9 +166,11 @@ class ProgramPageParser(private val clock: Clock) {
 
     /**
      * The block decoded into the parser's types; `null` if it isn't JSON of that shape.
-     * An entry, or its `fields`, that isn't an object fails the typed decoding: then the
-     * lists are read as JSON trees (within the same limits) and decoded entry by entry,
-     * and such an entry becomes `null`, which is skipped like any other invalid entry.
+     * Whenever the typed decoding fails (an entry or its `fields` that isn't an object,
+     * but also broken JSON or a broken structure), the block is decoded again with the
+     * lists as JSON trees (within the same limits) and the entries one by one: an entry
+     * that fails becomes `null`, which is skipped like any other invalid entry. Broken
+     * JSON or structure fails that pass too.
      */
     private fun decode(block: String): PageDto<EntryDto?>? {
         decodeOrNull(block, PageDto.serializer(EntryDto.serializer().nullable))?.let { return it }
