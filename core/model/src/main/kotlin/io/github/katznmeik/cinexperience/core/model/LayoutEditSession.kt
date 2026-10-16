@@ -26,8 +26,9 @@ package io.github.katznmeik.cinexperience.core.model
  *   a split-off part counts on (or restarts, per the row's numbering); when that
  *   seat is removed, the start moves on to the block's next numbered seat with
  *   the number that seat had; a new seat painted in front of it takes the number
- *   before it (start − 1, at least 1 and, in a continuous row, after the previous
- *   block's numbers); and an original seat painted back gets its own start back.
+ *   before it (start − 1, counting back only to 1 and, in a continuous row, to
+ *   just after the previous block's numbers; never above the start itself); and
+ *   an original seat painted back gets its own start back.
  * - [removedSeatsWithData] gives the §6.5 warning for the current state.
  *
  * Start with [Hall.startLayoutEdit] (or [start]) on the hall as currently stored,
@@ -55,29 +56,8 @@ class LayoutEditSession private constructor(
     fun clear(): LayoutEditSession = copyWith(null, emptyMap())
 
     fun setCellType(row: Int, column: Int, type: CellType): LayoutEditSession {
-        val current = requireLayout()
-        val cell = current.cell(row, column)
-        if (cell.type == type) return this
-        val position = CellPosition(row, column)
-        val ghosts = ghosts.toMutableMap()
-        val edited = when {
-            type == CellType.SEAT -> {
-                val ghost = ghosts.remove(position)
-                if (ghost != null && ghost.id !in current.seatIds) {
-                    current.withSeat(row, column, ghost.id, fixedLabel = ghost.fixedLabel, blockStart = ghost.blockStart)
-                } else {
-                    current.withCellType(row, column, type)
-                }
-            }
-            cell is LayoutCell.Seat -> {
-                if (cell.id in originalIds) {
-                    ghosts[position] = Ghost(cell.id, cell.fixedLabel, current.rows[row].blockStartAnchors()[cell.id])
-                }
-                current.withCellType(row, column, type)
-            }
-            else -> current.withCellType(row, column, type) // gap <-> aisle keeps a ghost
-        }
-        return copyWith(edited, ghosts)
+        if (requireLayout().cell(row, column).type == type) return this
+        return paint(listOf(CellPosition(row, column)), type, kind = null)
     }
 
     /**
@@ -86,13 +66,52 @@ class LayoutEditSession private constructor(
      * with [setCellType] (getting its original id back where possible).
      */
     fun setSeat(row: Int, column: Int, kind: SeatKind): LayoutEditSession {
-        val current = requireLayout()
-        val cell = current.cell(row, column)
-        if (cell is LayoutCell.Seat) {
-            return if (cell.kind == kind) this else copyWith(current.withSeatKind(row, column, kind), ghosts)
+        val cell = requireLayout().cell(row, column)
+        if (cell is LayoutCell.Seat && cell.kind == kind) return this
+        return paint(listOf(CellPosition(row, column)), CellType.SEAT, kind)
+    }
+
+    /**
+     * Paints [cells] one after the other, in the given order: with [type] SEAT as
+     * [setSeat] with [kind], otherwise as [setCellType]. The result is the same as
+     * those calls one by one, but the layout is built once (a paint stroke over a
+     * large grid stays cheap). Cells must be inside the grid.
+     */
+    fun paintCells(cells: List<CellPosition>, type: CellType, kind: SeatKind = SeatKind.STANDARD): LayoutEditSession =
+        paint(cells, type, kind.takeIf { type == CellType.SEAT })
+
+    /** [kind] `null`: as [setCellType]; otherwise as [setSeat] (with [type] SEAT). */
+    private fun paint(cells: List<CellPosition>, type: CellType, kind: SeatKind?): LayoutEditSession {
+        val changes = LayoutChanges(requireLayout())
+        val ghosts = ghosts.toMutableMap()
+        for ((row, column) in cells) {
+            val cell = changes.cell(row, column)
+            if (kind != null && cell is LayoutCell.Seat) {
+                changes.setSeatKind(row, column, kind)
+                continue
+            }
+            if (cell.type == type) continue
+            val position = CellPosition(row, column)
+            when {
+                type == CellType.SEAT -> {
+                    val ghost = ghosts.remove(position)
+                    if (ghost != null && ghost.id !in changes) {
+                        changes.setSeat(row, column, ghost.id, SeatKind.STANDARD, ghost.fixedLabel, ghost.blockStart)
+                    } else {
+                        changes.setCellType(row, column, type)
+                    }
+                }
+                cell is LayoutCell.Seat -> {
+                    if (cell.id in originalIds) {
+                        ghosts[position] = Ghost(cell.id, cell.fixedLabel, changes.row(row).blockStartAnchors()[cell.id])
+                    }
+                    changes.setCellType(row, column, type)
+                }
+                else -> changes.setCellType(row, column, type) // gap <-> aisle keeps a ghost
+            }
+            if (kind != null) changes.setSeatKind(row, column, kind)
         }
-        val seated = setCellType(row, column, CellType.SEAT)
-        return seated.copyWith(seated.requireLayout().withSeatKind(row, column, kind), seated.ghosts)
+        return copyWith(changes.build(), ghosts)
     }
 
     /** SEAT → GAP → AISLE → SEAT. */

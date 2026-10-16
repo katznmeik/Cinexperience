@@ -137,9 +137,8 @@ class LayoutEditorViewModel(
     /** The draft before the running gesture (stroke, handle drag), `null` without one. */
     private var gestureBase: LayoutDraft? = null
 
-    /** The draft before the running paint stroke, `null` without one, and the stroke's cells so far. */
-    private var strokeBase: LayoutDraft? = null
-    private val strokeCells = LinkedHashSet<CellPosition>()
+    /** The running paint stroke, `null` without one. */
+    private var stroke: PaintStroke? = null
 
     /** Screenshots imported in this session; they're deleted unless saved. */
     private val sessionImports = LinkedHashSet<String>()
@@ -222,10 +221,9 @@ class LayoutEditorViewModel(
      * Paints [cells] with the current tool (part of the running gesture, or one step
      * on its own). Painting deselects the screen.
      *
-     * Within a gesture, the stroke is painted again from the draft before it with all
-     * its cells so far ([LayoutDraft.paintStroke]), so the result doesn't depend on
-     * the direction of the stroke (spec §4.3: seats painted in front of a block keep
-     * the block's numbers whichever way the finger moves).
+     * Within a gesture, the cells join the running [PaintStroke], whose result
+     * doesn't depend on the direction of the stroke (spec §4.3: seats painted in
+     * front of a block keep the block's numbers whichever way the finger moves).
      */
     fun paintCells(cells: List<CellPosition>) {
         deselectScreen()
@@ -235,15 +233,12 @@ class LayoutEditorViewModel(
             edit { draft -> draft.paintStroke(cells, tool, kind) }
             return
         }
-        val base = strokeBase ?: draft?.also { strokeBase = it } ?: return
-        strokeCells += cells
-        val stroke = strokeCells.toList()
-        edit { base.paintStroke(stroke, tool, kind) }
+        val running = stroke ?: PaintStroke(draft ?: return, tool, kind).also { stroke = it }
+        edit { running.add(cells) }
     }
 
     private fun endStroke() {
-        strokeBase = null
-        strokeCells.clear()
+        stroke = null
     }
 
     /** A tap on a cell: paints it as one undo step (and deselects the screen). */

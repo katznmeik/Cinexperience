@@ -63,24 +63,47 @@ data class LayoutDraft(
     }
 
     /**
-     * Paints [cells] as one stroke ([paint] each, cells outside the grid ignored),
-     * in an order that doesn't depend on the order of [cells]: row by row and, in
-     * each row, in the order that keeps block starts (spec §4.3). Seats are painted
-     * from a block outwards (right to left in a left-to-right row), so each new
-     * seat in front of a block takes the number before the last; gaps and aisles in
-     * numbering order (left to right there), so each removed seat at a block's
-     * front hands the start on to the next one.
+     * Paints [cells] as one stroke (as [paint] each, cells outside the grid
+     * ignored, with the layout built once: [LayoutEditSession.paintCells]), in the
+     * order [strokeOrder], which doesn't depend on the order of [cells].
      */
-    fun paintStroke(cells: Collection<CellPosition>, type: CellType, kind: SeatKind = SeatKind.STANDARD): LayoutDraft {
-        val ordered = cells.distinct().sortedWith(
-            compareBy<CellPosition> { it.row }.thenBy { cell ->
-                val rightToLeft = layout.rows.getOrNull(cell.row)?.numberingDirection == NumberingDirection.RIGHT_TO_LEFT
-                // Numbering order: ascending columns left to right, descending right to left.
-                val inNumberingOrder = if (rightToLeft) -cell.column else cell.column
-                if (type == CellType.SEAT) -inNumberingOrder else inNumberingOrder
-            },
-        )
-        return ordered.fold(this) { draft, cell -> draft.paint(cell.row, cell.column, type, kind) }
+    fun paintStroke(cells: Collection<CellPosition>, type: CellType, kind: SeatKind = SeatKind.STANDARD): LayoutDraft =
+        paintOrdered(strokeOrder(cells, type), type, kind)
+
+    /** Paints [cells] (inside the grid) in the given order, as [paint] each, with the layout built once. */
+    internal fun paintOrdered(cells: List<CellPosition>, type: CellType, kind: SeatKind): LayoutDraft =
+        if (cells.isEmpty()) this else copy(session = session.paintCells(cells, type, kind))
+
+    /**
+     * The cells of a stroke inside the grid, without repeats, in the order that keeps
+     * block starts (spec §4.3): row by row; in each row the parts between aisles
+     * (each holds at most one block) in numbering order, so a block numbered first
+     * is done before the blocks after it; and in each part, seats from the block
+     * outwards (right to left in a left-to-right row), so each new seat in front of
+     * a block takes the number before the last, and gaps and aisles in numbering
+     * order, so each removed seat at a block's front hands its start on.
+     */
+    internal fun strokeOrder(cells: Collection<CellPosition>, type: CellType): List<CellPosition> {
+        val aislesBefore = HashMap<Int, IntArray>()
+        fun part(cell: CellPosition): Int = aislesBefore.getOrPut(cell.row) {
+            val counts = IntArray(columnCount)
+            layout.rows[cell.row].cells.forEachIndexed { column, it ->
+                if (column + 1 < columnCount) counts[column + 1] = counts[column] + if (it == LayoutCell.Aisle) 1 else 0
+            }
+            counts
+        }[cell.column]
+        fun rightToLeft(cell: CellPosition) = layout.rows[cell.row].numberingDirection == NumberingDirection.RIGHT_TO_LEFT
+        return cells.distinct()
+            .filter { it.row in 0 until rowCount && it.column in 0 until columnCount }
+            .sortedWith(
+                compareBy<CellPosition> { it.row }
+                    .thenBy { if (rightToLeft(it)) -part(it) else part(it) }
+                    .thenBy { cell ->
+                        // Numbering order: ascending columns left to right, descending right to left.
+                        val inNumberingOrder = if (rightToLeft(cell)) -cell.column else cell.column
+                        if (type == CellType.SEAT) -inNumberingOrder else inNumberingOrder
+                    },
+            )
     }
 
     /** Grows (new rows copy the last row's cells) or shrinks at the back, within [1, [SeatLayout.MAX_ROWS]]. */

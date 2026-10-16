@@ -175,8 +175,9 @@ enum class NumberingDirection {
  *   the seat it was set on and numbers that block's current first numbered seat;
  *   when that seat is removed, it moves on to the next numbered seat, with the
  *   number that seat had; a numbered seat added in front of that seat takes the
- *   number before it (start − 1, at least 1 and, in a continuous row, after the
- *   previous block's numbers), so the existing seats keep their numbers
+ *   number before it (start − 1, counting back only to 1 and, in a continuous
+ *   row, to just after the previous block's numbers; never above the start
+ *   itself), so the existing seats keep their numbers
  *   ([withBlockStartsKeyedOn], [withCells]).
  * @property halfSeatOffset the whole row is drawn shifted half a seat to the right
  *   (staggered rows). Alternating rows with and without the offset model staggering.
@@ -464,11 +465,7 @@ data class SeatLayout(
     /** Sets one cell's type. A cell that becomes a seat gets a fresh id; an unchanged type is a no-op. */
     fun withCellType(row: Int, column: Int, type: CellType): SeatLayout {
         if (cell(row, column).type == type) return this
-        val allocator = IdAllocator(nextSeatId)
-        val newCell = allocator.cell(type)
-        val newRows = rows.toMutableList()
-        newRows[row] = rows[row].withCells(rows[row].cells.toMutableList().also { it[column] = newCell })
-        return SeatLayout(newRows, allocator.next)
+        return LayoutChanges(this).apply { setCellType(row, column, type) }.build()
     }
 
     /**
@@ -490,23 +487,14 @@ data class SeatLayout(
         kind: SeatKind = SeatKind.STANDARD,
         fixedLabel: String? = null,
         blockStart: Int? = null,
-    ): SeatLayout {
-        require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
-        require(id !in seatPositions) { "$id is already used in this layout" }
-        if (id.value >= MAX_SEAT_ID) throw SeatIdsExhaustedException("$id is not below $MAX_SEAT_ID")
-        require(blockStart == null || blockStart >= 0) { "Block start numbers must not be negative: $blockStart" }
-        val newCells = rows[row].cells.toMutableList().also { it[column] = LayoutCell.Seat(id, kind, fixedLabel) }
-        val restored = if (blockStart == null) emptyMap() else mapOf(id to blockStart)
-        val newRows = rows.toMutableList().also { it[row] = rows[row].withCells(newCells, restored) }
-        return SeatLayout(newRows, maxOf(nextSeatId, id.value + 1))
-    }
+    ): SeatLayout = LayoutChanges(this).apply { setSeat(row, column, id, kind, fixedLabel, blockStart) }.build()
 
     /** Changes the [SeatKind] of the seat at ([row], [column]); the seat keeps its id and fixed label. */
     fun withSeatKind(row: Int, column: Int, kind: SeatKind): SeatLayout {
         val seat = cell(row, column)
         require(seat is LayoutCell.Seat) { "Cell ($row, $column) is not a seat" }
         if (seat.kind == kind) return this
-        return copy(rows = replaceCell(row, column, seat.copy(kind = kind)))
+        return LayoutChanges(this).apply { setSeatKind(row, column, kind) }.build()
     }
 
     /**
@@ -672,6 +660,60 @@ data class SeatLayout(
          */
         const val MAX_SEAT_ID: Int = 1_000_000_000
     }
+}
+
+/**
+ * A [SeatLayout] being changed cell by cell: the changes of [SeatLayout.withCellType],
+ * [SeatLayout.withSeat] and [SeatLayout.withSeatKind] (those use it, so they are
+ * the same), validated once in [build] instead of after every cell. A paint stroke
+ * over many cells ([LayoutEditSession.paintCells]) then costs one grid, not one
+ * grid per cell. After an exception the changes are incomplete: don't [build] them.
+ */
+internal class LayoutChanges(layout: SeatLayout) {
+    private val rows = layout.rows.toMutableList()
+    private val ids = HashSet(layout.seatIds)
+    private var nextSeatId = layout.nextSeatId
+
+    fun row(index: Int): LayoutRow = rows[index]
+
+    fun cell(row: Int, column: Int): LayoutCell = rows[row].cells[column]
+
+    operator fun contains(id: SeatId): Boolean = id in ids
+
+    /** As [SeatLayout.withCellType]. */
+    fun setCellType(row: Int, column: Int, type: CellType) {
+        if (cell(row, column).type == type) return
+        val allocator = IdAllocator(nextSeatId)
+        replace(row, column, allocator.cell(type), emptyMap())
+        nextSeatId = allocator.next
+    }
+
+    /** As [SeatLayout.withSeat]. */
+    fun setSeat(row: Int, column: Int, id: SeatId, kind: SeatKind, fixedLabel: String?, blockStart: Int?) {
+        require(cell(row, column) !is LayoutCell.Seat) { "Cell ($row, $column) is already a seat" }
+        require(id !in ids) { "$id is already used in this layout" }
+        if (id.value >= SeatLayout.MAX_SEAT_ID) throw SeatIdsExhaustedException("$id is not below ${SeatLayout.MAX_SEAT_ID}")
+        require(blockStart == null || blockStart >= 0) { "Block start numbers must not be negative: $blockStart" }
+        val restored = if (blockStart == null) emptyMap() else mapOf(id to blockStart)
+        replace(row, column, LayoutCell.Seat(id, kind, fixedLabel), restored)
+        nextSeatId = maxOf(nextSeatId, id.value + 1)
+    }
+
+    /** As [SeatLayout.withSeatKind]: no re-keying, the seat stays the same seat. */
+    fun setSeatKind(row: Int, column: Int, kind: SeatKind) {
+        val seat = cell(row, column)
+        require(seat is LayoutCell.Seat) { "Cell ($row, $column) is not a seat" }
+        if (seat.kind == kind) return
+        rows[row] = rows[row].copy(cells = rows[row].cells.toMutableList().also { it[column] = seat.copy(kind = kind) })
+    }
+
+    private fun replace(row: Int, column: Int, cell: LayoutCell, restored: Map<SeatId, Int?>) {
+        (cell(row, column) as? LayoutCell.Seat)?.let { ids -= it.id }
+        rows[row] = rows[row].withCells(rows[row].cells.toMutableList().also { it[column] = cell }, restored)
+        (cell as? LayoutCell.Seat)?.let { ids += it.id }
+    }
+
+    fun build(): SeatLayout = SeatLayout(rows.toList(), nextSeatId)
 }
 
 /**

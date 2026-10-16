@@ -167,10 +167,12 @@ Don't duplicate config in module build files.
   seat is removed the start moves on to the next numbered seat with the number
   it had, so the remaining seats keep theirs (`LayoutEditSession` gives the
   original start back with the seat). A numbered seat added in front of a
-  block with an explicit start takes the number before it (start − 1, but at
-  least 1 and, in a continuous row, after the previous block's numbers), so the
-  existing seats keep their numbers. A row whose starts don't change keeps its
-  stored list.
+  block with an explicit start takes the number before it (start − 1, counting
+  back only to 1 and, in a continuous row, to just after the previous block's
+  numbers; never above the start itself), so the existing seats keep their
+  numbers. The editor paints a stroke in an order that keeps this
+  (`LayoutDraft.strokeOrder`, `PaintStroke`), whichever way the finger moves.
+  A row whose starts don't change keeps its stored list.
   A seat can have a `fixedLabel` (1–4 characters, no surrounding spaces, no
   control or format characters, e.g. "R"): it is shown instead of a number and
   uses up no number. It moves with its seat and survives a change of kind; a
