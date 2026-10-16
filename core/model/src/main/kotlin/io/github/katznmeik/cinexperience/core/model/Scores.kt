@@ -94,7 +94,8 @@ const val NO_SCORE_TEXT: String = "–"
  * [score] without floating-point noise: scores are means of means, so equal ones
  * can differ in their last bits (mean[2.2] is 2.2, mean[2.0, 2.0, 2.6] is
  * 2.1999999999999997, and 3.95 can be computed as 3.9499999999999997). Rounded to
- * 9 decimals, far below anything a mean of 1–5 ratings can tell apart.
+ * 9 decimals: far coarser than that noise, far finer than any real difference
+ * between two scores.
  */
 private fun withoutNoise(score: Double): BigDecimal = BigDecimal.valueOf(score).setScale(9, RoundingMode.HALF_EVEN)
 
