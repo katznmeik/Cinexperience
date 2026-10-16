@@ -315,10 +315,15 @@ Don't duplicate config in module build files.
   `src="user"`, `debug-overrides`, network security configs outside
   `app/src/main/res/xml/`, WebView layouts), build files (`*.gradle(.kts)`,
   `*.toml`, build-logic: network, image, media, WebView, Firebase, Sentry, Play
-  services libraries, file dependencies, `externalNativeBuild`, `srcDir(s)`) and
-  allows no `.jar`/`.aar`/`.so`/`.dex`/`.class` (any case) but the Gradle wrapper;
-  the convention plugins refuse any dependency on files (`forbidFileDependencies`
-  in build-logic, a reviewed list of plugin configurations excepted);
+  services libraries, file dependencies, `externalNativeBuild`, `srcDir(s)` and
+  the variant API's `add…SourceDirectory`, repositories other than `google()`,
+  `mavenCentral()` and `gradlePluginPortal()`; only
+  `scripts/maven-central-mirror.init.gradle` may add Google's Maven Central
+  mirror, and every module applies `cinex.android.application`/`.library`/
+  `.feature` or `cinex.jvm.library`) and allows no `.jar`/`.aar`/`.so`/`.dex`/
+  `.class` (any case) but the Gradle wrapper; those convention plugins refuse any
+  dependency on files (`forbidFileDependencies` in build-logic, a reviewed list
+  of plugin configurations excepted);
   `AppPermissionsTest` (app) pins the merged manifest's permissions, debug and
   release (the build passes both merged manifests to the unit tests);
   `:app:checkReleaseDependencyGroups` (runs before every build) allows release

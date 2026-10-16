@@ -33,8 +33,19 @@ import java.io.File
  *   image-loading, media, WebView, Firebase, Sentry or Play services library, a
  *   file dependency (`implementation(files(…))`, `fileTree(…)`), a native build
  *   (`externalNativeBuild`) or source folders of its own (`srcDir`, `srcDirs`,
- *   `setSrcDirs`, `srcFile`, `….directories` except the assets'), which this scan
- *   wouldn't see;
+ *   `setSrcDirs`, `srcFile`, `….directories` except the assets', the variant API's
+ *   `addStaticSourceDirectory` / `addGeneratedSourceDirectory` / `add…ManifestFile`),
+ *   which this scan wouldn't see;
+ * - a build or settings file declares a repository other than `google()`,
+ *   `mavenCentral()` and `gradlePluginPortal()` (`maven`, `mavenLocal`, `flatDir`,
+ *   `ivy`, `jcenter`, or another `url` for one of them), which could serve a fake
+ *   `androidx.*` library. The one exception is the optional init script
+ *   `scripts/maven-central-mirror.init.gradle` (installed outside the repository by
+ *   `scripts/setup-android-sdk.sh`, which isn't scanned): its `maven { url = … }`
+ *   may only point at Google's Maven Central mirror;
+ * - a module's build file applies none of `cinex.android.application`, `.library`,
+ *   `.feature` and `cinex.jvm.library`, the convention plugins that refuse
+ *   dependencies on files;
  * - a compiled library or code file (`.jar`, `.aar`, `.so`, `.dex`, `.class`, in
  *   any case) is anywhere in the tree (outside hidden folders and build outputs),
  *   in any module or source set, except the Gradle wrapper's
@@ -265,6 +276,12 @@ class NetworkConfinementTest {
             "sourceSets[\"main\"].kotlin.srcDirs(\"src/test/kotlin\")",
             "sourceSets.named(\"main\") { java.setSrcDirs(listOf(\"elsewhere\")) }",
             "main { jniLibs.srcDirs(\"libs\") }",
+            // The Android plugin's variant API
+            "variant.sources.java?.addStaticSourceDirectory(\"extra\")",
+            "variant.sources.kotlin?.addGeneratedSourceDirectory(generate, Generate::outputDir)",
+            "variant.sources.jniLibs?.addStaticSourceDirectory(\"libs\")",
+            "variant.sources.manifests.addStaticManifestFile(\"other/AndroidManifest.xml\")",
+            "variant.sources.manifests.addGeneratedManifestFile(generate, Generate::manifest)",
             "manifest.srcFile(\"other/AndroidManifest.xml\")",
             "sourceSets.getByName(\"main\").kotlin.directories.add(\"extra\")",
             "java.directories += \"extra\"",
@@ -282,6 +299,116 @@ class NetworkConfinementTest {
             "room { schemaDirectory(schemaDir) }",
         )
         for (line in allowed) assertEquals(line, emptyList<String>(), NetworkScan.buildViolations(line))
+    }
+
+    @Test
+    fun buildRulesAllowOnlyTheStandardRepositories() {
+        val caught = listOf(
+            // Kotlin DSL
+            "maven { url = uri(\"https://repo.example.com/maven2/\") }",
+            "maven(\"https://jitpack.io\")",
+            "maven(url = \"https://repo.example.com/\")",
+            "repositories.maven { setUrl(\"https://repo.example.com/\") }",
+            "exclusiveContent { forRepository { maven(\"https://repo.example.com/\") }; filter { includeGroup(\"androidx.core\") } }",
+            "mavenLocal()",
+            "flatDir { dirs(\"libs\") }",
+            "ivy { url = uri(\"https://ivy.example.com/\") }",
+            "jcenter()",
+            // Another address for an allowed one
+            "google { url = uri(\"https://repo.example.com/\") }",
+            "mavenCentral { setUrl(\"https://repo.example.com/\") }",
+            // Groovy
+            "maven { url 'https://jitpack.io' }",
+            "maven { url('https://jitpack.io') }",
+            "flatDir dirs: 'libs'",
+        )
+        for (line in caught) assertTrue(line, NetworkScan.buildViolations(line).isNotEmpty())
+        val allowed = listOf(
+            "google()",
+            "mavenCentral()",
+            "gradlePluginPortal()",
+            // settings.gradle.kts and build-logic: only Google's groups from google().
+            "google {\n    content {\n        includeGroupByRegex(\"androidx.*\")\n    }\n}",
+            "repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)",
+            "// Maven Central (repo1.maven.org) may answer HTTP 429",
+            "a library has no Maven group",
+        )
+        for (line in allowed) assertEquals(line, emptyList<String>(), NetworkScan.buildViolations(line))
+    }
+
+    @Test
+    fun onlyTheMirrorScriptMayAddGooglesMavenCentralMirror() {
+        val mirror = File(NetworkScan.repositoryRoot(), "scripts/maven-central-mirror.init.gradle").readText()
+        assertEquals(emptyList<String>(), NetworkScan.buildViolations(mirror, mirrorScript = true))
+        // The same text anywhere else is a repository like any other.
+        assertTrue(NetworkScan.buildViolations(mirror).isNotEmpty())
+        // The mirror script itself may use no other address and no other repository.
+        val mirrorUrl = "https://maven-central.storage-download.googleapis.com/maven2/"
+        assertTrue(mirror.contains(mirrorUrl))
+        for (tampered in listOf(
+            mirror.replace(mirrorUrl, "https://repo.example.com/maven2/"),
+            mirror.replace(mirrorUrl, "http://maven-central.storage-download.googleapis.com/maven2/"),
+            mirror + "\nallprojects { repositories { maven { url = 'https://repo.example.com/' } } }",
+            mirror + "\nallprojects { repositories { mavenLocal() } }",
+            mirror + "\nallprojects { repositories { flatDir { dirs 'libs' } } }",
+        )) {
+            assertTrue(tampered.takeLast(80), NetworkScan.buildViolations(tampered, mirrorScript = true).isNotEmpty())
+        }
+    }
+
+    @Test
+    fun everyModuleAppliesAConventionPluginThatRefusesFileDependencies() {
+        for (text in listOf(
+            "plugins {\n    alias(libs.plugins.cinex.android.feature)\n    alias(libs.plugins.cinex.android.roborazzi)\n}",
+            "plugins { alias(libs.plugins.cinex.android.library) }",
+            "plugins { alias(libs.plugins.cinex.android.application) }",
+            "plugins { id(\"cinex.jvm.library\") }",
+            "plugins { id 'cinex.android.library' }",
+        )) {
+            assertEquals(text, emptyList<String>(), NetworkScan.moduleBuildFileViolations("feature/x/build.gradle.kts", text))
+        }
+        for (text in listOf(
+            "plugins { id(\"com.android.library\") }",
+            "plugins { alias(libs.plugins.android.library) }",
+            "plugins { id(\"org.jetbrains.kotlin.jvm\") }",
+            // Compose, Room and Roborazzi alone don't install the guard.
+            "plugins { alias(libs.plugins.cinex.android.compose); id(\"com.android.library\") }",
+            "",
+        )) {
+            assertTrue(text, NetworkScan.moduleBuildFileViolations("feature/x/build.gradle.kts", text).isNotEmpty())
+            assertTrue(text, NetworkScan.moduleBuildFileViolations("core/x/build.gradle", text).isNotEmpty())
+        }
+        // The root build file and build-logic's own aren't modules of the app.
+        assertEquals(emptyList<String>(), NetworkScan.moduleBuildFileViolations("build.gradle.kts", "plugins { alias(libs.plugins.android.library) apply false }"))
+        assertEquals(emptyList<String>(), NetworkScan.moduleBuildFileViolations("build-logic/convention/build.gradle.kts", "plugins { `kotlin-dsl` }"))
+        assertEquals(emptyList<String>(), NetworkScan.moduleBuildFileViolations("settings.gradle.kts", "include(\":app\")"))
+    }
+
+    @Test
+    fun theScanFindsOtherRepositoriesAndModulesWithoutTheGuard() {
+        val root = temp.root
+        fun write(path: String, text: String) = File(root, path).apply { parentFile!!.mkdirs() }.writeText(text)
+        val mirror = File(NetworkScan.repositoryRoot(), "scripts/maven-central-mirror.init.gradle").readText()
+        write("settings.gradle.kts", "rootProject.name = \"Cinexperience\"\ndependencyResolutionManagement { repositories { google(); mavenCentral() } }")
+        write("build.gradle.kts", "plugins { alias(libs.plugins.android.library) apply false }")
+        write("scripts/maven-central-mirror.init.gradle", mirror) // the one allowed place
+        write("scripts/other.init.gradle", mirror)
+        write("build-logic/settings.gradle.kts", "dependencyResolutionManagement { repositories { maven(\"https://jitpack.io\") } }")
+        write("feature/ok/build.gradle.kts", "plugins { alias(libs.plugins.cinex.android.feature) }")
+        write("feature/repo/build.gradle.kts", "plugins { alias(libs.plugins.cinex.android.feature) }\nrepositories { mavenLocal() }")
+        write("feature/plain/build.gradle.kts", "plugins { id(\"com.android.library\") }")
+        write("core/groovy/build.gradle", "plugins { id 'org.jetbrains.kotlin.jvm' }")
+
+        assertEquals(
+            setOf(
+                "build-logic/settings.gradle.kts",
+                "core/groovy/build.gradle",
+                "feature/plain/build.gradle.kts",
+                "feature/repo/build.gradle.kts",
+                "scripts/other.init.gradle",
+            ),
+            NetworkScan.scan(root).violations.map { it.substringBefore(':') }.toSet(),
+        )
     }
 
     @Test
@@ -466,8 +593,31 @@ internal object NetworkScan {
                 """|\badd\s*\(\s*["'][^"']*["']\s*,\s*(?:\w+\s*\.\s*)*(?:files|fileTree)\s*\(""",
         ),
         "native build" to Regex("""\bexternalNativeBuild\b"""),
-        "custom source folder" to Regex("""\b(?:srcDirs?|setSrcDirs|srcFile)\b|(?<!\bassets)\.\s*directories\b"""),
+        "custom source folder" to Regex(
+            """\b(?:srcDirs?|setSrcDirs|srcFile)\b|(?<!\bassets)\.\s*directories\b""" +
+                """|\badd(?:Static|Generated)(?:SourceDirectory|ManifestFile)\b""",
+        ),
     )
+
+    /**
+     * A repository other than google(), mavenCentral() and gradlePluginPortal(), or another
+     * address for one of them (their `{ … }` block may only filter the content).
+     */
+    private val REPOSITORY = Regex(
+        """\bmaven\s*[({]|\bmavenLocal\b|\bflatDir\b|\bivy\s*[({]|\bjcenter\b""" +
+            """|\b(?:url|setUrl|artifactUrls|setArtifactUrls)\s*(?:=|\(|["'])""",
+    )
+
+    /** The optional Maven Central mirror; outside the repository, `scripts/setup-android-sdk.sh` installs it. */
+    private const val MIRROR_SCRIPT = "scripts/maven-central-mirror.init.gradle"
+    private const val MIRROR_URL = "https://maven-central.storage-download.googleapis.com/maven2/"
+
+    /** What [REPOSITORY] finds in [MIRROR_SCRIPT]: its `repos.maven {`, `url = mirrorUrl` and Robolectric's `…repo.url'`. */
+    private val MIRROR_SCRIPT_MATCHES = setOf("maven {", "url =", "url'")
+    private val ADDRESS = Regex("""\b[A-Za-z][A-Za-z0-9+.-]*://[^\s'"]*""")
+
+    /** The convention plugins that refuse dependencies on files (build-logic `forbidFileDependencies`). */
+    private val BASE_CONVENTION_PLUGIN = Regex("""(?:\blibs\.plugins\.|["'])cinex\.(?:android\.(?:application|library|feature)|jvm\.library)\b""")
 
     /** Compiled libraries and code; [ALLOWED_BINARY] is the only one the repository may contain. */
     private val BINARY_EXTENSIONS = setOf("jar", "aar", "so", "dex", "class")
@@ -534,11 +684,37 @@ internal object NetworkScan {
      * libraries, a line ending with [DENYLIST_MARKER] is a list of forbidden groups
      * (`:app:checkReleaseDependencyGroups`) and is skipped.
      */
-    fun buildViolations(text: String): List<String> =
+    fun buildViolations(text: String, mirrorScript: Boolean = false): List<String> =
         BUILD_RULE.findAll(text)
             .filterNot { match -> lineAt(text, match.range.first).trimEnd().endsWith(DENYLIST_MARKER) }
             .map { "${lineOf(text, it.range.first)}: network or media library '${it.value}'" }
-            .toList() + matches(text, BUILD_CODE_RULES)
+            .toList() + matches(text, BUILD_CODE_RULES) + repositoryViolations(text, mirrorScript)
+
+    /**
+     * Repositories other than google(), mavenCentral() and gradlePluginPortal(). With
+     * [mirrorScript] (only for [MIRROR_SCRIPT]), its own mirror block is accepted, and
+     * every address in it must be [MIRROR_URL].
+     */
+    fun repositoryViolations(text: String, mirrorScript: Boolean = false): List<String> {
+        val repositories = REPOSITORY.findAll(text)
+            .filterNot { mirrorScript && it.value in MIRROR_SCRIPT_MATCHES }
+            .map { "${lineOf(text, it.range.first)}: repository other than google(), mavenCentral(), gradlePluginPortal() ('${it.value}')" }
+        val addresses = if (mirrorScript) {
+            ADDRESS.findAll(text).filter { it.value != MIRROR_URL }
+                .map { "${lineOf(text, it.range.first)}: the mirror script may only use $MIRROR_URL ('${it.value}')" }
+        } else {
+            emptySequence()
+        }
+        return (repositories + addresses).toList()
+    }
+
+    /** A module's build file ([relative] in the repository) must apply a convention plugin that refuses file dependencies. */
+    fun moduleBuildFileViolations(relative: String, text: String): List<String> {
+        val buildFile = relative.substringAfterLast('/').let { it == "build.gradle.kts" || it == "build.gradle" }
+        val module = buildFile && relative.contains('/') && !relative.startsWith(BUILD_LOGIC_DIR)
+        if (!module || BASE_CONVENTION_PLUGIN.containsMatchIn(text)) return emptyList()
+        return listOf("1: module without cinex.android.application/.library/.feature or cinex.jvm.library, which refuse file dependencies")
+    }
 
     /** A compiled library or code file at [relative] (the repository-relative path), other than [ALLOWED_BINARY]. */
     fun binaryViolations(relative: String): List<String> {
@@ -574,7 +750,10 @@ internal object NetworkScan {
                     }
                     addAll(resourceViolations(file.parentFile.name, file.readText()))
                 }
-                name.endsWith(".gradle.kts") || name.endsWith(".gradle") || file.extension == "toml" -> buildViolations(file.readText())
+                name.endsWith(".gradle.kts") || name.endsWith(".gradle") || file.extension == "toml" -> {
+                    val text = file.readText()
+                    buildViolations(text, mirrorScript = relative == MIRROR_SCRIPT) + moduleBuildFileViolations(relative, text)
+                }
                 sourceSet != null && !isTestSet(sourceSet) && file.extension in SOURCE_EXTENSIONS -> {
                     val text = file.readText()
                     val allowed = moduleOf(root, file) == NETWORK_MODULE && relative.contains(NETWORK_PACKAGE_DIR)
