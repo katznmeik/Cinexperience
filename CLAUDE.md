@@ -30,6 +30,9 @@ SHA-1) and the Gradle distribution (`distributionSha256Sum` in
 python3 -I -B -m unittest discover -s scripts/seed -p 'test_*.py'   # seed generator tests
 ```
 
+Unit tests run in UTC on every machine and list skipped tests in the build
+output (`configureUnitTests` in build-logic).
+
 CI (`.github/workflows/android.yml`) first runs the seed generator tests, then
 `testDebugUnitTest recordRoborazziDebug`, then `lintDebug`. If the
 `CINEX_KEYSTORE_BASE64` secret exists, it then runs `assembleRelease` with
@@ -141,7 +144,9 @@ Don't duplicate config in module build files.
 - **DI:** manual (`app/.../di/AppContainer.kt`), no Hilt. `CinexApp` hands the
   repositories to the features' `xxxScreen(...)` functions; each ViewModel has a
   `factory(...)` and exposes a `StateFlow` UI state. Repository failures become
-  user-facing messages, never crashes.
+  user-facing messages, never crashes. Screens that read the time get
+  `AppContainer.clock` (the system clock); the app tests' `FakeAppContainer`
+  fixes it at `SampleProgram.FETCHED_AT`.
 - **Data:** no invented sample data in the app.
 - **Favourite cinemas:** `Cinema.isFavourite`, written only through
   `CinemaRepository.setFavourite` (detail's ☆/★ `IconToggleButton`, read as
@@ -323,7 +328,10 @@ Don't duplicate config in module build files.
   dependencies only from `androidx.*` (not webkit, media3, browser),
   `org.jetbrains*`, `org.jspecify` and `com.google.guava`; review a new group
   before adding it there (its denylist line carries `// network-scan: denylist`,
-  the only line the build-file scan accepts). The one request is `GET https://www.yorck.de/en/films`
+  the only line the build-file scan accepts). `BuildLogicScanTest` (core:program)
+  applies the build-file rule to the build-logic sources too (the check's task
+  type lives there) and allows the marker only on that line of
+  `app/build.gradle.kts`. The one request is `GET https://www.yorck.de/en/films`
   over `HttpsURLConnection`: no query, body or cookies (no `CookieHandler`); the
   app sends `User-Agent: Cinexperience/<version> (Android; personal app)` and
   `Accept`, the HTTP client adds `Host`, `Connection` and `Accept-Encoding: gzip`;
