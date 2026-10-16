@@ -473,12 +473,13 @@ data class SeatLayout(
      * and [fixedLabel] (used by [LayoutEditSession] to give a seat its original id
      * and fixed label back). [blockStart] is the start number the seat was keyed
      * on when it was painted away (see [LayoutRow.blockStartNumbers]). Its block
-     * takes it unless a numbered seat that carries a start comes before the
-     * restored seat in the block's numbering order; then that seat's start wins
-     * and [blockStart] is dropped: e.g. when a new seat was painted in front of
-     * it meanwhile (`.SSS` from 5: the 5 painted away, a new seat at column 0
-     * takes 5, the 5 restored reads 6, so the row reads 5 6 7 8). Without a
-     * [blockStart], the seat counts as new (see [LayoutRow.withCells]).
+     * takes it unless a numbered seat that carries a start (automatic included)
+     * comes before the restored seat in the block's numbering order; then that
+     * seat's start wins and [blockStart] is dropped: e.g. when a new seat was
+     * painted in front of it meanwhile (`.SSS` from 5: the 5 painted away, a new
+     * seat at column 0 takes 5, the 5 restored reads 6, so the row reads
+     * 5 6 7 8). Without a [blockStart], the seat counts as new (see
+     * [LayoutRow.withCells]).
      */
     fun withSeat(
         row: Int,

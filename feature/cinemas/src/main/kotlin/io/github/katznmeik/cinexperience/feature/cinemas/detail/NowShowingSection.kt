@@ -23,6 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.katznmeik.cinexperience.core.program.FilmKind
@@ -31,6 +33,7 @@ import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.component.LabelChip
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
+import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import java.time.LocalDate
@@ -114,7 +117,9 @@ internal fun LazyListScope.nowShowingItems(
                         nowShowingDayText(day.date, nowShowing.today),
                         style = MaterialTheme.typography.labelMedium,
                         color = CinexTheme.colors.textMuted,
-                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp),
+                        modifier = Modifier
+                            .padding(start = 20.dp, end = 20.dp, top = 6.dp)
+                            .semantics { heading() },
                     )
                 }
                 items(day.showings, key = { "now-showing-${it.showingId}" }) { item ->
@@ -149,25 +154,39 @@ private fun NowShowingRow(item: NowShowingItem, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            TIME.format(item.start),
-            style = CinexTheme.textStyles.score,
-            color = CinexTheme.colors.text,
-            modifier = Modifier.widthIn(min = 48.dp),
-        )
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                isolate(item.filmTitle),
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = CinexTheme.colors.text,
-            )
-            if (item.versions.isNotEmpty() || item.events.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    item.versions.forEach { LabelChip(it.label, description = "${it.label}, ${it.description}") }
-                    item.events.forEach { LabelChip(it) }
-                }
+        // The time beside the film; with large text above it, so the title keeps the width.
+        if (isLargeText()) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ShowingTime(item)
+                ShowingFilm(item)
             }
+        } else {
+            ShowingTime(item, Modifier.widthIn(min = 48.dp))
+            ShowingFilm(item, Modifier.weight(1f))
         }
         Icon(CinexIcons.ChevronRight, contentDescription = null, tint = CinexTheme.colors.textMuted, modifier = Modifier.size(18.dp))
+    }
+}
+
+@Composable
+private fun ShowingTime(item: NowShowingItem, modifier: Modifier = Modifier) {
+    Text(TIME.format(item.start), style = CinexTheme.textStyles.score, color = CinexTheme.colors.text, modifier = modifier)
+}
+
+/** The film title and its version and event chips. */
+@Composable
+private fun ShowingFilm(item: NowShowingItem, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            isolate(item.filmTitle),
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = CinexTheme.colors.text,
+        )
+        if (item.versions.isNotEmpty() || item.events.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                item.versions.forEach { LabelChip(it.label, description = "${it.label}, ${it.description}") }
+                item.events.forEach { LabelChip(it) }
+            }
+        }
     }
 }

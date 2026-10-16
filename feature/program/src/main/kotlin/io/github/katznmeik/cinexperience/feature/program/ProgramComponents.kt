@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import io.github.katznmeik.cinexperience.core.ui.component.ActionPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.LabelChip
+import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
@@ -110,7 +111,7 @@ internal fun ShowingCard(
     showCinema: Boolean = true,
     dayInDescription: Boolean = true,
 ) {
-    val oneColumn = LocalDensity.current.fontScale > 1.3f
+    val oneColumn = isLargeText()
     Column(
         modifier
             .fillMaxWidth()
