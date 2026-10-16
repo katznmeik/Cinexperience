@@ -22,6 +22,7 @@ import java.net.URL
 import java.net.URLConnection
 import java.util.Collections
 import java.util.concurrent.Executors
+import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLHandshakeException
 
 /**
@@ -78,6 +79,9 @@ class HttpsProgramTransportTest {
         assertEquals("GET", sent.method)
         assertEquals(15_000, sent.connectTimeout)
         assertEquals(30_000, sent.readTimeout)
+        // TLS stays as the platform sets it up: the system's trust and hostname checks.
+        assertSame(HttpsURLConnection.getDefaultSSLSocketFactory(), sent.sslSocketFactory)
+        assertSame(HttpsURLConnection.getDefaultHostnameVerifier(), sent.hostnameVerifier)
         assertEquals(expectedRequestProperties, sent.requestProperties)
     }
 
@@ -278,6 +282,7 @@ class HttpsProgramTransportTest {
             assertEquals(expectedRequestProperties, sent.requestProperties)
             assertEquals(1, connection.disconnects.get())
         }
+        assertEquals("The second request differs", redirect.sentOrFail(), page.sentOrFail())
         assertFalse(redirect.inputStreamOpened)
     }
 
@@ -318,7 +323,7 @@ class HttpsProgramTransportTest {
     fun theTotalTimeoutDisconnectsAStalledConnect() {
         val connection = connection(200)
         connection.onSend = { connection.stallUntilDisconnected() }
-        val result = onRealThreads { downloader(Opener(connection), totalTimeoutMs = 300).download { true } }
+        val result = onRealThreads { downloader(Opener(connection), totalTimeoutMs = 1_000).download { true } }
         assertEquals(ProgramError.NETWORK, result.error())
         assertTrue("The stalled connect was not ended by disconnect()", connection.endedByDisconnect)
     }
@@ -327,7 +332,7 @@ class HttpsProgramTransportTest {
     fun theTotalTimeoutDisconnectsAStalledRead() {
         val connection = connection(200)
         connection.body = connection.StallingBody()
-        val result = onRealThreads { downloader(Opener(connection), totalTimeoutMs = 300).download { true } }
+        val result = onRealThreads { downloader(Opener(connection), totalTimeoutMs = 1_000).download { true } }
         assertEquals(ProgramError.NETWORK, result.error())
         assertTrue("The stalled read was not ended by disconnect()", connection.endedByDisconnect)
     }

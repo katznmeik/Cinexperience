@@ -9,15 +9,18 @@ import java.security.cert.Certificate
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLSocketFactory
 
 /**
  * An [HttpsURLConnection] without sockets, for [HttpsProgramTransportTest]. It
  * answers with [status], [responseHeaders] and [body], and records:
  *
  * - [sent]: its configuration at the moment the request would go out (the first
- *   call that needs the response, like a real connection's implicit connect);
- *   afterwards the options can't be changed any more ("Already connected");
+ *   call that needs the response, like a real connection's implicit connect).
+ *   Afterwards most setters throw "Already connected"; the timeouts and
+ *   `instanceFollowRedirects` don't, but [sent] keeps their values at send time;
  * - which streams were opened, and how often it was disconnected.
  *
  * It starts from the worst defaults a platform could have (redirects followed,
@@ -41,6 +44,8 @@ internal class FakeHttpsConnection(
         val connectTimeout: Int,
         val readTimeout: Int,
         val requestProperties: Map<String, List<String>>,
+        val sslSocketFactory: SSLSocketFactory,
+        val hostnameVerifier: HostnameVerifier,
     )
 
     /** `null` while nothing was sent. */
@@ -95,6 +100,8 @@ internal class FakeHttpsConnection(
             connectTimeout = connectTimeout,
             readTimeout = readTimeout,
             requestProperties = requestProperties, // throws once connected
+            sslSocketFactory = sslSocketFactory,
+            hostnameVerifier = hostnameVerifier,
         )
         connected = true
         onSend()
