@@ -141,7 +141,8 @@ private fun Header(
 
 /**
  * Full-width two-option segmented control on a filled surface track; the selected
- * segment is filled light. Segments are 48 dp tall (touch target).
+ * segment is filled light. Segments are at least 48 dp tall (touch target) and grow
+ * together when a label wraps (large text).
  */
 @Composable
 private fun ScopeSwitch(scope: RankingScope, onScopeChange: (RankingScope) -> Unit) {

@@ -544,13 +544,15 @@ private fun ReferenceToggle(selected: Boolean, hasImage: Boolean, onClick: () ->
 
 @Composable
 private fun SeatKindRow(selected: SeatKind, actions: LayoutEditorActions) {
-    // Wraps onto a second line when the chips don't fit (large text).
+    // Wraps onto a second line when the chips don't fit (large text), with the
+    // seat picker's gap between the lines.
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text("Seat type", style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.textMuted)
         SeatKind.entries.forEach { kind ->
