@@ -52,7 +52,8 @@ import kotlin.coroutines.coroutineContext
  *   adds nothing that the backup's own seed state doesn't call for.
  * - **Safety copies:** if the newest copy already holds exactly the current data
  *   (e.g. after a failed attempt or process death) it is reused; otherwise a new
- *   one is written. A failed import deletes the copy it wrote; old copies are
+ *   one is written, but only if it fits with [BackupLimits.minFreeBytes] to spare
+ *   ([BackupWriter.maxSize]). A failed import deletes the copy it wrote; old copies are
  *   pruned only after a successful import. So the newest copy always holds the
  *   data from before the last successful import, and failed attempts never push
  *   an older copy out.
@@ -73,13 +74,15 @@ internal class RoomBackupRepository(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val clock: Clock = Clock.systemUTC(),
     private val awaitReady: AwaitReady = {},
-    limits: BackupLimits = BackupLimits(),
+    private val limits: BackupLimits = BackupLimits(),
     private val failpoint: (ImportStep) -> Unit = {},
+    /** Free storage of a folder ([freeBytes]; tests pass their own). */
+    private val freeSpace: (File) -> Long = ::freeBytes,
 ) : BackupRepository {
 
     private val mutex = Mutex()
     private val writer = BackupWriter(filesDir)
-    private val reader = BackupReader(limits)
+    private val reader = BackupReader(limits, freeSpace)
     private val copyStore = SafetyCopies(File(filesDir, SafetyCopies.FOLDER))
     private val stagingRoot = File(cacheDir, STAGING_FOLDER)
 
@@ -304,6 +307,14 @@ internal class RoomBackupRepository(
             onProgress(1f)
             return null
         }
+        // Nothing is written unless all of it fits with the reserve to spare (copies go to filesDir).
+        if (freeSpace(filesDir) < writer.maxSize(prepared) + limits.minFreeBytes) {
+            throw BackupException(
+                BackupError.WRITE_FAILED,
+                "There isn't enough free storage for a safety copy of your current data, so nothing was imported. " +
+                    "Free up some space and try again.",
+            )
+        }
         val createdAt: Instant = clock.instant()
         val target = copyStore.newFile(createdAt)
         val temp = File(target.parentFile, target.name + SafetyCopies.TEMP_SUFFIX)
@@ -316,6 +327,14 @@ internal class RoomBackupRepository(
             if (!temp.renameTo(target)) throw IOException("Couldn't rename $temp")
         } catch (e: Exception) {
             temp.delete()
+            if (e is FileDeletedDuringBackupException) {
+                // The UI blocks writes during an import, but one already running can still finish.
+                throw BackupException(
+                    BackupError.DATA_CHANGED,
+                    "Your data changed while importing. Nothing was replaced; please try again.",
+                    e,
+                )
+            }
             throw BackupException(
                 BackupError.WRITE_FAILED,
                 "Couldn't save a safety copy of your current data, so nothing was imported. Is there enough free storage?",

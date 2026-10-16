@@ -70,6 +70,21 @@ internal class BackupWriter(private val filesDir: File) {
     }
 
     /**
+     * At most how many bytes [write] produces for [prepared], for a free-space check
+     * before it is written: data.json and the files at their current sizes, plus an
+     * allowance for the manifest and the zip's own records. Deflate adds a few bytes
+     * per block, whether it compresses or (for the files) only stores: about
+     * n / 4096 at most for n bytes, so n / 2048 covers it.
+     */
+    fun maxSize(prepared: PreparedBackup): Long {
+        val data = BackupFormat.writeJson.encodeToString(BackupData.serializer(), prepared.data)
+            .encodeToByteArray().size.toLong()
+        val paths = prepared.data.filePaths
+        val content = data + paths.sumOf { File(filesDir, it).length() }
+        return content + content / 2048 + MANIFEST_ALLOWANCE + (paths.size + 2) * ENTRY_ALLOWANCE
+    }
+
+    /**
      * Writes [prepared] and the files it refers to as a backup zip to [out], which
      * is flushed but not closed. Files are streamed, never loaded into memory.
      * Returns the counts that were written.
@@ -138,5 +153,11 @@ internal class BackupWriter(private val filesDir: File) {
     private companion object {
         const val TAG = "CinexBackup"
         const val BUFFER_SIZE = 64 * 1024
+
+        /** The manifest is a few hundred bytes; this also covers the zip's end records. */
+        const val MANIFEST_ALLOWANCE = 4096L
+
+        /** An entry's header, data descriptor and central directory record, each with its name. */
+        const val ENTRY_ALLOWANCE = 1024L
     }
 }

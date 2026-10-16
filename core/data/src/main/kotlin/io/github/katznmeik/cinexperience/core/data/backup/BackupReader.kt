@@ -236,6 +236,15 @@ internal object BackupValidator {
 }
 
 /**
+ * The free storage of [dir]'s file system, for the import's free-space checks.
+ * Deliberately not StorageManager's allocatable bytes (lint's UsableSpace hint):
+ * those count cached files the system may delete as free, and staged files are
+ * such cache files themselves.
+ */
+@SuppressLint("UsableSpace")
+internal fun freeBytes(dir: File): Long = dir.usableSpace
+
+/**
  * Unpacks and validates a backup zip (see BackupFormat.kt), streaming entries
  * into a staging directory. Throws [BackupException] for anything unexpected:
  *
@@ -256,7 +265,11 @@ internal object BackupValidator {
  *   so deeply nested input can't exhaust the stack); then [BackupValidator]; the
  *   manifest's counts must match.
  */
-internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
+internal class BackupReader(
+    private val limits: BackupLimits = BackupLimits(),
+    /** Free storage of a folder ([freeBytes]; tests pass their own). */
+    private val freeSpace: (File) -> Long = ::freeBytes,
+) {
 
     /** Unpacks [input] into [dir] (created; the caller deletes it on failure) and validates it. */
     fun read(input: InputStream, dir: File): StagedBackup {
@@ -369,7 +382,7 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
                         }
                         // A zip doesn't reliably say how large an entry is (and may lie), so there must be
                         // room for the largest allowed file, and the reserve stays free whatever it holds.
-                        if (freeBytes(dir) < limits.maxFileBytes + limits.minFreeBytes) throw noRoom()
+                        if (freeSpace(dir) < limits.maxFileBytes + limits.minFreeBytes) throw noRoom()
                         files[name] = StagedFile(target, copyEntry(zip, target, limits.maxFileBytes, budget))
                     } else {
                         drainEntry(zip, limits.maxFileBytes, budget)
@@ -428,14 +441,6 @@ internal class BackupReader(private val limits: BackupLimits = BackupLimits()) {
             size
         }
     }
-
-    /**
-     * The free storage of [dir]'s file system. Deliberately not StorageManager's
-     * allocatable bytes (lint's UsableSpace hint): those count cached files the
-     * system may delete as free, and staged files are such cache files themselves.
-     */
-    @SuppressLint("UsableSpace")
-    private fun freeBytes(dir: File): Long = dir.usableSpace
 
     /** Reads and discards the current entry, under the same limits as a staged one. */
     private fun drainEntry(zip: ZipInputStream, maxBytes: Long, budget: Budget) {

@@ -65,11 +65,13 @@ internal class BackupStagingTest : BackupTestBase() {
         val e = assertRefused(valid.path, BackupError.WRITE_FAILED, device = full)
         assertTrue(e.message, e.message!!.contains("enough free storage"))
 
-        // The check comes before each photo or reference image: a backup without any still imports.
+        // The check comes before each photo or reference image: a backup without any is still
+        // unpacked. (Its safety copy has a check of its own, see BackupSafetyCopyTest.)
         val noFiles = deviceA.document("no-files.zip")
         newDevice("empty").repository.export(noFiles)
         val preview = full.repository.prepareImport(noFiles)
-        full.repository.commitImport(preview)
-        assertTrue(full.files().isEmpty())
+        assertEquals(BackupCounts(0, 0, 0, 0, 0, 0), preview.counts)
+        full.repository.discardImport(preview)
+        assertTrue(full.stagingIsEmpty())
     }
 }
