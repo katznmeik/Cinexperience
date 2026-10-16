@@ -19,8 +19,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import io.github.katznmeik.cinexperience.core.model.LayoutLabels
-import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatKind
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexColors
@@ -40,10 +38,6 @@ import io.github.katznmeik.cinexperience.core.ui.theme.CinexColors
  */
 val SeatLabel.seatNumberText: String
     get() = seat
-
-/** The number text of every seat, from the derived labels ([io.github.katznmeik.cinexperience.core.model.labels]). */
-fun LayoutLabels.seatNumbers(): Map<SeatId, String> =
-    buildMap { seats.forEach { (id, info) -> put(id, info.label.seatNumberText) } }
 
 /** Font size of a seat number of up to two digits, as a fraction of the seat's width. */
 const val SEAT_NUMBER_SIZE: Float = 0.54f

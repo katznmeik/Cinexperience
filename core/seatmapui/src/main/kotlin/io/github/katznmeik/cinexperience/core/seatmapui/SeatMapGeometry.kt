@@ -135,8 +135,6 @@ class SeatMapGeometry(
         Rect(left, rowTop(row), left + metrics.labelWidth, rowTop(row) + metrics.seatSize)
     }
 
-    fun seatCenter(seatId: SeatId): Offset? = layout.positionOf(seatId)?.let { cellCenter(it.row, it.column) }
-
     /** The row whose band (cell height plus half the row gap on each side) contains [y]. */
     private fun rowAt(y: Float): Int? {
         val row = floor((y + metrics.rowGap / 2f) / metrics.pitchY).toInt()

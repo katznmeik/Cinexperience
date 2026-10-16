@@ -115,9 +115,6 @@ data class ProgramUiState(
     val favouriteCinemas: Set<String> get() = cinemaOptions.filter { it.isFavourite }.mapTo(LinkedHashSet()) { it.seedKey }
 
     val showingCount: Int get() = days.sumOf { it.showings.size }
-
-    /** The program is shown, in the OFF mode read-only. */
-    val showsProgram: Boolean get() = mode == ProgramMode.PROGRAM || (mode == ProgramMode.OFF && hasProgram)
 }
 
 /** The parts of the state this ViewModel owns. */

@@ -46,8 +46,6 @@ class LayoutEditSession private constructor(
 ) {
     private val originalIds: Set<SeatId> = original?.seatIds.orEmpty()
 
-    val hasChanges: Boolean get() = layout?.rows != original?.rows
-
     /** Replaces the layout with a fresh `rows × columns` grid; all its seats are new. */
     fun newGrid(rows: Int, columns: Int, fill: CellType = CellType.SEAT): LayoutEditSession =
         copyWith(SeatLayout.create(rows, columns, firstSeatId = freshIdFloor, fill = fill), emptyMap())
