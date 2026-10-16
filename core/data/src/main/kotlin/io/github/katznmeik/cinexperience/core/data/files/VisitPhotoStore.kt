@@ -62,11 +62,14 @@ interface VisitPhotoStore {
     /** Deletes a stored photo; a missing file or a path outside the folder is ignored. */
     suspend fun delete(relativePath: String)
 
+    /** Whether [relativePath] is a stored photo; `false` for a path outside the folder. */
+    suspend fun exists(relativePath: String): Boolean
+
     /**
      * Deletes the stored photos that are not in [referencedPaths], and leftover
      * capture files, that were last modified before [modifiedBefore] (epoch ms).
-     * The age limit protects photos that an open visit form added but has not
-     * saved yet. Returns how many files were deleted.
+     * The age limit protects photos that an open (or a restored) visit form added
+     * but has not saved yet. Returns how many files were deleted.
      */
     suspend fun deleteOrphans(referencedPaths: Set<String>, modifiedBefore: Long): Int
 
@@ -197,6 +200,9 @@ internal class FileVisitPhotoStore(
     override suspend fun delete(relativePath: String) {
         withContext(ioDispatcher) { resolve(relativePath)?.delete() }
     }
+
+    override suspend fun exists(relativePath: String): Boolean =
+        withContext(ioDispatcher) { resolve(relativePath)?.isFile == true }
 
     override suspend fun deleteOrphans(referencedPaths: Set<String>, modifiedBefore: Long): Int =
         withContext(ioDispatcher) {
