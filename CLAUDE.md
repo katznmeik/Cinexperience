@@ -144,7 +144,10 @@ Don't duplicate config in module build files.
   reused within a hall (`Hall.nextSeatId` is the hall's mark; the repository
   rejects layouts that reuse ids). Edit layouts only through
   `hall.startLayoutEdit()` (`LayoutEditSession`); derive labels with
-  `layout.labels()`.
+  `layout.labels()`. A layout has at most `SeatLayout.MAX_ROWS` ×
+  `MAX_COLUMNS` cells (50 × 60, the editor's limits) and `nextSeatId` ≤
+  `MAX_SEAT_ID` (1,000,000,000), checked in `SeatLayout.init`; handing out an id at the
+  limit throws `IllegalArgumentException`, it never wraps.
 - **Seat numbering** (`SeatLabels.kt`, spec §4.3) must match Yorck's booking.
   Every seat place is numbered, wheelchair spaces, companion seats and sofa
   places included. Each row has a `numberingDirection`: `LEFT_TO_RIGHT`
@@ -227,6 +230,11 @@ Don't duplicate config in module build files.
   straight into the DTOs; new DTO fields get no default value). The v1
   fixture in `core/data/src/test/resources/backup/v1` is never changed. `BackupValidator` holds the data rules; export and
   safety copies run it too, so no backup is written that can't be imported.
+  Its size limits (texts within `TextLimits`, layouts within the `SeatLayout`
+  limits and their JSON ≤ `LayoutJson.MAX_JSON_LENGTH`, seat ids below
+  `MAX_SEAT_ID`, screen width > 0, distance ≥ 0) keep every row far below
+  Android's 2 MB per row; the repositories' writers enforce the same, so
+  whatever the app saves exports, and the forms cap their fields at or below them.
   Imports validate everything before touching data (`BackupReader`; manifest
   and data must precede the files, unreferenced entries are skipped), make
   sure a safety copy exists (`filesDir/backups/pre-import-<seq>-<time>.zip`,

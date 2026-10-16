@@ -83,6 +83,7 @@ import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.NumberingDirection
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.SeatKind
+import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatNumbering
 import io.github.katznmeik.cinexperience.core.seatmapui.SeatMapViewState
 import io.github.katznmeik.cinexperience.core.seatmapui.blockName
@@ -889,7 +890,7 @@ private fun Steppers(draft: LayoutDraft, actions: LayoutEditorActions, includeSc
             onMinus = { actions.onRowCount(-1) },
             onPlus = { actions.onRowCount(1) },
             canMinus = draft.rowCount > 1,
-            canPlus = draft.rowCount < LayoutDraft.MAX_ROWS,
+            canPlus = draft.rowCount < SeatLayout.MAX_ROWS,
         ),
         StepperSpec(
             label = "Columns",
@@ -897,7 +898,7 @@ private fun Steppers(draft: LayoutDraft, actions: LayoutEditorActions, includeSc
             onMinus = { actions.onColumnCount(-1) },
             onPlus = { actions.onColumnCount(1) },
             canMinus = draft.columnCount > 1,
-            canPlus = draft.columnCount < LayoutDraft.MAX_COLUMNS,
+            canPlus = draft.columnCount < SeatLayout.MAX_COLUMNS,
         ),
     ) + if (includeScreen) screenSteppers(draft, actions) else emptyList()
     // Two per row; one per row with large text, so the labels aren't broken mid-word.

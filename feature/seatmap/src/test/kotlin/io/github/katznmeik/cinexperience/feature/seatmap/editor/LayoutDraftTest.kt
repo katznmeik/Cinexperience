@@ -67,7 +67,7 @@ class LayoutDraftTest {
         assertEquals(listOf(SeatId(10), SeatId(11)), grown.layout.rows[2].seatIds) // fresh ids
         assertEquals(listOf("SS|SS"), draft.withRowCount(1).patterns())
         assertEquals(1, draft.withRowCount(0).rowCount)
-        assertEquals(LayoutDraft.MAX_ROWS, draft.withRowCount(999).rowCount)
+        assertEquals(SeatLayout.MAX_ROWS, draft.withRowCount(999).rowCount)
 
         val wider = draft.withColumnCount(6)
         assertEquals(listOf("SS|SSS", ".S|S.."), wider.patterns())

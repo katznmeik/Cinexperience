@@ -6,6 +6,8 @@ import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallSummary
+import io.github.katznmeik.cinexperience.core.model.TextLimits
+import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,7 +82,9 @@ internal interface CinemaDeleteListener {
  * add / edit / delete cinemas, add / rename / delete halls (spec §6.2, §6.7).
  *
  * Names are validated here (blank → inline error); duplicate names are allowed.
- * Repository failures never crash: they close the dialog and set [message].
+ * Every field stops at the repositories' [TextLimits], so a long paste is cut
+ * instead of failing the save. Repository failures never crash: they close the
+ * dialog and set [message].
  */
 internal class CinemaEditor(
     private val scope: CoroutineScope,
@@ -105,9 +109,10 @@ internal class CinemaEditor(
         val cinema = detail.cinema
         _dialog.value = EditDialog.CinemaForm(
             cinemaId = cinema.id,
-            name = cinema.name,
-            address = cinema.address.orEmpty(),
-            notes = cinema.notes.orEmpty(),
+            // Cut like typed text, so saving repairs a text stored before the limits.
+            name = cinema.name.takeCodePoints(TextLimits.MAX_NAME_LENGTH),
+            address = cinema.address.orEmpty().takeCodePoints(TextLimits.MAX_NAME_LENGTH),
+            notes = cinema.notes.orEmpty().takeCodePoints(TextLimits.MAX_LONG_TEXT_LENGTH),
             canDelete = !cinema.isPreloaded,
         )
     }
@@ -117,7 +122,11 @@ internal class CinemaEditor(
     }
 
     fun startRenameHall(hall: Hall) {
-        _dialog.value = EditDialog.HallName(cinemaId = hall.cinemaId, hallId = hall.id, name = hall.name)
+        _dialog.value = EditDialog.HallName(
+            cinemaId = hall.cinemaId,
+            hallId = hall.id,
+            name = hall.name.takeCodePoints(TextLimits.MAX_NAME_LENGTH),
+        )
     }
 
     fun requestDeleteCinema(detail: CinemaDetail) {
@@ -155,7 +164,8 @@ internal class CinemaEditor(
         }
     }
 
-    fun onNameChange(name: String) {
+    fun onNameChange(input: String) {
+        val name = input.takeCodePoints(TextLimits.MAX_NAME_LENGTH)
         _dialog.value = when (val d = _dialog.value) {
             is EditDialog.CinemaForm -> d.copy(name = name, nameError = null)
             is EditDialog.HallName -> d.copy(name = name, nameError = null)
@@ -164,11 +174,15 @@ internal class CinemaEditor(
     }
 
     fun onAddressChange(address: String) {
-        (_dialog.value as? EditDialog.CinemaForm)?.let { _dialog.value = it.copy(address = address) }
+        (_dialog.value as? EditDialog.CinemaForm)?.let {
+            _dialog.value = it.copy(address = address.takeCodePoints(TextLimits.MAX_NAME_LENGTH))
+        }
     }
 
     fun onNotesChange(notes: String) {
-        (_dialog.value as? EditDialog.CinemaForm)?.let { _dialog.value = it.copy(notes = notes) }
+        (_dialog.value as? EditDialog.CinemaForm)?.let {
+            _dialog.value = it.copy(notes = notes.takeCodePoints(TextLimits.MAX_LONG_TEXT_LENGTH))
+        }
     }
 
     fun dismiss() {

@@ -20,6 +20,7 @@ import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatOverride
 import io.github.katznmeik.cinexperience.core.model.SeatOverrides
+import io.github.katznmeik.cinexperience.core.model.TextLimits
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
 import io.github.katznmeik.cinexperience.core.model.cinemaScores
@@ -36,6 +37,9 @@ import kotlinx.coroutines.flow.update
 
 /** Newest first: by date, then by insertion order (id), like the Room repositories. */
 private val NEWEST_FIRST = compareByDescending<Visit> { it.date }.thenByDescending { it.id }
+
+/** The limit of notes and film titles, like in the Room repositories. */
+private const val LONG = TextLimits.MAX_LONG_TEXT_LENGTH
 
 /**
  * Everything the fake repositories hold.
@@ -130,7 +134,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         write()
         val id = nextId++
         store.update {
-            it.copy(cinemas = it.cinemas + Cinema(id, name.requireName(), address.clean(), notes.clean()))
+            it.copy(cinemas = it.cinemas + Cinema(id, name.requireName(), address.clean(), notes.clean(LONG)))
         }
         return id
     }
@@ -142,7 +146,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         store.update { s ->
             s.copy(
                 cinemas = s.cinemas.map {
-                    if (it.id == cinemaId) it.copy(name = cleanName, address = address.clean(), notes = notes.clean()) else it
+                    if (it.id == cinemaId) it.copy(name = cleanName, address = address.clean(), notes = notes.clean(LONG)) else it
                 },
             )
         }
@@ -217,6 +221,8 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         write()
         val cleanName = hall.name.requireName()
         require(ScreenOffsetRules.isValid(hall.screenOffset)) { "Invalid screen offset ${hall.screenOffset}" }
+        require(hall.screenWidth.let { it == null || (it.isFinite() && it > 0f) }) { "Invalid screen width ${hall.screenWidth}" }
+        require(hall.screenDistance.let { it == null || (it.isFinite() && it >= 0f) }) { "Invalid screen distance ${hall.screenDistance}" }
         val existing = store.value.halls.firstOrNull { it.id == hall.id } ?: return false
         require(existing.cinemaId == hall.cinemaId) { "Moving a hall to another cinema is not supported" }
         val stored = existing.layout
@@ -237,7 +243,7 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
             screenDistance = hall.screenDistance,
             screenOffset = hall.screenOffset + 0f,
             referenceImagePath = hall.referenceImagePath.clean(),
-            notes = hall.notes.clean(),
+            notes = hall.notes.clean(LONG),
             nextSeatId = maxOf(mark, newLayout?.nextSeatId ?: 0),
             layoutUnreadable = keepUnreadable,
         )
@@ -307,8 +313,8 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         val seatValid = visit.seatId == null || unchangedSeat || hall.layout?.seatIds?.contains(visit.seatId) == true
         val saved = visit.copy(
             id = if (visit.id == 0L) nextId++ else visit.id,
-            filmTitle = visit.filmTitle.clean(),
-            note = visit.note.clean(),
+            filmTitle = visit.filmTitle.clean(LONG),
+            note = visit.note.clean(LONG),
             photoPath = visit.photoPath.clean(),
             seatId = if (seatValid) visit.seatId else null,
         )
@@ -347,7 +353,12 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         }
     }
 
-    private fun String.requireName(): String = trim().also { require(it.isNotEmpty()) { "Name must not be blank" } }
+    // Like Room: trimmed, and within TextLimits (names, addresses and paths; LONG for notes and film titles).
+    private fun String.requireName(): String = trim().also {
+        require(it.isNotEmpty()) { "Name must not be blank" }
+        require(TextLimits.fits(it, TextLimits.MAX_NAME_LENGTH)) { "Name is too long" }
+    }
 
-    private fun String?.clean(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
+    private fun String?.clean(max: Int = TextLimits.MAX_NAME_LENGTH): String? =
+        this?.trim()?.takeIf { it.isNotEmpty() }?.also { require(TextLimits.fits(it, max)) { "Text is too long" } }
 }

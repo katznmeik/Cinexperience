@@ -39,7 +39,12 @@ interface CinemaRepository {
     /** Cinema header scores and its halls sorted by name (spec §6.2); `null` if it doesn't exist. */
     fun observeCinemaDetail(cinemaId: Long): Flow<CinemaDetail?>
 
-    /** Creates a user-added cinema and returns its id. */
+    /**
+     * Creates a user-added cinema and returns its id. Like every writer of these
+     * repositories, it trims texts (blank → `null`) and refuses texts beyond
+     * [io.github.katznmeik.cinexperience.core.model.TextLimits] with an
+     * IllegalArgumentException, so whatever is saved can be exported.
+     */
     suspend fun createCinema(name: String, address: String? = null, notes: String? = null): Long
 
     /** Updates name, address and notes; returns false if the cinema doesn't exist. */
@@ -76,6 +81,9 @@ interface HallRepository {
      * and `nextSeatId` are not changeable. [Hall.screenOffset] must be
      * [io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules.isValid]
      * (IllegalArgumentException otherwise; snap it with `ScreenOffsetRules.snap`).
+     * A set screen width must be finite and positive, a set distance finite and
+     * not negative, and the layout's JSON at most `LayoutJson.MAX_JSON_LENGTH`
+     * chars (no layout within `SeatLayout`'s limits comes near it).
      * A caller that doesn't deal with the offset keeps it by saving a copy of
      * the hall it read. When the layout changes, overrides of seats
      * that no longer exist are deleted (visits keep their seat id; it simply has no

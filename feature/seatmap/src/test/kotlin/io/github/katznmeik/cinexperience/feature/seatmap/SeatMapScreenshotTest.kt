@@ -420,13 +420,13 @@ class SeatMapScreenshotTest {
     /** The widest grid the editor allows, its screen as wide as the grid (handles at the outer edges). */
     @Test
     fun layoutEditorWide60() {
-        val state = wideHallEditor(columns = LayoutDraft.MAX_COLUMNS, screenWidth = 60f, selected = false)
+        val state = wideHallEditor(columns = SeatLayout.MAX_COLUMNS, screenWidth = 60f, selected = false)
         capture("layout_editor_wide_60") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
     }
 
     @Test
     fun layoutEditorWide60Selected() {
-        val state = wideHallEditor(columns = LayoutDraft.MAX_COLUMNS, screenWidth = 60f, selected = true)
+        val state = wideHallEditor(columns = SeatLayout.MAX_COLUMNS, screenWidth = 60f, selected = true)
         capture("layout_editor_wide_60_selected") { LayoutEditorScreen(state, referenceImage = null, actions = noActions) }
     }
 

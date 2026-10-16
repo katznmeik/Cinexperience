@@ -81,7 +81,8 @@ import java.util.Locale
  *   holds the new layout.
  * - **Seat ids.** A seed layout's ids start at 1; when it fills or replaces the
  *   layout of an existing hall it is shifted above the hall's seat id mark, so
- *   ids are never reused.
+ *   ids are never reused. A hall whose mark leaves no room for them below
+ *   [SeatLayout.MAX_SEAT_ID] (only damaged or crafted data) keeps its layout.
  */
 internal class Seeder(
     private val db: CinexDatabase,
@@ -178,15 +179,26 @@ internal class Seeder(
                     val fillLayout = snapshots.fill(HALL, key, LAYOUT, matchedHall.layoutJson, seedLayoutJson)
                     val adopted = matchedHall.seedKey != key
                     val applied = appliedLayoutJson(key, adopted, snapshots)
-                    if (matchedHall.layoutJson == null && fillLayout != null && seedLayout != null) {
-                        val mark = db.seatIdMark(matchedHall, null)
-                        val shifted = seedLayout.withIdsShiftedBy(mark - SeatLayout.FIRST_SEAT_ID)
-                        updated = updated.copy(layoutJson = LayoutJson.encode(shifted), nextSeatId = shifted.nextSeatId)
+                    // The seed layout to fill an empty layout with, or to replace an untouched one,
+                    // shifted above the hall's mark; null if its ids wouldn't fit (see shiftedAbove).
+                    val filled = if (matchedHall.layoutJson == null && fillLayout != null && seedLayout != null) {
+                        shiftedAbove(seedLayout, db.seatIdMark(matchedHall, null))
+                    } else {
+                        null
+                    }
+                    val replacement = if (filled == null && seedLayout != null && !adopted &&
+                        replacesUntouchedLayout(matchedHall, seedLayout, applied)
+                    ) {
+                        shiftedAbove(seedLayout, db.seatIdMark(matchedHall, matchedHall.layoutJson?.let(LayoutJson::decodeOrNull)))
+                    } else {
+                        null
+                    }
+                    if (filled != null) {
+                        updated = updated.copy(layoutJson = LayoutJson.encode(filled), nextSeatId = filled.nextSeatId)
                         snapshots.record(HALL, key, APPLIED_LAYOUT, seedAppliedJson)
-                    } else if (seedLayout != null && !adopted && replacesUntouchedLayout(matchedHall, seedLayout, applied)) {
+                    } else if (replacement != null) {
                         val stored = matchedHall.layoutJson?.let(LayoutJson::decodeOrNull)
-                        val mark = db.seatIdMark(matchedHall, stored)
-                        val shifted = seedLayout.withIdsShiftedBy(mark - SeatLayout.FIRST_SEAT_ID)
+                        val shifted = replacement
                         // A stored value that is still the previous seed's follows the new seed;
                         // anything else keeps what the fill rule gave (the user's value, or a filled gap).
                         fun screenValue(field: String, stored: Float?, filled: Float?, seedValue: Float?): Float? =
@@ -235,6 +247,17 @@ internal class Seeder(
 
     private fun sameName(a: String, b: String): Boolean =
         a.trim().lowercase(Locale.ROOT) == b.trim().lowercase(Locale.ROOT)
+
+    /**
+     * [seedLayout] (ids from 1) with its ids moved up to start at the hall's id
+     * [mark], or `null` if they would reach [SeatLayout.MAX_SEAT_ID]. Only damaged
+     * or crafted data has such a mark; that hall keeps its layout instead of the
+     * whole seed run failing (and with it every later one).
+     */
+    private fun shiftedAbove(seedLayout: SeatLayout, mark: Int): SeatLayout? {
+        val delta = mark - SeatLayout.FIRST_SEAT_ID // mark ≥ FIRST_SEAT_ID, so no overflow
+        return if (delta > SeatLayout.MAX_SEAT_ID - seedLayout.nextSeatId) null else seedLayout.withIdsShiftedBy(delta)
+    }
 
     /** [layout] in the canonical form `appliedLayout` records: ids from 1. */
     private fun canonicalJson(layout: SeatLayout): String = LayoutJson.encode(layout.withCanonicalSeatIds())

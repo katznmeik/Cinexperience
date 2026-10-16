@@ -61,9 +61,9 @@ data class LayoutDraft(
         return if (edited === session) this else copy(session = edited)
     }
 
-    /** Grows (new rows copy the last row's cells) or shrinks at the back, within [1, MAX_ROWS]. */
+    /** Grows (new rows copy the last row's cells) or shrinks at the back, within [1, [SeatLayout.MAX_ROWS]]. */
     fun withRowCount(count: Int): LayoutDraft {
-        val target = count.coerceIn(1, MAX_ROWS)
+        val target = count.coerceIn(1, SeatLayout.MAX_ROWS)
         var draft = this
         while (draft.rowCount < target) draft = draft.insertRowCopy(draft.rowCount, template = draft.rowCount - 1)
         while (draft.rowCount > target) draft = draft.removeRow(draft.rowCount - 1)
@@ -72,11 +72,11 @@ data class LayoutDraft(
 
     /**
      * Grows (new columns copy the last column's cell types) or shrinks at the
-     * right, within [1, MAX_COLUMNS]. A screen exactly as wide as the grid stays
+     * right, within [1, [SeatLayout.MAX_COLUMNS]]. A screen exactly as wide as the grid stays
      * as wide as the grid; the screen's offset stays within the narrower grid.
      */
     fun withColumnCount(count: Int): LayoutDraft {
-        val target = count.coerceIn(1, MAX_COLUMNS)
+        val target = count.coerceIn(1, SeatLayout.MAX_COLUMNS)
         if (target == columnCount) return this
         var edited = session
         while (edited.layout!!.columnCount < target) {
@@ -101,7 +101,7 @@ data class LayoutDraft(
      * block) and its numbering direction; not its label or block starts.
      */
     fun insertRowCopy(index: Int, template: Int): LayoutDraft {
-        if (rowCount >= MAX_ROWS) return this
+        if (rowCount >= SeatLayout.MAX_ROWS) return this
         val templateRow = layout.rows[template.coerceIn(0, rowCount - 1)]
         var edited = session.insertRow(index.coerceIn(0, rowCount), fill = CellType.GAP)
         val at = index.coerceIn(0, rowCount)
@@ -133,8 +133,6 @@ data class LayoutDraft(
         const val DEFAULT_ROWS = 10
         const val DEFAULT_COLUMNS = 16
         const val DEFAULT_SCREEN_DISTANCE = 2f
-        const val MAX_ROWS = 50
-        const val MAX_COLUMNS = 60
 
         /**
          * The draft for [hall] as stored. A hall without a (readable) layout starts
