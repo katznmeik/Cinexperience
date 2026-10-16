@@ -149,10 +149,10 @@ class LayoutEditSession private constructor(
     fun resize(rowCount: Int, columnCount: Int, fill: CellType = CellType.SEAT): LayoutEditSession {
         require(rowCount > 0 && columnCount > 0) { "Layout must be at least 1×1" }
         var session = this
-        while (session.requireLayout().columnCount < columnCount) session = session.insertColumn(session.layout!!.columnCount, fill)
-        while (session.requireLayout().columnCount > columnCount) session = session.removeColumn(session.layout!!.columnCount - 1)
-        while (session.requireLayout().rowCount < rowCount) session = session.insertRow(session.layout!!.rowCount, fill)
-        while (session.requireLayout().rowCount > rowCount) session = session.removeRow(session.layout!!.rowCount - 1)
+        while (session.requireLayout().columnCount < columnCount) session = session.insertColumn(session.requireLayout().columnCount, fill)
+        while (session.requireLayout().columnCount > columnCount) session = session.removeColumn(session.requireLayout().columnCount - 1)
+        while (session.requireLayout().rowCount < rowCount) session = session.insertRow(session.requireLayout().rowCount, fill)
+        while (session.requireLayout().rowCount > rowCount) session = session.removeRow(session.requireLayout().rowCount - 1)
         return session
     }
 
