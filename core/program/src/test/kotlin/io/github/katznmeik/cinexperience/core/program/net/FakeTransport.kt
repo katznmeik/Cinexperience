@@ -28,7 +28,11 @@ internal class FakeTransport : ProgramTransport {
     var closed = 0
         private set
 
-    /** Number of requests that were aborted while blocked. */
+    /**
+     * Number of requests that were aborted while blocked. A request that waits
+     * [STALL_LIMIT_SECONDS] without an abort fails without counting here, so
+     * `aborted == 1` shows that an abort ended it, not a timeout.
+     */
     @Volatile
     var aborted = 0
         private set
@@ -56,12 +60,12 @@ internal class FakeTransport : ProgramTransport {
         return answer(abort)
     }
 
-    /** Blocks like a stalled connect or read until [abort] fires (at most 20 s), then fails like a closed socket. */
+    /** Blocks like a stalled connect or read until [abort] fires (at most [STALL_LIMIT_SECONDS]), then fails like a closed socket. */
     fun blockUntilAborted(abort: TransportAbort): Nothing {
         val released = CountDownLatch(1)
         abort.onAbort { released.countDown() }
         blocking.countDown()
-        if (released.await(20, TimeUnit.SECONDS)) {
+        if (released.await(STALL_LIMIT_SECONDS, TimeUnit.SECONDS)) {
             aborted++
             throw IOException("Socket closed")
         }
@@ -108,8 +112,21 @@ internal class FakeTransport : ProgramTransport {
 
         override fun read(): Int {
             if (sent < prefix) return 'a'.code.also { sent++ }
-            if (!released.await(20, TimeUnit.SECONDS)) throw IOException("Never aborted")
+            if (!released.await(STALL_LIMIT_SECONDS, TimeUnit.SECONDS)) throw IOException("Never aborted")
             throw IOException("Socket closed")
         }
+    }
+
+    companion object {
+        /**
+         * How long a stalled request waits for its abort. An abort takes milliseconds, and
+         * the download's own limit is the 90 s total timeout, so real-thread tests assert
+         * [aborted] instead of measuring the time, and only a hang guard above this limit
+         * measures time at all.
+         */
+        const val STALL_LIMIT_SECONDS = 20L
+
+        /** Ends a real-thread test that hangs; above [STALL_LIMIT_SECONDS], so a missing abort fails its own assertion first. */
+        const val HANG_GUARD_MS = 60_000L
     }
 }

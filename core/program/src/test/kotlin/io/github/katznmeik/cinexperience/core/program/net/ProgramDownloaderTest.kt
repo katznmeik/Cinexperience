@@ -232,7 +232,7 @@ class ProgramDownloaderTest {
     private fun <T> onRealThreads(block: suspend CoroutineScope.() -> T): T {
         val executor = Executors.newFixedThreadPool(3)
         try {
-            return runBlocking(executor.asCoroutineDispatcher()) { withTimeout(15_000) { block() } }
+            return runBlocking(executor.asCoroutineDispatcher()) { withTimeout(FakeTransport.HANG_GUARD_MS) { block() } }
         } finally {
             executor.shutdownNow()
         }
@@ -241,11 +241,9 @@ class ProgramDownloaderTest {
     @Test
     fun theTotalTimeoutAbortsAStalledConnect() = onRealThreads {
         val transport = FakeTransport().then { abort -> blockUntilAborted(abort) }
-        val started = System.nanoTime()
         val result = downloader(transport, totalTimeoutMs = 300).get()
+        assertEquals("ended by the watchdog's abort, not by waiting", 1, transport.aborted)
         assertEquals(ProgramError.NETWORK, result.error())
-        assertEquals(1, transport.aborted)
-        assertTrue((System.nanoTime() - started) / 1_000_000 < 10_000) // not a socket timeout
     }
 
     @Test
@@ -259,13 +257,11 @@ class ProgramDownloaderTest {
     fun cancellingTheDownloadAbortsTheBlockedCallAtOnce() = onRealThreads {
         val transport = FakeTransport().then { abort -> blockUntilAborted(abort) }
         val download = async { downloader(transport).get() } // 90 s timeout: only the cancel can end it
-        assertTrue(transport.blocking.await(5, TimeUnit.SECONDS))
-        val started = System.nanoTime()
+        assertTrue(transport.blocking.await(FakeTransport.STALL_LIMIT_SECONDS, TimeUnit.SECONDS))
         download.cancel()
         download.join()
+        assertEquals("ended by the cancel's abort, not by waiting", 1, transport.aborted)
         assertTrue(download.isCancelled)
-        assertEquals(1, transport.aborted)
-        assertTrue((System.nanoTime() - started) / 1_000_000 < 5_000)
     }
 
     @Test
