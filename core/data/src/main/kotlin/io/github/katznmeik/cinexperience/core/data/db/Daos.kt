@@ -178,9 +178,20 @@ internal interface TicketDao {
     @Query("SELECT visit_id FROM ticket WHERE booking_number = :bookingNumber")
     suspend fun visitIdOf(bookingNumber: String): Long?
 
-    /** Inserts the ticket or replaces the visit's ticket (check the booking number first: it is unique). */
-    @Upsert
-    suspend fun put(ticket: TicketEntity)
+    /**
+     * Inserts a ticket for a visit that has none. A booking number another ticket
+     * has fails loudly (UNIQUE index, ABORT), like a second ticket for the visit.
+     */
+    @Insert
+    suspend fun insert(ticket: TicketEntity)
+
+    /**
+     * Replaces the visit's ticket; returns 0 if the visit has none. Not an upsert:
+     * Room's upsert would turn a UNIQUE conflict on the booking number into an
+     * update of 0 rows, so the conflict would pass silently. Here it throws.
+     */
+    @Update
+    suspend fun update(ticket: TicketEntity): Int
 
     @Query("DELETE FROM ticket WHERE visit_id = :visitId")
     suspend fun delete(visitId: Long): Int

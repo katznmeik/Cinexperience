@@ -36,7 +36,11 @@ internal class RoomTicketRepository(
             val owner = dao.visitIdOf(ticket.bookingNumber.value)
             if (owner != null && owner != visit.id) return@withTransaction SaveTicketResult.BookingNumberInUse(owner)
             val saved = db.saveVisitInTransaction(visit)
-            dao.put(ticket.copy(visitId = saved.visitId).toEntity())
+            // The owner check above keeps the booking number unique; should it ever miss a
+            // conflict, the UNIQUE index makes the insert or update throw and the whole
+            // transaction (the visit too) is rolled back.
+            val entity = ticket.copy(visitId = saved.visitId).toEntity()
+            if (dao.update(entity) == 0) dao.insert(entity)
             SaveTicketResult.Saved(saved.visitId, saved.seatCleared)
         }
     }
