@@ -421,7 +421,7 @@ Don't duplicate config in module build files.
   every limit is in `TicketPdfLimits` (2 MB file, 4 pages, 2,000 objects, 2 MB per
   unpacked stream and 8 MB together, nesting, glyphs, ≤ 512 px QR candidates) and
   has a test. It never follows links, actions or external data; `read()` never
-  throws (`content()` is the strict path the fuzz tests use). Fields are checked by
+  throws for any file content (`content()` is the strict path the fuzz tests use). Fields are checked by
   `TicketPdfRules` and cleaned like the program's texts (`TicketText`); each is
   `Found` or `NotFound(MISSING/INVALID/AMBIGUOUS)`; several seats only where
   unambiguous. Never read or returned: the "Gebucht von" name, prices, numbers,
