@@ -155,6 +155,13 @@ Don't duplicate config in module build files.
   "Favourite, checked"); every cinema flow carries it. In the list,
   `CinemaFilter.FAVOURITES` is a filter, not a sort: only favourites, always in
   score order; the sort chips go back to `ALL` with their sort. Sort and filter live in the ViewModel (not persisted).
+- **Tickets** (v1.4, spec §4.7): `Ticket` (core:model: `BookingNumber`,
+  `TicketSeat`, `QrModules`, checked in `init`), written only through
+  `TicketRepository`: at most one per visit, deleted with it, a booking number
+  of another visit is refused (`SaveTicketResult.BookingNumberInUse`, nothing
+  saved). `Visit.startTime` is Berlin clock time; `ShowingTime` (core:model)
+  computes the start, upcoming visits and the QR modules' expiry (7 days), which
+  `DataContainer.removeExpiredQrModules` applies at app start.
 - **Seats** are identified by a stable `SeatId` stored in the layout (see
   `core/model/.../SeatLayout.kt`), never by grid position or label. Ids are never
   reused within a hall (`Hall.nextSeatId` is the hall's mark; the repository
@@ -245,8 +252,9 @@ Don't duplicate config in module build files.
   editor's range and a stored distance up to 15 to the 0.5 steps (a distance
   under 0.5 to 0 or 0.5); other widths and farther distances are kept, like an
   offset beyond the grid.
-- **Schema changes:** the database is at version 2 (`MIGRATION_1_2` added
-  `cinema.is_favourite` and `hall.screen_offset`). Bump the `CinexDatabase`
+- **Schema changes:** the database is at version 3 (`MIGRATION_1_2` added
+  `cinema.is_favourite` and `hall.screen_offset`, `MIGRATION_2_3`
+  `visit.start_time` and the `ticket` table). Bump the `CinexDatabase`
   version, add a migration to `ALL_MIGRATIONS`, commit the exported
   `core/data/schemas/.../<n>.json` and add a case to `MigrationTest`. No destructive fallback. A new table or column must
   also reach the backup (next point).
@@ -254,10 +262,12 @@ Don't duplicate config in module build files.
   `manifest.json`, `data.json` (every row, ids included, layouts as stored) and
   the referenced `photos/` and `reference/` files. The DTOs are the format and
   are separate from the Room entities: any DTO change bumps `BACKUP_VERSION`
-  (now 2: favourites and screen offsets; step 1 → 2 fills the defaults) and
+  (now 3: 2 added favourites and screen offsets, 3 start times and tickets;
+  steps 1 → 2 and 2 → 3 fill the defaults; QR modules are never in a backup,
+  a restore writes tickets without them) and
   adds a step to `BackupMigrations` (imports parse `data.json` strictly,
-  straight into the DTOs; new DTO fields get no default value). The v1
-  fixture in `core/data/src/test/resources/backup/v1` is never changed. `BackupValidator` holds the data rules; export and
+  straight into the DTOs; new DTO fields get no default value). The v1 and v2
+  fixtures in `core/data/src/test/resources/backup/` are never changed. `BackupValidator` holds the data rules; export and
   safety copies run it too, so no backup is written that can't be imported.
   Its size limits (texts and row labels within `TextLimits`, layouts within the
   `SeatLayout` limits and their JSON ≤ `LayoutJson.MAX_JSON_LENGTH` and not
