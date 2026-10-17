@@ -453,6 +453,9 @@ class LayoutEditorViewModel(
         _uiState.update { it.copy(referenceAlignment = alignment) }
     }
 
+    /** "Reset position": the screenshot goes back to its initial placement. */
+    fun resetReferencePosition() = setReferenceAlignment(null)
+
     // ---- Save / discard ----
 
     /**

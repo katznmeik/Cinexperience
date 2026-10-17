@@ -86,7 +86,14 @@ internal fun categoryRows(scores: HallScores): List<CategoryScoreRow> = HallCate
 sealed interface HallDetailUiState {
     data object Loading : HallDetailUiState
     data object NotFound : HallDetailUiState
-    data class Error(val message: String) : HallDetailUiState
+
+    /**
+     * Loading failed; [message] says so in place of the hall.
+     *
+     * @property pendingMessage a one-off message still to show in the snackbar, like
+     *   [Loaded.message] (e.g. a save that failed before loading did).
+     */
+    data class Error(val message: String, val pendingMessage: String? = null) : HallDetailUiState
 
     /**
      * @property layout `null` when the hall has no layout yet or it can't be read
@@ -118,6 +125,14 @@ sealed interface HallDetailUiState {
     ) : HallDetailUiState
 }
 
+/** The one-off message for the snackbar, whatever the screen shows. */
+internal val HallDetailUiState.snackbarMessage: String?
+    get() = when (this) {
+        is HallDetailUiState.Loaded -> message
+        is HallDetailUiState.Error -> pendingMessage
+        HallDetailUiState.Loading, HallDetailUiState.NotFound -> null
+    }
+
 /**
  * Hall detail (spec §6.3): header with the overall score, the coloured seat map,
  * the selected seat with its colour override and favourite, the score breakdown,
@@ -137,11 +152,19 @@ class HallDetailViewModel(
     private val writes = Mutex()
 
     val uiState: StateFlow<HallDetailUiState> =
-        combine(hallRepository.observeHallDetail(hallId), selectedSeatId, message) { detail, selected, message ->
-            detail?.toUiState(selected, message) ?: HallDetailUiState.NotFound
-        }
-            .catch { emit(HallDetailUiState.Error(LOAD_FAILED)) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HallDetailUiState.Loading)
+        combine(
+            combine(hallRepository.observeHallDetail(hallId), selectedSeatId) { detail, selected ->
+                detail?.toUiState(selected) ?: HallDetailUiState.NotFound
+            }.catch { emit(HallDetailUiState.Error(LOAD_FAILED)) },
+            // Combined after the catch, so a message still reaches the screen once loading failed.
+            message,
+        ) { state, message ->
+            when (state) {
+                is HallDetailUiState.Loaded -> state.copy(message = message)
+                is HallDetailUiState.Error -> state.copy(pendingMessage = message)
+                HallDetailUiState.Loading, HallDetailUiState.NotFound -> state
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HallDetailUiState.Loading)
 
     /** A tap on the map: selects the seat, or clears the selection when it was already selected. */
     fun onSeatClick(seatId: SeatId) {
@@ -177,7 +200,7 @@ class HallDetailViewModel(
         }
     }
 
-    /** The snackbar showed [HallDetailUiState.Loaded.message]. */
+    /** The snackbar showed the state's [snackbarMessage]. */
     fun messageShown() {
         message.value = null
     }
@@ -199,7 +222,7 @@ class HallDetailViewModel(
         }
     }
 
-    private fun HallDetail.toUiState(selected: SeatId?, message: String?): HallDetailUiState.Loaded {
+    private fun HallDetail.toUiState(selected: SeatId?): HallDetailUiState.Loaded {
         val layout = hall.layout
         val labels = this.labels
         val visuals = seats.mapValues { (_, state) -> state.toSeatVisual() }
@@ -241,7 +264,6 @@ class HallDetailViewModel(
             overallScore = scores.overall,
             scores = categoryRows(scores),
             seatVisuals = visuals,
-            message = message,
         )
     }
 

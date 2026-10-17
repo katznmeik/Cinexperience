@@ -12,19 +12,20 @@ import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramTime
 import io.github.katznmeik.cinexperience.core.ui.flow.minuteTicks
-import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaDeleteListener
+import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaDeleteState
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.CinemaEditor
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditDialog
 import io.github.katznmeik.cinexperience.feature.cinemas.edit.EditMessages
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -51,12 +52,11 @@ data class CinemaDetailUiState(
     val nowShowing: NowShowing = NowShowing.Hidden,
 )
 
-/** Where a delete started on this screen stands. */
-private sealed interface OwnDelete {
-    data object None : OwnDelete
-    data object Running : OwnDelete
-    data class Done(val message: String) : OwnDelete
-}
+/** The cinema's content and the last content that loaded, which stays on screen while a delete started here closes it. */
+private data class ContentWithLastLoaded(
+    val content: CinemaDetailContent,
+    val lastLoaded: CinemaDetailContent.Loaded?,
+)
 
 /**
  * Cinema detail (spec §6.2): header scores, halls, edit / add hall / delete actions
@@ -72,55 +72,36 @@ class CinemaDetailViewModel(
     ticks: Flow<Unit> = minuteTicks(),
 ) : ViewModel() {
 
-    private val ownDelete = MutableStateFlow<OwnDelete>(OwnDelete.None)
-
     /** Runs the favourite writes one after another (see [toggleFavourite]). */
     private val favouriteWrites = Mutex()
 
-    private val editor = CinemaEditor(
-        viewModelScope,
-        cinemaRepository,
-        hallRepository,
-        deleteListener = object : CinemaDeleteListener {
-            override fun onDeleting(cinemaId: Long) {
-                ownDelete.value = OwnDelete.Running
-            }
-
-            override fun onDeleted(cinemaId: Long, message: String) {
-                ownDelete.value = OwnDelete.Done(message)
-            }
-
-            override fun onDeleteFailed(cinemaId: Long) {
-                ownDelete.value = OwnDelete.None
-            }
-        },
-    )
+    private val editor = CinemaEditor(viewModelScope, cinemaRepository, hallRepository, tracksCinemaDelete = true)
 
     private val content = cinemaRepository.observeCinemaDetail(cinemaId)
         .map { detail -> detail?.let { CinemaDetailContent.Loaded(it) } ?: CinemaDetailContent.NotFound }
         .catch { emit(CinemaDetailContent.Error(LOAD_FAILED)) }
-
-    /** Last loaded content, kept on screen while a delete started here closes it. */
-    private var lastLoaded: CinemaDetailContent.Loaded? = null
+        .scan(null as ContentWithLastLoaded?) { previous, content ->
+            ContentWithLastLoaded(content, content as? CinemaDetailContent.Loaded ?: previous?.lastLoaded)
+        }
+        .filterNotNull()
 
     val uiState: StateFlow<CinemaDetailUiState> =
         combine(
             content,
             editor.dialog,
             editor.message,
-            ownDelete,
+            editor.deleteState,
             // ticks: "now" stays current, so started showings leave "Now showing".
             combine(programRepository.state, ticks) { program, _ -> program },
-        ) { content, dialog, message, ownDelete, program ->
-            if (content is CinemaDetailContent.Loaded) lastLoaded = content
-            val shown = if (ownDelete != OwnDelete.None && content !is CinemaDetailContent.Loaded) {
+        ) { (content, lastLoaded), dialog, message, delete, program ->
+            val shown = if (delete != CinemaDeleteState.None && content !is CinemaDetailContent.Loaded) {
                 lastLoaded ?: content
             } else {
                 content
             }
             val seedKey = (shown as? CinemaDetailContent.Loaded)?.detail?.cinema?.seedKey
             val nowShowing = NowShowing.of(program, seedKey, clock.instant(), ProgramTime.now(clock).toLocalDate())
-            CinemaDetailUiState(shown, dialog, message, (ownDelete as? OwnDelete.Done)?.message, nowShowing)
+            CinemaDetailUiState(shown, dialog, message, (delete as? CinemaDeleteState.Done)?.message, nowShowing)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CinemaDetailUiState())
 
     private val detail: CinemaDetail?

@@ -81,7 +81,7 @@ class YorckSeedScreenshotTest(private val seedKey: String) {
     }
 
     private fun seededHall(): Pair<String, Hall> = runBlocking {
-        val data = DataContainer(ApplicationProvider.getApplicationContext(), scope)
+        val data = DataContainer(ApplicationProvider.getApplicationContext(), scope, appVersion = "1.2.3")
         val cinema = data.cinemaRepository.observeCinemaDetails().first().single { detail ->
             detail.halls.any { it.hall.seedKey == seedKey }
         }

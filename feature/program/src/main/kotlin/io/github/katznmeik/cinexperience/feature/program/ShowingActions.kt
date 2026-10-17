@@ -1,24 +1,10 @@
 package io.github.katznmeik.cinexperience.feature.program
 
-import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.program.Program
 import io.github.katznmeik.cinexperience.core.program.ProgramLinks
 import io.github.katznmeik.cinexperience.core.program.visitPrefill
 import java.time.Instant
-import java.time.LocalDate
-
-/**
- * "Log visit" from a showing (spec §11.1): what Add visit is pre-filled with. The
- * app wires it to the visit form, which selects the hall of a one-hall cinema.
- *
- * @property cinemaId the app cinema of the showing, `null` if the app doesn't know it.
- */
-data class LogVisitRequest(
-    val cinemaId: Long?,
-    val date: LocalDate,
-    val filmTitle: String?,
-    val format: ScreeningFormat?,
-)
 
 /** The actions of a showing row, shared by the Program tab and the film page. */
 internal object ShowingActions {
@@ -48,11 +34,14 @@ internal object ShowingActions {
         Booking.None -> NO_LINK
     }
 
-    /** The pre-fill of "Log visit" for [showingId], `null` if the showing is gone. */
-    fun logVisit(program: Program?, showingId: String, join: CinemaJoin): LogVisitRequest? {
+    /**
+     * The pre-fill of "Log visit" for [showingId] (spec §11.1), `null` if the showing
+     * is gone. Its cinema is `null` if the app doesn't know the showing's cinema.
+     */
+    fun logVisit(program: Program?, showingId: String, join: CinemaJoin): VisitPrefillArgs? {
         val showing = program?.showings?.firstOrNull { it.id == showingId } ?: return null
         val prefill = showing.visitPrefill(ProgramLookup.filmOf(program, showing))
-        return LogVisitRequest(
+        return VisitPrefillArgs(
             cinemaId = join[prefill.cinemaSeedKey]?.id,
             date = prefill.date,
             filmTitle = prefill.filmTitle,

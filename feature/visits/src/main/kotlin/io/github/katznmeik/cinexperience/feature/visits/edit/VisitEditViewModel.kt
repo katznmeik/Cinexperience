@@ -16,9 +16,9 @@ import io.github.katznmeik.cinexperience.core.model.HallCategory
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.model.labels
 import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
-import io.github.katznmeik.cinexperience.feature.visits.VisitPrefillArgs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

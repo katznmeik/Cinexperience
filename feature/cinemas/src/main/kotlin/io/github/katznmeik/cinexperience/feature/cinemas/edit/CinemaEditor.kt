@@ -66,16 +66,19 @@ internal object EditMessages {
     fun deleted(name: String) = "Deleted $name"
 }
 
-/** Lets the cinema detail screen close itself around deleting its own cinema. */
-internal interface CinemaDeleteListener {
-    /** The delete is about to run: the cinema will disappear from the data. */
-    fun onDeleting(cinemaId: Long)
+/**
+ * Where a cinema delete confirmed in a [CinemaEditor] stands, so the cinema detail
+ * screen can close itself around deleting its own cinema.
+ */
+internal sealed interface CinemaDeleteState {
+    /** No delete is running, or the last one did not happen (failure, not found or preloaded). */
+    data object None : CinemaDeleteState
+
+    /** The delete is about to run or running: the cinema will disappear from the data. */
+    data object Running : CinemaDeleteState
 
     /** The cinema was deleted; [message] confirms it to the user. */
-    fun onDeleted(cinemaId: Long, message: String)
-
-    /** The delete did not happen (failure, not found or preloaded). */
-    fun onDeleteFailed(cinemaId: Long)
+    data class Done(val message: String) : CinemaDeleteState
 }
 
 /**
@@ -91,11 +94,19 @@ internal class CinemaEditor(
     private val scope: CoroutineScope,
     private val cinemaRepository: CinemaRepository,
     private val hallRepository: HallRepository,
-    /** When set, it gets the "Deleted …" message of a deleted cinema instead of [message]. */
-    private val deleteListener: CinemaDeleteListener? = null,
+    /**
+     * When true, a cinema delete is tracked in [deleteState], and the "Deleted …"
+     * message of a deleted cinema goes there instead of [message].
+     */
+    private val tracksCinemaDelete: Boolean = false,
 ) {
     private val _dialog = MutableStateFlow<EditDialog?>(null)
     val dialog: StateFlow<EditDialog?> = _dialog.asStateFlow()
+
+    private val _deleteState = MutableStateFlow<CinemaDeleteState>(CinemaDeleteState.None)
+
+    /** The cinema delete confirmed here; stays [CinemaDeleteState.None] unless [tracksCinemaDelete]. */
+    val deleteState: StateFlow<CinemaDeleteState> = _deleteState.asStateFlow()
 
     private val _message = MutableStateFlow<String?>(null)
 
@@ -230,14 +241,14 @@ internal class CinemaEditor(
                 }
             }
             is EditDialog.ConfirmDeleteCinema -> {
-                deleteListener?.onDeleting(d.cinemaId)
-                runWrite(EditMessages.DELETE_FAILED, onFailure = { deleteListener?.onDeleteFailed(d.cinemaId) }) {
+                if (tracksCinemaDelete) _deleteState.value = CinemaDeleteState.Running
+                runWrite(EditMessages.DELETE_FAILED, onFailure = { _deleteState.value = CinemaDeleteState.None }) {
                     val result = cinemaRepository.deleteCinema(d.cinemaId)
                     val message = result.message(d.name, EditMessages.PRELOADED_CINEMA)
-                    if (result == DeleteResult.DELETED && deleteListener != null) {
-                        deleteListener.onDeleted(d.cinemaId, message)
+                    if (result == DeleteResult.DELETED && tracksCinemaDelete) {
+                        _deleteState.value = CinemaDeleteState.Done(message)
                     } else {
-                        if (result != DeleteResult.DELETED) deleteListener?.onDeleteFailed(d.cinemaId)
+                        if (result != DeleteResult.DELETED) _deleteState.value = CinemaDeleteState.None
                         _message.value = message
                     }
                 }

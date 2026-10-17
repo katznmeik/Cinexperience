@@ -1,9 +1,10 @@
 package io.github.katznmeik.cinexperience.feature.program
 
-import io.github.katznmeik.cinexperience.core.program.FilmKey
 import androidx.lifecycle.SavedStateHandle
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.program.DownloadPermission
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.program.ProgramError
 import io.github.katznmeik.cinexperience.core.program.ProgramState
@@ -29,8 +30,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
-import java.time.Instant
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -534,12 +535,12 @@ class ProgramViewModelTest {
 
         val delphi = rows.first { it.cinemaName == "delphi LUX" }
         assertEquals(
-            LogVisitRequest(SampleData.DELPHI_LUX, today, "The Quiet Projectionist", ScreeningFormat.OMU),
+            VisitPrefillArgs(SampleData.DELPHI_LUX, today, "The Quiet Projectionist", ScreeningFormat.OMU),
             vm.logVisit(delphi.showingId),
         )
         val international = rows.first { it.cinemaName == "International" }
         assertEquals(
-            LogVisitRequest(7L, LocalDate.of(2026, 10, 17), "The Quiet Projectionist", ScreeningFormat.GERMAN_DUB),
+            VisitPrefillArgs(7L, LocalDate.of(2026, 10, 17), "The Quiet Projectionist", ScreeningFormat.GERMAN_DUB),
             vm.logVisit(international.showingId),
         )
         // OmeU has no screening format; Blauer Stern no app cinema.

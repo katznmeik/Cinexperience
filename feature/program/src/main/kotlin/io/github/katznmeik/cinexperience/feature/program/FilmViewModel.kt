@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.program.Film
 import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.program.Program
@@ -131,7 +132,7 @@ class FilmViewModel(
         local.update { it.copy(pendingLink = null, message = if (opened) it.message else ShowingActions.NO_BROWSER) }
     }
 
-    fun logVisit(showingId: String): LogVisitRequest? {
+    fun logVisit(showingId: String): VisitPrefillArgs? {
         val request = ShowingActions.logVisit(programRepository.state.value.program, showingId, latestJoin)
         if (request == null) local.update { it.copy(message = ShowingActions.SHOWING_GONE) }
         return request

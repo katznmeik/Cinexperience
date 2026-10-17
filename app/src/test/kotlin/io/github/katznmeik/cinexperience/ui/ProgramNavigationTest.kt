@@ -14,13 +14,13 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.testing.FakeBackupRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
-import io.github.katznmeik.cinexperience.feature.visits.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAddVisit
 import org.junit.Assert.assertEquals
 import org.junit.Rule

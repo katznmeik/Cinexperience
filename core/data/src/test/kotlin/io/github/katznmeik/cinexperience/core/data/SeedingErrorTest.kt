@@ -24,6 +24,7 @@ class SeedingErrorTest {
     private fun data(scope: CoroutineScope, failure: Throwable) = DataContainer(
         ApplicationProvider.getApplicationContext(),
         scope,
+        "1.2.3",
         Dispatchers.Default,
         Dispatchers.IO,
         seedSource = { throw failure },

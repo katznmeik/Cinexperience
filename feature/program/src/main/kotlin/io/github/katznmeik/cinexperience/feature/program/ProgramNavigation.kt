@@ -1,6 +1,5 @@
 package io.github.katznmeik.cinexperience.feature.program
 
-import io.github.katznmeik.cinexperience.core.program.FilmKey
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -9,6 +8,8 @@ import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
@@ -57,7 +58,7 @@ fun NavGraphBuilder.programScreen(
     filterStore: ProgramFilterStore,
     clock: Clock = Clock.systemDefaultZone(),
     onOpenFilm: (FilmKey) -> Unit,
-    onLogVisit: (LogVisitRequest) -> Unit,
+    onLogVisit: (VisitPrefillArgs) -> Unit,
 ) {
     composable<ProgramRoute> { entry ->
         val cinema = entry.toRoute<ProgramRoute>().cinemaSeedKey
@@ -77,7 +78,7 @@ fun NavGraphBuilder.filmScreen(
     cinemaRepository: CinemaRepository,
     clock: Clock = Clock.systemDefaultZone(),
     onBack: () -> Unit,
-    onLogVisit: (LogVisitRequest) -> Unit,
+    onLogVisit: (VisitPrefillArgs) -> Unit,
 ) {
     composable<FilmRoute> { entry ->
         val route = entry.toRoute<FilmRoute>()

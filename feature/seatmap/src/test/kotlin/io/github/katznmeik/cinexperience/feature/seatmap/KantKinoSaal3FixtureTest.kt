@@ -32,7 +32,7 @@ class KantKinoSaal3FixtureTest {
 
     @Test
     fun theFixtureIsTheSeededLayout() = runBlocking {
-        val data = DataContainer(ApplicationProvider.getApplicationContext(), scope)
+        val data = DataContainer(ApplicationProvider.getApplicationContext(), scope, appVersion = "1.2.3")
         val hall = data.cinemaRepository.observeCinemaDetails().first()
             .flatMap { it.halls }
             .single { it.hall.seedKey == "kant-kino/saal-3" }

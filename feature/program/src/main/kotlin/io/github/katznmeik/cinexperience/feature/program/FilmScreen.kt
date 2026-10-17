@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.ui.component.ActionPillButton
@@ -53,7 +54,7 @@ internal interface FilmActions {
 }
 
 @Composable
-internal fun FilmEntry(viewModel: FilmViewModel, onBack: () -> Unit, onLogVisit: (LogVisitRequest) -> Unit) {
+internal fun FilmEntry(viewModel: FilmViewModel, onBack: () -> Unit, onLogVisit: (VisitPrefillArgs) -> Unit) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     OpenLinkEffect(state.pendingLink, viewModel::onLinkHandled)
     val actions = remember(viewModel) {
