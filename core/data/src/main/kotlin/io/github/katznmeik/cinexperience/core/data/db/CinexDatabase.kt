@@ -53,7 +53,7 @@ internal abstract class CinexDatabase : RoomDatabase() {
 }
 
 /**
- * 1 → 2 (M8): favourite cinemas (`cinema.is_favourite`, spec §4.1) and the
+ * 1 → 2: favourite cinemas (`cinema.is_favourite`, spec §4.1) and the
  * screen's horizontal offset (`hall.screen_offset`, spec §4.2). Existing rows
  * keep all their data and get the defaults: not a favourite, screen centred.
  */

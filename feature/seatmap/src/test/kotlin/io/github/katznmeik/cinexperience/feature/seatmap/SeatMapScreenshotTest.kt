@@ -34,7 +34,6 @@ import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailUiState
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.HallDetailViewModel
 import io.github.katznmeik.cinexperience.feature.seatmap.detail.titleText
-import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutDraft
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutEditorActions
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutEditorScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.editor.LayoutEditorUiState

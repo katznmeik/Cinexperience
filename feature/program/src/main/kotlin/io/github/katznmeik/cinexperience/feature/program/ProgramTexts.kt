@@ -4,6 +4,7 @@ import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.program.Film
 import io.github.katznmeik.cinexperience.core.program.ProgramTime
 import io.github.katznmeik.cinexperience.core.program.ShowingVersion
+import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
 import io.github.katznmeik.cinexperience.core.ui.text.dateTimeText
 import io.github.katznmeik.cinexperience.core.ui.text.dayText
@@ -62,7 +63,7 @@ internal fun timeRangeText(from: LocalTime?, to: LocalTime?): String = when {
 internal fun partOfText(titles: List<String>): String = "Part of: " + titles.joinToString(", ") { isolate(it) }
 
 /** "1 showing", "12 showings". */
-internal fun showingsText(count: Int): String = if (count == 1) "1 showing" else "$count showings"
+internal fun showingsText(count: Int): String = countText(count, "showing")
 
 /** Spoken summary of a showing for its actions: "The Quiet Projectionist, Thursday 15 Oct, 16:30, delphi LUX". */
 internal fun showingSpokenName(item: ShowingItem): String =

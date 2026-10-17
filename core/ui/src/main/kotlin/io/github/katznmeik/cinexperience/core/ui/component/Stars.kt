@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 /** Number of stars of every rating (spec §4.4: 1–5). */
@@ -86,4 +87,4 @@ fun StarRatingDisplay(rating: Int?, modifier: Modifier = Modifier, starSize: Tex
 }
 
 /** "1 star", "4 stars". */
-fun starsText(count: Int): String = if (count == 1) "1 star" else "$count stars"
+fun starsText(count: Int): String = countText(count, "star")

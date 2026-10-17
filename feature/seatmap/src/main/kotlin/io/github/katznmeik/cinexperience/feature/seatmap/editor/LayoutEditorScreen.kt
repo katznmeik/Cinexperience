@@ -209,7 +209,7 @@ internal fun LayoutEditorScreen(
             )
             when (state.status) {
                 EditorStatus.Loading -> Unit
-                EditorStatus.NotFound -> FormMessage("This hall no longer exists.")
+                EditorStatus.NotFound -> FormMessage(LayoutEditorViewModel.HALL_GONE)
                 EditorStatus.LoadFailed -> {
                     FormMessage("Couldn't load this hall.")
                     TextButton(onClick = actions::onReload, modifier = Modifier.padding(horizontal = 8.dp)) { Text("Try again") }

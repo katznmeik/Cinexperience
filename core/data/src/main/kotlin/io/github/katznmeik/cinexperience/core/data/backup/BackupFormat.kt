@@ -40,7 +40,7 @@ import java.time.LocalDate
  * - Layouts are stored verbatim as the JSON string the database holds (LayoutJson).
  *
  * Versions: 1 (v1.0); 2 adds `isFavourite` to cinemas and `screenOffset` to
- * halls (M8). New DTO fields have no default values, so the strict parser still
+ * halls. New DTO fields have no default values, so the strict parser still
  * requires them; older files get them from their BackupMigrations step.
  */
 

@@ -247,7 +247,7 @@ object SampleLayouts {
     val yorckRowSixR: SeatId = SeatId(78)
 
     /**
-     * Kant Kino Saal 3 exactly as the seed (version 5) holds it (checked against the
+     * Kant Kino Saal 3 exactly as the seed holds it (checked against the
      * seed in feature:seatmap's `KantKinoSaal3FixtureTest`): 11 double sofas, each its
      * own row without a name ("-", spec §4.3), alternately right and left of the centre,
      * numbered 1–22 across the room: the front sofa holds 11 12, the next 14 13, … the

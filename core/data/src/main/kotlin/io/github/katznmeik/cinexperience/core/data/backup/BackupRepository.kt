@@ -2,7 +2,6 @@ package io.github.katznmeik.cinexperience.core.data.backup
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
 
@@ -118,9 +117,6 @@ interface BackupRepository {
      * import before that).
      */
     val safetyCopies: Flow<List<SafetyCopy>>
-
-    /** The newest safety copy, `null` if there is none. */
-    val latestSafetyCopy: Flow<SafetyCopy?> get() = safetyCopies.map { it.firstOrNull() }
 
     /**
      * Writes a backup of all data to [destinationUri] (a Storage Access Framework

@@ -45,14 +45,6 @@ enum class CellType {
     SEAT,
     GAP,
     AISLE,
-    ;
-
-    /** The next type in the editor's tap cycle SEAT → GAP → AISLE → SEAT (spec §6.5). */
-    fun next(): CellType = when (this) {
-        SEAT -> GAP
-        GAP -> AISLE
-        AISLE -> SEAT
-    }
 }
 
 /**
@@ -470,8 +462,9 @@ data class SeatLayout(
 
     /**
      * Turns one non-seat cell into a seat with the given, currently unused [id]
-     * and [fixedLabel] (used by [LayoutEditSession] to give a seat its original id
-     * and fixed label back). [blockStart] is the start number the seat was keyed
+     * and [fixedLabel]. Only tests call it; [LayoutEditSession] makes the same
+     * change through [LayoutChanges.setSeat] to give a seat its original id and
+     * fixed label back. [blockStart] is the start number the seat was keyed
      * on when it was painted away (see [LayoutRow.blockStartNumbers]). Its block
      * takes it unless a numbered seat that carries a start (automatic included)
      * comes before the restored seat in the block's numbering order; then that
@@ -553,9 +546,6 @@ data class SeatLayout(
     fun hasSameStructureAs(other: SeatLayout): Boolean =
         withCanonicalSeatIds().rows == other.withCanonicalSeatIds().rows
 
-    /** Cycles one cell SEAT → GAP → AISLE → SEAT (spec §6.5). */
-    fun cycleCell(row: Int, column: Int): SeatLayout = withCellType(row, column, cell(row, column).type.next())
-
     /**
      * Changes a row's label, numbering, numbering direction, block start numbers or
      * offset. The transform must leave [LayoutRow.cells] untouched; use
@@ -596,17 +586,6 @@ data class SeatLayout(
     fun removeColumn(index: Int): SeatLayout {
         require(columnCount > 1) { "Cannot remove the only column" }
         return copy(rows = rows.map { row -> row.withCells(row.cells.toMutableList().also { it.removeAt(index) }) })
-    }
-
-    /** Grows or shrinks the grid at the bottom / right edge; new cells are [fill]. */
-    fun resize(rowCount: Int, columnCount: Int, fill: CellType = CellType.SEAT): SeatLayout {
-        require(rowCount > 0 && columnCount > 0) { "Layout must be at least 1×1" }
-        var layout = this
-        while (layout.columnCount < columnCount) layout = layout.insertColumn(layout.columnCount, fill)
-        while (layout.columnCount > columnCount) layout = layout.removeColumn(layout.columnCount - 1)
-        while (layout.rowCount < rowCount) layout = layout.insertRow(layout.rowCount, fill)
-        while (layout.rowCount > rowCount) layout = layout.removeRow(layout.rowCount - 1)
-        return layout
     }
 
     companion object {

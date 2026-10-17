@@ -7,7 +7,6 @@ import io.github.katznmeik.cinexperience.core.program.DownloadPermission
 import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.program.ProgramError
 import io.github.katznmeik.cinexperience.core.program.ProgramState
-import io.github.katznmeik.cinexperience.core.program.ProgramStatus
 import io.github.katznmeik.cinexperience.core.program.ShowingVersion
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository

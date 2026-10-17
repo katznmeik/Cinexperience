@@ -110,14 +110,6 @@ object ProgramFilters {
         return if (acrossMidnight && !start.toLocalTime().isAfter(to)) start.toLocalDate().minusDays(1) else start.toLocalDate()
     }
 
-    /**
-     * The film search: true if a title of [showing] ([ProgramLookup.searchableTitles]:
-     * its film's and its specials') contains [search], ignoring case, accents and
-     * surrounding spaces.
-     */
-    fun matchesSearch(program: Program, showing: Showing, search: String): Boolean =
-        SearchIndex(program).matches(showing, normalise(search))
-
     private val MARKS = Regex("\\p{Mn}+")
     private val SPACES = Regex("\\s+")
 
@@ -135,6 +127,12 @@ object ProgramFilters {
     class SearchIndex(private val program: Program) {
         private val titles = HashMap<String, List<String>>()
 
+        /**
+         * The film search: true if a title of [showing] ([ProgramLookup.searchableTitles]:
+         * its film's and its specials') contains [needle], the search text [normalise]d
+         * (so case, accents and surrounding spaces don't count); an empty [needle]
+         * matches every showing.
+         */
         fun matches(showing: Showing, needle: String): Boolean =
             needle.isEmpty() ||
                 titles.getOrPut(showing.id) { ProgramLookup.searchableTitles(program, showing).map(::normalise) }

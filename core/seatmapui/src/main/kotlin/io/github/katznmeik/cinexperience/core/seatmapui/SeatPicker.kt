@@ -120,22 +120,6 @@ fun seatChoices(labels: LayoutLabels): List<SeatRowChoice> {
 fun seatChoices(layout: SeatLayout): List<SeatRowChoice> = seatChoices(layout.labels())
 
 /**
- * The first seat in a row labelled [rowLabel] whose seat label is [seat] (a
- * number like "10", or a fixed label like "R"). Both are trimmed and compared
- * ignoring case; every kind of place is numbered, so the kind doesn't matter.
- * A [rowLabel] that is `null`, blank or "-" ([LayoutRow.NO_NAME]) finds the seat
- * among the rows without a name.
- */
-fun List<SeatRowChoice>.findSeat(rowLabel: String?, seat: String): SeatId? {
-    val row = rowLabel?.trim()?.takeUnless { it.isEmpty() || it == LayoutRow.NO_NAME }
-    return asSequence()
-        .filter { if (row == null) it.isUnnamed else it.label.equals(row, ignoreCase = true) }
-        .flatMap { it.seats }
-        .firstOrNull { it.label.seat.equals(seat.trim(), ignoreCase = true) }
-        ?.seatId
-}
-
-/**
  * Choose a seat by row, then by number: an accessible alternative to tapping the
  * [SeatMap]. Plain chips (no dialog), each announced with the seat's full label.
  * Split rows show their blocks separately (numbers may restart per block). When
