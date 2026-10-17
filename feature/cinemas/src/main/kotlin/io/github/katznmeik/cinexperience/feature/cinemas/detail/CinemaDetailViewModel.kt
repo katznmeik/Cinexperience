@@ -52,7 +52,7 @@ data class CinemaDetailUiState(
     val nowShowing: NowShowing = NowShowing.Hidden,
 )
 
-/** The cinema's content, with the last loaded one up to it (kept on screen while a delete started here closes it). */
+/** The cinema's content and the last content that loaded, which stays on screen while a delete started here closes it. */
 private data class ContentWithLastLoaded(
     val content: CinemaDetailContent,
     val lastLoaded: CinemaDetailContent.Loaded?,

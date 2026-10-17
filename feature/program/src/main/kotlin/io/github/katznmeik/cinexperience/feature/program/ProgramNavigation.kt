@@ -1,7 +1,5 @@
 package io.github.katznmeik.cinexperience.feature.program
 
-import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
-import io.github.katznmeik.cinexperience.core.program.FilmKey
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -10,6 +8,8 @@ import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith

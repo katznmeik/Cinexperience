@@ -130,7 +130,7 @@ Don't duplicate config in module build files.
   together with callbacks. Four tabs (`TopLevelDestination`), in this order:
   Cinemas · Program · Rankings · Settings. "Show all in Program" (cinema detail)
   switches to `ProgramRoute(cinemaSeedKey)` with the tab options; "Log visit"
-  opens `AddVisitRoute` with pre-fill arguments (`VisitPrefillArgs`).
+  opens `AddVisitRoute` with pre-fill arguments (`VisitPrefillArgs`, core:model).
 - **Transitions** (spec §7) live only in `app/.../ui/CinexTransitions.kt`, passed
   to the NavHost in `CinexApp` (features never set their own): opening a screen
   slides it in from the right while the old one slides out left by the full

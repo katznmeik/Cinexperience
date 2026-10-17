@@ -1,10 +1,10 @@
 package io.github.katznmeik.cinexperience.feature.program
 
-import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
-import io.github.katznmeik.cinexperience.core.program.FilmKey
 import androidx.lifecycle.SavedStateHandle
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.program.DownloadPermission
+import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.program.ProgramError
 import io.github.katznmeik.cinexperience.core.program.ProgramState
@@ -30,8 +30,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
-import java.time.Instant
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
