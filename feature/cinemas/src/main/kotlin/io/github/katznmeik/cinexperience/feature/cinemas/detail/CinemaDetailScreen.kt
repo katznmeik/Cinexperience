@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +40,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import io.github.katznmeik.cinexperience.core.model.CinemaCategory
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
@@ -75,9 +79,7 @@ internal fun CinemaDetailEntry(
     onOpenProgram: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(state.deletedMessage) {
-        state.deletedMessage?.let(onCinemaDeleted)
-    }
+    CloseWhenResumed(state.deletedMessage, onCinemaDeleted)
     val actions = remember(viewModel) { viewModel.dialogActions() }
     CinemaDetailScreen(
         state = state,
@@ -94,6 +96,21 @@ internal fun CinemaDetailEntry(
         onShowAllInProgram = onShowAllInProgram,
         onOpenProgram = onOpenProgram,
     )
+}
+
+/**
+ * Calls [onClose] with [message] while the screen is resumed: right away, or once it
+ * is resumed again if the delete ended while the app was paused or a transition ran.
+ * Navigation callbacks are dropped unless the screen is resumed, so calling only
+ * once, as soon as the message arrives, could leave the screen open.
+ */
+@Composable
+private fun CloseWhenResumed(message: String?, onClose: (String) -> Unit) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentOnClose by rememberUpdatedState(onClose)
+    LaunchedEffect(message, lifecycleOwner) {
+        if (message != null) lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) { currentOnClose(message) }
+    }
 }
 
 private fun CinemaDetailViewModel.dialogActions() = object : EditDialogActions {
