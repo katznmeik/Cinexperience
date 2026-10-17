@@ -88,5 +88,6 @@ cinex-android-library = { id = "cinex.android.library" }
 cinex-android-compose = { id = "cinex.android.compose" }
 cinex-android-feature = { id = "cinex.android.feature" }
 cinex-android-room = { id = "cinex.android.room" }
+cinex-android-robolectric = { id = "cinex.android.robolectric" }
 cinex-android-roborazzi = { id = "cinex.android.roborazzi" }
 cinex-jvm-library = { id = "cinex.jvm.library" }
