@@ -16,6 +16,7 @@ import io.github.katznmeik.cinexperience.core.program.ProgramState
 import io.github.katznmeik.cinexperience.core.program.ProgramStatus
 import io.github.katznmeik.cinexperience.core.program.ProgramTime
 import io.github.katznmeik.cinexperience.core.program.ShowingVersion
+import io.github.katznmeik.cinexperience.core.ui.flow.minuteTicks
 import io.github.katznmeik.cinexperience.core.ui.text.codePointLength
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
@@ -30,7 +31,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -134,14 +134,6 @@ private data class LocalState(
     val pendingLink: String? = null,
 ) {
     val filter: ProgramFilter get() = temporary ?: settings.current
-}
-
-/** Emits now and then once a minute, so "now" stays current (started showings go, dates roll over). */
-internal fun minuteTicks(): Flow<Unit> = flow {
-    while (true) {
-        emit(Unit)
-        delay(60_000)
-    }
 }
 
 /**

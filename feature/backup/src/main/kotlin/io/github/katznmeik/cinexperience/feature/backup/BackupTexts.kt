@@ -5,17 +5,9 @@ import io.github.katznmeik.cinexperience.core.data.backup.LastExport
 import io.github.katznmeik.cinexperience.core.data.backup.SafetyCopy
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
-import java.time.Instant
+import io.github.katznmeik.cinexperience.core.ui.text.dateTimeText
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.roundToInt
-
-private val DATE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.ENGLISH)
-
-/** "3 Oct 2026, 14:05" in [zone]. */
-internal fun dateTimeText(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): String =
-    DATE_TIME.format(instant.atZone(zone))
 
 /** "Last export: 3 Oct 2026 · 27 visits, 9 photos". */
 internal fun lastExportText(export: LastExport, zone: ZoneId = ZoneId.systemDefault()): String =

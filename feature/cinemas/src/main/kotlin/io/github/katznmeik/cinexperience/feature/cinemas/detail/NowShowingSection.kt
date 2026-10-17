@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,28 +28,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.program.ProgramTime
-import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.component.LabelChip
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.text.dateTimeText
+import io.github.katznmeik.cinexperience.core.ui.text.dayHeaderText
+import io.github.katznmeik.cinexperience.core.ui.text.dayMonthText
+import io.github.katznmeik.cinexperience.core.ui.text.isolate
+import io.github.katznmeik.cinexperience.core.ui.text.timeText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-
-private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
-private val AS_OF: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.ENGLISH)
-private val OLD_DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
-private val DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE d MMM", Locale.ENGLISH)
-
-/** "Today · Thursday 15 Oct", "Tomorrow · Friday 16 Oct", "Saturday 17 Oct". */
-internal fun nowShowingDayText(date: LocalDate, today: LocalDate): String = when (date) {
-    today -> "Today · ${DAY.format(date)}"
-    today.plusDays(1) -> "Tomorrow · ${DAY.format(date)}"
-    else -> DAY.format(date)
-}
 
 /**
  * "Now showing" (spec §6.2): the cinema's showings of the next 7 days from the
@@ -87,13 +75,13 @@ internal fun LazyListScope.nowShowingItems(
         item(key = "now-showing-as-of") {
             Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    "As of ${AS_OF.format(nowShowing.asOf.atZone(ProgramTime.ZONE))}",
+                    "As of ${dateTimeText(nowShowing.asOf, ProgramTime.ZONE)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = CinexTheme.colors.textMuted,
                 )
                 if (nowShowing.isOld) {
                     Text(
-                        "Program from ${OLD_DAY.format(nowShowing.asOf.atZone(ProgramTime.ZONE))}; open the Program tab to update.",
+                        "Program from ${dayMonthText(nowShowing.asOf.atZone(ProgramTime.ZONE).toLocalDate())}; open the Program tab to update.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = CinexTheme.colors.text,
                     )
@@ -114,7 +102,7 @@ internal fun LazyListScope.nowShowingItems(
             nowShowing.days.forEach { day ->
                 item(key = "now-showing-${day.date}") {
                     Text(
-                        nowShowingDayText(day.date, nowShowing.today),
+                        dayHeaderText(day.date, nowShowing.today),
                         style = MaterialTheme.typography.labelMedium,
                         color = CinexTheme.colors.textMuted,
                         modifier = Modifier
@@ -170,7 +158,7 @@ private fun NowShowingRow(item: NowShowingItem, onClick: () -> Unit) {
 
 @Composable
 private fun ShowingTime(item: NowShowingItem, modifier: Modifier = Modifier) {
-    Text(TIME.format(item.start), style = CinexTheme.textStyles.score, color = CinexTheme.colors.text, modifier = modifier)
+    Text(timeText(item.start), style = CinexTheme.textStyles.score, color = CinexTheme.colors.text, modifier = modifier)
 }
 
 /** The film title and its version and event chips. */

@@ -1,11 +1,7 @@
 package io.github.katznmeik.cinexperience.feature.cinemas
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -16,6 +12,8 @@ import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
+import io.github.katznmeik.cinexperience.core.ui.navigation.navigateUpWithResultMessage
+import io.github.katznmeik.cinexperience.core.ui.navigation.resultMessage
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailEntry
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailViewModel
 import io.github.katznmeik.cinexperience.feature.cinemas.list.CinemasEntry
@@ -42,29 +40,10 @@ fun NavController.navigateToCinemaDetail(cinemaId: Long) = navigate(CinemaDetail
 fun NavController.navigateToManageCinemas() = navigate(ManageCinemasRoute)
 
 /**
- * Saved-state key of a message handed to the screen below a closing cinema detail.
- * Screens of other features that open a cinema detail get it from the app and show it.
- */
-const val CINEMA_RESULT_MESSAGE_KEY = "cinemas.resultMessage"
-
-private const val RESULT_MESSAGE_KEY = CINEMA_RESULT_MESSAGE_KEY
-
-/**
  * Closes a cinema detail whose cinema was just deleted and shows [message] on the
- * screen it returns to (the cinema list or the manage screen).
+ * screen it returns to (the cinema list, the manage screen or the rankings).
  */
-fun NavController.closeDeletedCinema(message: String) {
-    previousBackStackEntry?.savedStateHandle?.set(RESULT_MESSAGE_KEY, message)
-    navigateUp()
-}
-
-/** A message left for this screen by [closeDeletedCinema], and a way to clear it. */
-@Composable
-private fun NavBackStackEntry.resultMessage(): Pair<String?, () -> Unit> {
-    val handle = savedStateHandle
-    val message by handle.getStateFlow<String?>(RESULT_MESSAGE_KEY, null).collectAsStateWithLifecycle()
-    return message to { handle[RESULT_MESSAGE_KEY] = null }
-}
+fun NavController.closeDeletedCinema(message: String) = navigateUpWithResultMessage(message)
 
 fun NavGraphBuilder.cinemasScreen(
     cinemaRepository: CinemaRepository,

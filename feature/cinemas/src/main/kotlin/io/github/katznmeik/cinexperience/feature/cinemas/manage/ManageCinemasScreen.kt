@@ -13,11 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,11 +28,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarEffect
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
@@ -101,19 +101,8 @@ internal fun ManageCinemasScreen(
     incomingMessage: String? = null,
     onIncomingMessageShown: () -> Unit = {},
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(incomingMessage) {
-        incomingMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            onIncomingMessageShown()
-        }
-    }
-    LaunchedEffect(state.message) {
-        state.message?.let {
-            snackbarHostState.showSnackbar(it)
-            onMessageShown()
-        }
-    }
+    val snackbarHostState = rememberMessageSnackbarState(incomingMessage, onIncomingMessageShown)
+    MessageSnackbarEffect(snackbarHostState, state.message, onMessageShown)
     Box(modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -178,7 +167,7 @@ internal fun ManageCinemasScreen(
                 }
             }
         }
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+        MessageSnackbarHost(snackbarHostState)
     }
     EditDialogHost(state.dialog, dialogActions)
 }

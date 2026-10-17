@@ -8,12 +8,11 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaSummary
 import io.github.katznmeik.cinexperience.core.model.ScoreOrder
+import io.github.katznmeik.cinexperience.core.ui.flow.asResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
@@ -92,9 +91,7 @@ class CinemasViewModel(cinemaRepository: CinemaRepository) : ViewModel() {
 
     private val choice = MutableStateFlow(Choice())
 
-    private val cinemas = cinemaRepository.observeCinemas()
-        .map { Result.success(it) }
-        .catch { emit(Result.failure(it)) }
+    private val cinemas = cinemaRepository.observeCinemas().asResult()
 
     val uiState: StateFlow<CinemasUiState> = combine(cinemas, choice) { result, choice ->
         val all = result.getOrDefault(emptyList())
