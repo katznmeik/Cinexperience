@@ -12,11 +12,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -34,8 +31,11 @@ import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.ui.component.ActionPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.text.dayHeaderText
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
@@ -73,13 +73,7 @@ internal fun FilmEntry(viewModel: FilmViewModel, onBack: () -> Unit, onLogVisit:
 /** The film page (spec §6.9). */
 @Composable
 internal fun FilmScreen(state: FilmUiState, actions: FilmActions, modifier: Modifier = Modifier) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(state.message) {
-        state.message?.let {
-            snackbarHostState.showSnackbar(it)
-            actions.onMessageShown()
-        }
-    }
+    val snackbarHostState = rememberMessageSnackbarState(state.message, actions::onMessageShown)
     Box(modifier.fillMaxSize()) {
         when (val content = state.content) {
             FilmContent.Loading -> BackTopBar(actions::onBack)
@@ -95,7 +89,7 @@ internal fun FilmScreen(state: FilmUiState, actions: FilmActions, modifier: Modi
             }
             is FilmContent.Loaded -> FilmContentList(content, state, actions)
         }
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+        MessageSnackbarHost(snackbarHostState)
     }
 }
 

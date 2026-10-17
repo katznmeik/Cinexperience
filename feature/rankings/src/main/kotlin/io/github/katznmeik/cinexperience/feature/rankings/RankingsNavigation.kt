@@ -1,13 +1,12 @@
 package io.github.katznmeik.cinexperience.feature.rankings
 
-import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import io.github.katznmeik.cinexperience.core.data.repository.RankingsRepository
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
+import io.github.katznmeik.cinexperience.core.ui.navigation.resultMessage
 import kotlinx.serialization.Serializable
 
 /** Rankings tab (spec §6.6). */
@@ -15,29 +14,24 @@ import kotlinx.serialization.Serializable
 data object RankingsRoute
 
 /**
- * @param resultMessageKey saved-state key under which a screen opened from here
- *   (e.g. a cinema detail whose cinema was deleted) leaves a message; it is shown
- *   in a snackbar and then cleared. `null` = none.
+ * A message left by a screen opened from here when it closes (e.g. a cinema detail
+ * whose cinema was deleted, `navigateUpWithResultMessage`) is shown in a snackbar and
+ * then cleared.
  */
 fun NavGraphBuilder.rankingsScreen(
     rankingsRepository: RankingsRepository,
     onOpenHall: (Long) -> Unit,
     onOpenCinema: (Long) -> Unit,
-    resultMessageKey: String? = null,
 ) {
     composable<RankingsRoute> { entry ->
-        val handle = entry.savedStateHandle
-        val message = resultMessageKey?.let { key ->
-            val value by handle.getStateFlow<String?>(key, null).collectAsStateWithLifecycle()
-            value
-        }
+        val (message, onMessageShown) = entry.resultMessage()
         ScreenBackground {
             RankingsEntry(
                 viewModel = viewModel(factory = RankingsViewModel.factory(rankingsRepository)),
                 onOpenHall = dropUnlessResumedWith(onOpenHall),
                 onOpenCinema = dropUnlessResumedWith(onOpenCinema),
                 message = message,
-                onMessageShown = { resultMessageKey?.let { handle[it] = null } },
+                onMessageShown = onMessageShown,
             )
         }
     }

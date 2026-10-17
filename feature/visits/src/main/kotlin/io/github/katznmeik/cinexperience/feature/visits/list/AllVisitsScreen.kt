@@ -25,14 +25,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
-import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
+import io.github.katznmeik.cinexperience.core.ui.component.InfoText
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
 import io.github.katznmeik.cinexperience.core.ui.component.StarRatingDisplay
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
+import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.visits.UNTITLED
 
@@ -78,9 +79,12 @@ internal fun AllVisitsScreen(
             }
         }
         when {
-            state.errorMessage != null -> item(key = "error") { InfoText(state.errorMessage) }
+            state.errorMessage != null -> item(key = "error") { InfoText(state.errorMessage, horizontalPadding = 20.dp) }
             !state.isLoading && state.visits.isEmpty() -> item(key = "empty") {
-                InfoText("Visits you log with \"Add visit\" on the Cinemas tab or a hall's page appear here.")
+                InfoText(
+                    "Visits you log with \"Add visit\" on the Cinemas tab or a hall's page appear here.",
+                    horizontalPadding = 20.dp,
+                )
             }
             else -> itemsIndexed(state.visits, key = { _, item -> item.visit.id }) { index, item ->
                 Column(Modifier.padding(horizontal = 12.dp)) {
@@ -122,14 +126,4 @@ private fun VisitRow(item: VisitListItem, onClick: () -> Unit) {
         }
         if (!starsBelow && visit.seatRating != null) StarRatingDisplay(visit.seatRating?.value)
     }
-}
-
-@Composable
-private fun InfoText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = CinexTheme.colors.textMuted,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-    )
 }

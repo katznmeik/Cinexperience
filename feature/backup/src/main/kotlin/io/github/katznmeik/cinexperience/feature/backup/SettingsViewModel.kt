@@ -17,6 +17,7 @@ import io.github.katznmeik.cinexperience.core.program.DownloadPermission
 import io.github.katznmeik.cinexperience.core.program.ProgramActionResult
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramStatus
+import io.github.katznmeik.cinexperience.core.ui.flow.asResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -143,8 +144,8 @@ class SettingsViewModel(
     private val transient = MutableStateFlow(BackupUiState())
 
     private val counts: Flow<Result<DataCounts>> = cinemaRepository.observeCinemaDetails()
-        .map { Result.success(DataCounts.of(it)) }
-        .catch { emit(Result.failure(it)) }
+        .map { DataCounts.of(it) }
+        .asResult()
 
     private val lastExport: Flow<LastExport?> = backupRepository.lastExport.orNullOnError()
     private val safetyCopies: Flow<List<SafetyCopy>> = backupRepository.safetyCopies.catch { emit(emptyList()) }

@@ -7,6 +7,8 @@ plugins {
 
 dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
+    // NavController and the back stack's saved state, for the result message (navigation/ResultMessage.kt).
+    implementation(libs.androidx.navigation.compose)
 
     testImplementation(projects.core.testing)
 }

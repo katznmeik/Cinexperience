@@ -21,23 +21,17 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -46,7 +40,11 @@ import io.github.katznmeik.cinexperience.core.model.NO_SCORE_TEXT
 import io.github.katznmeik.cinexperience.core.model.formatScore
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChipRow
+import io.github.katznmeik.cinexperience.core.ui.component.InfoText
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
+import io.github.katznmeik.cinexperience.core.ui.component.rememberTextWidth
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 @Composable
@@ -79,16 +77,10 @@ internal fun RankingsScreen(
     message: String? = null,
     onMessageShown: () -> Unit = {},
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(message) {
-        message?.let {
-            snackbarHostState.showSnackbar(it)
-            onMessageShown()
-        }
-    }
+    val snackbarHostState = rememberMessageSnackbarState(message, onMessageShown)
     Box(modifier.fillMaxSize()) {
         RankingsList(state, onScopeChange, onCategoryChange, onOpenItem)
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+        MessageSnackbarHost(snackbarHostState)
     }
 }
 
@@ -238,28 +230,11 @@ private fun RankedCard(item: RankedItem, onClick: () -> Unit) {
 
 /** Width of the position column: two digits in the score style, at least 32 dp. */
 @Composable
-private fun rankWidth(): Dp {
-    val measurer = rememberTextMeasurer()
-    val style = CinexTheme.textStyles.score
-    val density = LocalDensity.current
-    return remember(style, density) {
-        with(density) { measurer.measure("88", style).size.width.toDp() }.coerceAtLeast(32.dp)
-    }
-}
+private fun rankWidth(): Dp = rememberTextWidth("88", CinexTheme.textStyles.score).coerceAtLeast(32.dp)
 
 /** Spoken summary, e.g. "Rank 1, International, 1 hall · 3 visits, score 4.4" or "Capitol Dahlem, not rated". */
 internal fun RankedItem.accessibilityText(): String = if (position == null || score == null) {
     "$title, ${subtitle.replace(" · ", ", ")}, not rated"
 } else {
     "Rank $position, $title, ${subtitle.replace(" · ", ", ")}, score ${formatScore(score)}"
-}
-
-@Composable
-private fun InfoText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = CinexTheme.colors.textMuted,
-        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-    )
 }

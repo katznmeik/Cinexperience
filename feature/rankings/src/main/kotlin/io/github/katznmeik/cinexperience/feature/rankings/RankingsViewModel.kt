@@ -11,13 +11,12 @@ import io.github.katznmeik.cinexperience.core.data.repository.RankingsRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaCategory
 import io.github.katznmeik.cinexperience.core.model.HallCategory
 import io.github.katznmeik.cinexperience.core.model.ScoreOrder
+import io.github.katznmeik.cinexperience.core.ui.flow.asResult
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /** What the Rankings tab ranks (spec §6.6). */
@@ -149,9 +148,7 @@ class RankingsViewModel(rankingsRepository: RankingsRepository) : ViewModel() {
 
     private val selection = MutableStateFlow(RankingsUiState(isLoading = false))
 
-    private val rankings = rankingsRepository.observeRankings()
-        .map { Result.success(it) }
-        .catch { emit(Result.failure(it)) }
+    private val rankings = rankingsRepository.observeRankings().asResult()
 
     val uiState: StateFlow<RankingsUiState> = combine(rankings, selection) { result, sel ->
         val data = result.getOrNull()

@@ -6,36 +6,15 @@ import io.github.katznmeik.cinexperience.core.program.ProgramTime
 import io.github.katznmeik.cinexperience.core.program.ShowingVersion
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
+import io.github.katznmeik.cinexperience.core.ui.text.dateTimeText
+import io.github.katznmeik.cinexperience.core.ui.text.dayText
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
+import io.github.katznmeik.cinexperience.core.ui.text.timeText
 import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-
-private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
-private val DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE d MMM", Locale.ENGLISH)
-private val SHORT_DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)
-private val AS_OF: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.ENGLISH)
-
-/** "16:30" */
-internal fun timeText(time: LocalTime): String = TIME.format(time)
-
-internal fun timeText(dateTime: LocalDateTime): String = timeText(dateTime.toLocalTime())
-
-/** Day header: "Today · Thursday 15 Oct", "Tomorrow · Friday 16 Oct", "Saturday 17 Oct". */
-internal fun dayHeaderText(date: LocalDate, today: LocalDate): String = when (date) {
-    today -> "Today · ${DAY.format(date)}"
-    today.plusDays(1) -> "Tomorrow · ${DAY.format(date)}"
-    else -> DAY.format(date)
-}
-
-/** "Sat 17 Oct" */
-internal fun shortDayText(date: LocalDate): String = SHORT_DAY.format(date)
 
 /** "As of 15 Oct 2026, 10:00" (Berlin time, like the program). */
-internal fun asOfText(instant: Instant): String = "As of ${AS_OF.format(instant.atZone(ProgramTime.ZONE))}"
+internal fun asOfText(instant: Instant): String = "As of ${dateTimeText(instant, ProgramTime.ZONE)}"
 
 /** "118 min · ends about 18:28", or just one of them, or `null`. */
 internal fun runtimeText(item: ShowingItem): String? = listOfNotNull(
@@ -88,4 +67,4 @@ internal fun showingsText(count: Int): String = countText(count, "showing")
 
 /** Spoken summary of a showing for its actions: "The Quiet Projectionist, Thursday 15 Oct, 16:30, delphi LUX". */
 internal fun showingSpokenName(item: ShowingItem): String =
-    "${isolate(item.filmTitle)}, ${DAY.format(item.start)}, ${timeText(item.start)}, ${isolate(item.cinemaName)}"
+    "${isolate(item.filmTitle)}, ${dayText(item.start.toLocalDate())}, ${timeText(item.start)}, ${isolate(item.cinemaName)}"

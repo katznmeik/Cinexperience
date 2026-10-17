@@ -7,44 +7,33 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -53,36 +42,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
@@ -92,21 +62,25 @@ import io.github.katznmeik.cinexperience.core.model.HallCategory
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.ui.component.ChoiceChip
+import io.github.katznmeik.cinexperience.core.ui.component.FormMessage
+import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
+import io.github.katznmeik.cinexperience.core.ui.component.MutedText
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.RowGroup
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.StarRatingInput
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
-import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
+import io.github.katznmeik.cinexperience.core.ui.component.rememberLoadedImage
+import io.github.katznmeik.cinexperience.core.ui.component.rememberMessageSnackbarState
+import io.github.katznmeik.cinexperience.core.ui.component.toPickerDate
+import io.github.katznmeik.cinexperience.core.ui.component.toPickerMillis
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.navigation.CloseOnce
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.visits.chipText
 import io.github.katznmeik.cinexperience.feature.visits.formLabel
-import kotlinx.coroutines.CancellationException
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 
 /** Everything the form can do; the defaults do nothing (screenshots, previews). */
 internal interface VisitEditActions {
@@ -195,25 +169,8 @@ internal fun VisitEditEntry(
         }
     }
     val path = state.form.photoPath
-    val photo by produceState<ImageBitmap?>(null, path) {
-        value = path?.let {
-            try {
-                photoStore.loadPhoto(it, THUMBNAIL_DECODE_SIZE)?.asImageBitmap()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
-    // Close exactly once, also if the screen is recreated while it leaves.
-    var closeHandled by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(state.isClosed) {
-        if (state.isClosed && !closeHandled) {
-            closeHandled = true
-            onClose()
-        }
-    }
+    val photo by rememberLoadedImage(path) { photoStore.loadPhoto(it, THUMBNAIL_DECODE_SIZE) }
+    CloseOnce(state.isClosed, onClose)
     // Stays enabled while saving: Back is then swallowed instead of leaving mid-save.
     BackHandler(enabled = !state.isClosed) { actions.onClose() }
     VisitEditScreen(state, photo, actions)
@@ -234,13 +191,7 @@ internal fun VisitEditScreen(
     actions: VisitEditActions,
     modifier: Modifier = Modifier,
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(state.message) {
-        state.message?.let {
-            snackbarHostState.showSnackbar(it)
-            actions.onMessageShown()
-        }
-    }
+    val snackbarHostState = rememberMessageSnackbarState(state.message, actions::onMessageShown)
     Box(modifier.fillMaxSize()) {
         val picker = state.seatPicker
         if (picker != null) {
@@ -254,13 +205,13 @@ internal fun VisitEditScreen(
                 )
                 when (state.status) {
                     VisitEditStatus.Loading -> Unit
-                    VisitEditStatus.NotFound -> Message("This visit no longer exists.")
-                    VisitEditStatus.LoadFailed -> Message(VisitEditViewModel.LOAD_FAILED)
+                    VisitEditStatus.NotFound -> FormMessage("This visit no longer exists.")
+                    VisitEditStatus.LoadFailed -> FormMessage(VisitEditViewModel.LOAD_FAILED)
                     VisitEditStatus.Ready -> FormContent(state, photo, actions)
                 }
             }
         }
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
+        MessageSnackbarHost(snackbarHostState)
     }
     DialogHost(state.dialog, actions)
 }
@@ -455,180 +406,6 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
     }
 }
 
-/**
- * Two fields side by side; with large text one below the other, so their
- * texts ("Choose cinema first", a film title) aren't cut off.
- */
-@Composable
-private fun FieldPair(
-    first: @Composable (Modifier) -> Unit,
-    second: @Composable (Modifier) -> Unit,
-) {
-    if (isLargeText()) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            first(Modifier.fillMaxWidth())
-            second(Modifier.fillMaxWidth())
-        }
-    } else {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            first(Modifier.weight(1f))
-            second(Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun LabelledField(label: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.textMuted)
-        content()
-    }
-}
-
-/** The 48 dp surface box of the form's fields. */
-@Composable
-private fun FieldBox(
-    onClick: (() -> Unit)?,
-    contentDescription: String?,
-    modifier: Modifier = Modifier,
-    content: @Composable RowScope.() -> Unit,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clip(FieldShape)
-            .background(CinexTheme.colors.surface)
-            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-            .then(
-                // The description replaces the visible texts (e.g. "Hall, not chosen" instead of "Choose").
-                if (contentDescription != null) {
-                    Modifier.clearAndSetSemantics {
-                        this.contentDescription = contentDescription
-                        if (onClick != null) {
-                            role = Role.Button
-                            onClick {
-                                onClick()
-                                true
-                            }
-                        }
-                    }
-                } else {
-                    Modifier
-                },
-            )
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        content = content,
-    )
-}
-
-private val FieldShape = RoundedCornerShape(12.dp)
-
-@Composable
-private fun FieldText(text: String, modifier: Modifier = Modifier, muted: Boolean = false) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (muted) FontWeight.Normal else FontWeight.Medium),
-        color = if (muted) CinexTheme.colors.textMuted else CinexTheme.colors.text,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier,
-    )
-}
-
-/** A dropdown-like field ("delphi LUX ▾") opening a menu of [options] (id to name). */
-@Composable
-private fun DropdownField(
-    text: String?,
-    placeholder: String,
-    contentDescription: String,
-    options: List<Pair<Long, String>>,
-    onSelect: (Long) -> Unit,
-) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        FieldBox(
-            onClick = if (options.isEmpty()) null else ({ open = true }),
-            contentDescription = when {
-                text != null -> "$contentDescription, $text"
-                options.isEmpty() -> "$contentDescription, not chosen, ${placeholder.lowercase()}"
-                else -> "$contentDescription, not chosen"
-            },
-        ) {
-            FieldText(text ?: placeholder, Modifier.weight(1f), muted = text == null)
-            Icon(
-                CinexIcons.ChevronDown,
-                contentDescription = null,
-                tint = if (options.isEmpty()) CinexTheme.colors.outline else CinexTheme.colors.textMuted,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        DropdownMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            containerColor = CinexTheme.colors.surfaceRaised,
-        ) {
-            options.forEach { (id, name) ->
-                DropdownMenuItem(
-                    text = { Text(name, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text) },
-                    onClick = {
-                        open = false
-                        onSelect(id)
-                    },
-                )
-            }
-        }
-    }
-}
-
-/** A plain text field in the form's field style, with a muted [placeholder]. */
-@Composable
-private fun TextInput(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    contentDescription: String,
-    singleLine: Boolean,
-    minHeight: Dp = 48.dp,
-) {
-    val style = MaterialTheme.typography.bodyMedium.copy(color = CinexTheme.colors.text, fontWeight = FontWeight.Medium)
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        singleLine = singleLine,
-        textStyle = style,
-        cursorBrush = SolidColor(CinexTheme.colors.text),
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics { this.contentDescription = contentDescription },
-        decorationBox = { inner ->
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = minHeight)
-                    .clip(FieldShape)
-                    .background(CinexTheme.colors.surface)
-                    .padding(horizontal = 14.dp, vertical = 14.dp),
-                contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart,
-            ) {
-                if (value.isEmpty()) {
-                    // Not read out: the field's description already names it.
-                    Text(
-                        placeholder,
-                        style = style.copy(fontWeight = FontWeight.Normal),
-                        color = CinexTheme.colors.textMuted,
-                        maxLines = 1,
-                        modifier = Modifier.clearAndSetSemantics {},
-                    )
-                }
-                inner()
-            }
-        },
-    )
-}
-
 @Composable
 private fun SeatCard(state: VisitEditUiState, actions: VisitEditActions) {
     val form = state.form
@@ -703,161 +480,6 @@ private fun SeatCard(state: VisitEditUiState, actions: VisitEditActions) {
     }
 }
 
-/** One rating row: label on the left, five stars on the right, at least 52 dp tall. */
-@Composable
-private fun StarRow(label: String, rating: Int?, onRate: (Int) -> Unit) {
-    // With large text the label goes above the stars, so it isn't broken mid-word.
-    if (isLargeText()) {
-        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 4.dp)) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text)
-            StarRatingInput(rating = rating, onRate = onRate, label = label, modifier = Modifier.align(Alignment.End))
-        }
-        return
-    }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .padding(start = 16.dp, end = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text, modifier = Modifier.weight(1f))
-        StarRatingInput(rating = rating, onRate = onRate, label = label)
-    }
-}
-
-@Composable
-private fun CollapsibleHeader(text: String, expanded: Boolean, onToggle: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(role = Role.Button, onClick = onToggle)
-            .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        SectionHeader(text, Modifier.weight(1f))
-        Icon(
-            if (expanded) CinexIcons.ChevronDown else CinexIcons.ChevronRight,
-            contentDescription = null,
-            tint = CinexTheme.colors.textMuted,
-            modifier = Modifier
-                .padding(end = 8.dp)
-                .size(18.dp),
-        )
-    }
-}
-
-@Composable
-private fun PhotoField(photo: ImageBitmap?, hasPhoto: Boolean, busy: Boolean, actions: VisitEditActions) {
-    var menuOpen by remember { mutableStateOf(false) }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Box {
-            val tileShape = RoundedCornerShape(14.dp)
-            if (hasPhoto) {
-                // A picture without text: a fixed size is fine.
-                Box(
-                    Modifier
-                        .size(96.dp)
-                        .clip(tileShape)
-                        .background(CinexTheme.colors.surface)
-                        .semantics { contentDescription = "Visit photo" },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (photo != null) {
-                        Image(photo, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                    } else {
-                        Icon(CinexIcons.Image, contentDescription = null, tint = CinexTheme.colors.textMuted)
-                    }
-                }
-            } else {
-                // At least 96 dp; wider and taller when "Add photo" needs it (large text).
-                DashedTile(
-                    modifier = Modifier
-                        .sizeIn(minWidth = 96.dp, minHeight = 96.dp)
-                        .clip(tileShape)
-                        .clickable(enabled = !busy, role = Role.Button) { menuOpen = true },
-                )
-            }
-            PhotoSourceMenu(
-                expanded = menuOpen,
-                onDismiss = { menuOpen = false },
-                onCamera = {
-                    menuOpen = false
-                    actions.onTakePhoto()
-                },
-                onGallery = {
-                    menuOpen = false
-                    actions.onChoosePhoto()
-                },
-            )
-        }
-        if (hasPhoto) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                PhotoButton("Replace", "Replace photo", enabled = !busy, onClick = { menuOpen = true })
-                PhotoButton("Remove", "Remove photo", enabled = !busy, onClick = actions::onRemovePhoto)
-            }
-        } else if (busy) {
-            Text("Adding photo…", style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
-        }
-    }
-}
-
-/** "Replace" / "Remove" next to the photo, read out with their object ("Remove photo"). */
-@Composable
-private fun PhotoButton(text: String, description: String, enabled: Boolean, onClick: () -> Unit) {
-    TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.semantics { contentDescription = description }) {
-        Text(
-            text,
-            style = MaterialTheme.typography.labelLarge,
-            color = CinexTheme.colors.text,
-            modifier = Modifier.clearAndSetSemantics {},
-        )
-    }
-}
-
-@Composable
-private fun DashedTile(modifier: Modifier) {
-    val outline = CinexTheme.colors.outline
-    Column(
-        modifier = modifier
-            .drawBehind {
-                val stroke = 1.5.dp.toPx()
-                drawRoundRect(
-                    color = outline,
-                    topLeft = Offset(stroke / 2, stroke / 2),
-                    size = Size(size.width - stroke, size.height - stroke),
-                    cornerRadius = CornerRadius(14.dp.toPx()),
-                    style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx()))),
-                )
-            }
-            .padding(10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(CinexIcons.Camera, contentDescription = null, tint = CinexTheme.colors.textMuted, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.size(6.dp))
-        Text("Add photo", style = MaterialTheme.typography.labelSmall, color = CinexTheme.colors.textMuted, textAlign = TextAlign.Center)
-    }
-}
-
-@Composable
-private fun PhotoSourceMenu(expanded: Boolean, onDismiss: () -> Unit, onCamera: () -> Unit, onGallery: () -> Unit) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss, containerColor = CinexTheme.colors.surfaceRaised) {
-        DropdownMenuItem(
-            text = { Text("Camera", style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text) },
-            leadingIcon = { Icon(CinexIcons.Camera, contentDescription = null, tint = CinexTheme.colors.text) },
-            onClick = onCamera,
-        )
-        DropdownMenuItem(
-            text = { Text("Gallery", style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text) },
-            leadingIcon = { Icon(CinexIcons.Image, contentDescription = null, tint = CinexTheme.colors.text) },
-            onClick = onGallery,
-        )
-    }
-}
-
 /**
  * Material date picker in a dialog, picker mode only (no text input). The
  * picker works in UTC midnight millis; the visit date is a plain [LocalDate].
@@ -876,10 +498,6 @@ private fun VisitDatePicker(date: LocalDate, onDate: (LocalDate) -> Unit, onDism
     }
 }
 
-internal fun LocalDate.toPickerMillis(): Long = atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
-
-internal fun Long.toPickerDate(): LocalDate = Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()
-
 @Composable
 private fun DialogHost(dialog: VisitEditDialog?, actions: VisitEditActions) {
     when (dialog) {
@@ -887,31 +505,16 @@ private fun DialogHost(dialog: VisitEditDialog?, actions: VisitEditActions) {
         VisitEditDialog.ConfirmDiscard -> AlertDialog(
             onDismissRequest = actions::onDismissDialog,
             title = { Text("Discard this visit?") },
-            text = { DialogText("Your changes will be lost.") },
+            text = { MutedText("Your changes will be lost.") },
             confirmButton = { TextButton(onClick = actions::onConfirmDiscard) { Text("Discard") } },
             dismissButton = { TextButton(onClick = actions::onDismissDialog) { Text("Keep editing") } },
         )
         VisitEditDialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = actions::onDismissDialog,
             title = { Text("Delete this visit?") },
-            text = { DialogText("The visit, its ratings and its photo are deleted. This can't be undone.") },
+            text = { MutedText("The visit, its ratings and its photo are deleted. This can't be undone.") },
             confirmButton = { TextButton(onClick = actions::onConfirmDelete) { Text("Delete") } },
             dismissButton = { TextButton(onClick = actions::onDismissDialog) { Text("Cancel") } },
         )
     }
-}
-
-@Composable
-private fun DialogText(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.textMuted)
-}
-
-@Composable
-private fun Message(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = CinexTheme.colors.textMuted,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-    )
 }
