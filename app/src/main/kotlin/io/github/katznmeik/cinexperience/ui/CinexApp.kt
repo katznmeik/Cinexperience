@@ -42,7 +42,6 @@ import io.github.katznmeik.cinexperience.feature.cinemas.closeDeletedCinema
 import io.github.katznmeik.cinexperience.feature.cinemas.manageCinemasScreen
 import io.github.katznmeik.cinexperience.feature.cinemas.navigateToCinemaDetail
 import io.github.katznmeik.cinexperience.feature.cinemas.navigateToManageCinemas
-import io.github.katznmeik.cinexperience.feature.program.LogVisitRequest
 import io.github.katznmeik.cinexperience.feature.program.filmScreen
 import io.github.katznmeik.cinexperience.feature.program.navigateToFilm
 import io.github.katznmeik.cinexperience.feature.program.navigateToProgram
@@ -52,7 +51,6 @@ import io.github.katznmeik.cinexperience.feature.seatmap.hallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.layoutEditorScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToHallDetail
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToLayoutEditor
-import io.github.katznmeik.cinexperience.feature.visits.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.feature.visits.allVisitsScreen
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAddVisit
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAllVisits
@@ -180,14 +178,14 @@ fun CinexApp(
                 filterStore = container.programFilterStore,
                 clock = container.clock,
                 onOpenFilm = navController::navigateToFilm,
-                onLogVisit = navController::logVisit,
+                onLogVisit = navController::navigateToAddVisit,
             )
             filmScreen(
                 programRepository = container.programRepository,
                 cinemaRepository = container.cinemaRepository,
                 clock = container.clock,
                 onBack = navController::navigateUp,
-                onLogVisit = navController::logVisit,
+                onLogVisit = navController::navigateToAddVisit,
             )
 
             // Rankings tab
@@ -238,7 +236,3 @@ private fun NavHostController.navigateToTab(tab: TopLevelDestination, tabSwitch:
     navigate(tab.route, tabOptions())
     tabSwitch.entryId = currentBackStackEntry?.id
 }
-
-/** "Log visit" on a showing: Add visit pre-filled with cinema, date, film and format (spec §11.1). */
-private fun NavHostController.logVisit(request: LogVisitRequest) =
-    navigateToAddVisit(VisitPrefillArgs(request.cinemaId, request.date, request.filmTitle, request.format))

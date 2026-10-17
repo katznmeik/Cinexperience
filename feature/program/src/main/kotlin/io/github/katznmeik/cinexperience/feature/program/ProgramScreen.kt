@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.program.ShowingVersion
 import io.github.katznmeik.cinexperience.core.ui.component.ActionPillButton
@@ -109,7 +110,7 @@ internal interface ProgramActions {
 internal fun ProgramEntry(
     viewModel: ProgramViewModel,
     onOpenFilm: (FilmKey) -> Unit,
-    onLogVisit: (LogVisitRequest) -> Unit,
+    onLogVisit: (VisitPrefillArgs) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     // Once per open of the tab: the back stack entry is new after a tab switch, the

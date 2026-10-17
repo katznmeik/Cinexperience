@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.program
 
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.program.FilmKey
 import androidx.lifecycle.SavedStateHandle
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
@@ -534,12 +535,12 @@ class ProgramViewModelTest {
 
         val delphi = rows.first { it.cinemaName == "delphi LUX" }
         assertEquals(
-            LogVisitRequest(SampleData.DELPHI_LUX, today, "The Quiet Projectionist", ScreeningFormat.OMU),
+            VisitPrefillArgs(SampleData.DELPHI_LUX, today, "The Quiet Projectionist", ScreeningFormat.OMU),
             vm.logVisit(delphi.showingId),
         )
         val international = rows.first { it.cinemaName == "International" }
         assertEquals(
-            LogVisitRequest(7L, LocalDate.of(2026, 10, 17), "The Quiet Projectionist", ScreeningFormat.GERMAN_DUB),
+            VisitPrefillArgs(7L, LocalDate.of(2026, 10, 17), "The Quiet Projectionist", ScreeningFormat.GERMAN_DUB),
             vm.logVisit(international.showingId),
         )
         // OmeU has no screening format; Blauer Stern no app cinema.

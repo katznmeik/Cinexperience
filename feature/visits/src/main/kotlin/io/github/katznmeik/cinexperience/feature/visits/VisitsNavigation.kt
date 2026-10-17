@@ -10,6 +10,7 @@ import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
 import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditEntry
@@ -46,18 +47,6 @@ data class AddVisitRoute(
         )
     }
 }
-
-/**
- * What a new visit is pre-filled with ("Log visit" from a showing, spec §11.1).
- * The form selects the cinema's hall if it has only one; otherwise the cinema is
- * set and the owner picks the hall. `null` fields stay as for a blank visit.
- */
-data class VisitPrefillArgs(
-    val cinemaId: Long? = null,
-    val date: LocalDate? = null,
-    val filmTitle: String? = null,
-    val format: ScreeningFormat? = null,
-)
 
 /** Edit (or delete) an existing visit (spec §6.4). */
 @Serializable

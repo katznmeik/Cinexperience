@@ -2,13 +2,13 @@ package io.github.katznmeik.cinexperience.feature.visits.edit
 
 import androidx.lifecycle.SavedStateHandle
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
+import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
 import io.github.katznmeik.cinexperience.feature.visits.AddVisitRoute
-import io.github.katznmeik.cinexperience.feature.visits.VisitPrefillArgs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
