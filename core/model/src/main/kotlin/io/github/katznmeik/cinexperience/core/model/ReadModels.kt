@@ -1,5 +1,7 @@
 package io.github.katznmeik.cinexperience.core.model
 
+import java.time.LocalTime
+
 /*
  * Read models that the repositories in core:data emit for the screens.
  * All scores are computed with the functions in Scores.kt / SeatColours.kt.
@@ -56,4 +58,9 @@ data class VisitListItem(
     val hallName: String,
     /** Label of the visit's seat in the current layout; `null` if no seat or the seat was removed. */
     val seatLabel: SeatLabel?,
-)
+    /** The visit has a [Ticket] (spec §4.7), with or without its QR code. */
+    val hasTicket: Boolean = false,
+) {
+    /** The showing's start, Berlin clock time ([Visit.startTime]): upcoming visits show it (spec §6.8). */
+    val startTime: LocalTime? get() = visit.startTime
+}
