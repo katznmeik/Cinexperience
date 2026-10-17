@@ -25,7 +25,6 @@ import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.testing.SampleProgram
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.di.AppContainer
-import io.github.katznmeik.cinexperience.feature.program.InMemoryProgramFilterStore
 import io.github.katznmeik.cinexperience.feature.cinemas.closeDeletedCinema
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule

@@ -3,10 +3,11 @@ package io.github.katznmeik.cinexperience.feature.program
 import android.content.Context
 import android.content.SharedPreferences
 import io.github.katznmeik.cinexperience.core.program.ShowingVersion
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import io.github.katznmeik.cinexperience.core.ui.text.codePointLength
 import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -37,12 +38,19 @@ interface ProgramFilterStore {
     suspend fun write(settings: ProgramFilterSettings): Boolean
 }
 
-/** [ProgramFilterStore] in shared preferences (`program_filters.xml`), as JSON. */
-class SharedPreferencesProgramFilterStore(private val prefs: SharedPreferences) : ProgramFilterStore {
+/**
+ * [ProgramFilterStore] in shared preferences (`program_filters.xml`), as JSON.
+ * Reads and writes run on [ioDispatcher].
+ */
+class SharedPreferencesProgramFilterStore(
+    private val prefs: SharedPreferences,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+) : ProgramFilterStore {
 
-    constructor(context: Context) : this(context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE))
+    constructor(context: Context, ioDispatcher: CoroutineDispatcher = Dispatchers.IO) :
+        this(context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE), ioDispatcher)
 
-    override suspend fun read(): ProgramFilterSettings = withContext(Dispatchers.IO) {
+    override suspend fun read(): ProgramFilterSettings = withContext(ioDispatcher) {
         try {
             // getString throws if another type is stored under the key: then the defaults.
             prefs.getString(KEY_FILTERS, null)?.let(ProgramFilterCodec::decode) ?: ProgramFilterSettings()
@@ -51,7 +59,7 @@ class SharedPreferencesProgramFilterStore(private val prefs: SharedPreferences) 
         }
     }
 
-    override suspend fun write(settings: ProgramFilterSettings): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun write(settings: ProgramFilterSettings): Boolean = withContext(ioDispatcher) {
         try {
             // commit (on the IO dispatcher): its result tells whether the filters were stored.
             val editor = prefs.edit()
@@ -66,24 +74,6 @@ class SharedPreferencesProgramFilterStore(private val prefs: SharedPreferences) 
     companion object {
         const val PREFERENCES_NAME: String = "program_filters"
         private const val KEY_FILTERS = "filters"
-    }
-}
-
-/** An in-memory [ProgramFilterStore], e.g. for previews and tests. */
-class InMemoryProgramFilterStore(var settings: ProgramFilterSettings = ProgramFilterSettings()) : ProgramFilterStore {
-    var writes: Int = 0
-        private set
-
-    /** While true, writes fail (return false) and store nothing. */
-    var failWrites: Boolean = false
-
-    override suspend fun read(): ProgramFilterSettings = settings
-
-    override suspend fun write(settings: ProgramFilterSettings): Boolean {
-        writes++
-        if (failWrites) return false
-        this.settings = settings
-        return true
     }
 }
 
