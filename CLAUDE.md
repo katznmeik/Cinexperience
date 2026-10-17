@@ -71,6 +71,7 @@ Look at the screenshot PNGs after every UI change.
 | `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic (no Android) |
 | `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos), backup export/import engine |
 | `core:program` | Android lib + kotlinx.serialization | Yorck's program (v1.1, spec §11.1): model (`Program`, `Film`, `Showing`), page parser, Yorck-name → seed-key table, `ProgramLinks`, visit pre-fill, the HTTPS download (the app's **only network code**), cache `files/program/program.json`, `ProgramRepository` |
+| `core:ticket` | Android lib (+ Robolectric tests) | Yorck's ticket PDF (v1.4, spec §11.2): the own small PDF reader (`pdf/`), text in reading order (`text/`), the ticket fields (`TicketPdfReader` → `TicketPdfContent`, `TicketPdfRules`), the QR code's module grid (`qr/`, `QrModuleGrid`); pure Kotlin except the JPEG decoding (`BitmapLuminanceDecoder`) |
 | `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories (incl. `FakeProgramRepository`) and file stores, illustrative screenshot fixtures (incl. `buildProgram`, `SampleProgram`), `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips, messages, the message snackbar, `rememberLoadedImage`, `rememberTextWidth`, picker date conversions), date and time texts (`text/Dates.kt`), `flow/Flows.kt` (`minuteTicks`, `asResult`), `navigation/` (result message for the screen below, `CloseOnce`) |
 | `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
@@ -83,7 +84,7 @@ Look at the screenshot PNGs after every UI change.
 
 Build configuration lives in the convention plugins in `build-logic/convention`
 (`cinex.android.application`, `.library`, `.compose`, `.feature`, `.room`,
-`.roborazzi`, `cinex.jvm.library`). Versions live in `gradle/libs.versions.toml`.
+`.roborazzi`, `.robolectric`, `cinex.jvm.library`). Versions live in `gradle/libs.versions.toml`.
 Don't duplicate config in module build files.
 
 ## Conventions
@@ -413,6 +414,24 @@ Don't duplicate config in module build files.
   `https://www.yorck.de/`; no browser = a message). Texts from Yorck's page joined
   with other text go through `isolate()` (Unicode isolates), so right-to-left text
   can't reorder times or names.
+- **Ticket PDF** (`core:ticket`, spec §11.2, binding): the file is untrusted. The
+  reader handles only Yorck's shape (Qt 5.5: classic cross-reference table, found
+  through it, never by scanning; Flate content; Type 0 / Identity-H fonts with
+  `/ToUnicode`; DCT images) and refuses anything else with a `TicketPdfError`;
+  every limit is in `TicketPdfLimits` (2 MB file, 4 pages, 2,000 objects, 2 MB per
+  unpacked stream and 8 MB together, nesting, glyphs, ≤ 512 px QR candidates) and
+  has a test. It never follows links, actions or external data; `read()` never
+  throws (`content()` is the strict path the fuzz tests use). Fields are checked by
+  `TicketPdfRules` and cleaned like the program's texts (`TicketText`); each is
+  `Found` or `NotFound(MISSING/INVALID/AMBIGUOUS)`; several seats only where
+  unambiguous. Never read or returned: the "Gebucht von" name, prices, numbers,
+  address, conditions. QR: only a grid whose finder, separator, timing and
+  alignment patterns, dark module and both format copies check out and whose
+  pattern centres lie on the grid is returned; no decoding, no generation. Tests
+  use invented fixtures (`InventedTicketPdf`, `TestQrCodes`, the JDK's JPEG codec
+  in plain JVM tests). Never commit a real ticket; `RealTicketTest` reads one
+  named by `CINEX_TICKET_PDF` (skipped otherwise; keep it in the git-ignored
+  `tickets/` or as `*.ticket.pdf`) and asserts and prints structural facts only.
 - **Seed data:** `core/data/src/main/assets/seed/yorck.json`. Bump `seedVersion`
   for every change; `seedKey`s are permanent. Seeding only inserts missing items
   and fills empty fields, it never overwrites or deletes (a renamed seed hall
