@@ -1,7 +1,11 @@
 package io.github.katznmeik.cinexperience.core.ticket.qr
 
 import android.graphics.Bitmap
+import io.github.katznmeik.cinexperience.core.ticket.TicketPdfReader
+import io.github.katznmeik.cinexperience.core.ticket.TicketPdfResult
+import io.github.katznmeik.cinexperience.core.ticket.testing.InventedTicketPdf
 import io.github.katznmeik.cinexperience.core.ticket.testing.TestQrCodes
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -12,7 +16,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.ByteArrayOutputStream
 
-/** The Android JPEG path: BitmapFactory (bounds first), luminance, the grid. */
+/** The Android JPEG path: BitmapFactory (bounds first), luminance, the grid; and the public reader as the app builds it. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36])
@@ -75,5 +79,16 @@ class BitmapLuminanceDecoderTest {
             val read = QrGridReader.read(partial)
             assertTrue("cut at $length", read == null || read.toBooleanArray().contentEquals(grid))
         }
+    }
+
+    @Test
+    fun theAppsReaderReadsTheInventedTicketsQrCode() {
+        val grid = TestQrCodes.grid(21, seed = 21)
+        val pdf = InventedTicketPdf.build(qrJpeg = androidJpeg(TestQrCodes.render(grid, 21)))
+
+        val content = (TicketPdfReader().read(pdf) as TicketPdfResult.Read).content
+
+        assertEquals(21, content.qrCode.valueOrNull?.size)
+        assertTrue(content.qrCode.valueOrNull!!.toBooleanArray().contentEquals(grid))
     }
 }
