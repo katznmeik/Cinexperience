@@ -7,9 +7,12 @@ import io.github.katznmeik.cinexperience.core.model.HallRatings
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.ShowingTime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeParseException
 
 /**
  * The visit form's in-progress state, kept in the ViewModel's `SavedStateHandle`
@@ -41,7 +44,10 @@ internal data class VisitDraft(
     }
 }
 
-/** [VisitForm] with plain values; ratings are 0 when not rated. */
+/**
+ * [VisitForm] with plain values; ratings are 0 when not rated. [startTime] is
+ * "HH:mm" or `null` (a draft saved before it existed has none).
+ */
 @Serializable
 internal data class FormDraft(
     val hallId: Long?,
@@ -55,6 +61,7 @@ internal data class FormDraft(
     val cinemaRatings: List<Int>,
     val note: String,
     val photoPath: String?,
+    val startTime: String? = null,
 ) {
     fun toForm(): VisitForm = VisitForm(
         hallId = hallId,
@@ -70,6 +77,7 @@ internal data class FormDraft(
         },
         note = note,
         photoPath = photoPath,
+        startTime = startTime?.let { startTimeOrNull(it) },
     )
 
     companion object {
@@ -85,6 +93,14 @@ internal data class FormDraft(
             cinemaRatings = CinemaCategory.entries.map { form.cinemaRatings[it]?.value ?: 0 },
             note = form.note,
             photoPath = form.photoPath,
+            startTime = form.startTime?.toString(), // "HH:mm": a visit's start time is to the minute
         )
+
+        /** [text] as a start time, `null` if it isn't a valid one (the draft is restored without it). */
+        private fun startTimeOrNull(text: String): LocalTime? = try {
+            LocalTime.parse(text).takeIf { ShowingTime.isWholeMinute(it) }
+        } catch (e: DateTimeParseException) {
+            null
+        }
     }
 }

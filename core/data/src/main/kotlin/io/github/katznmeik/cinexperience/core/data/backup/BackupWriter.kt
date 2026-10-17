@@ -25,6 +25,7 @@ internal suspend fun CinexDatabase.readBackupDataInTransaction(): BackupData {
         cinemas = dao.cinemas().map { it.toBackup() },
         halls = dao.halls().map { it.toBackup() },
         visits = dao.visits().map { it.toBackup() },
+        tickets = dao.tickets().map { it.toBackup() },
         seatOverrides = dao.seatOverrides().map { it.toBackup() },
         seedSnapshots = dao.seedSnapshots().map { it.toBackup() },
         metadata = dao.metadata().map { it.toBackup() },

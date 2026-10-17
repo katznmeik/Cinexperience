@@ -91,12 +91,12 @@ internal class BackupVersion1Test : BackupTestBase() {
         assertTrue(details.none { it.cinema.isFavourite })
         assertTrue(details.flatMap { it.halls }.all { it.hall.screenOffset == 0f })
 
-        // Exporting it again writes version 2, which imports to the same data.
+        // Exporting it again writes the current version, which imports to the same data.
         val again = deviceA.document("again.zip")
         deviceA.repository.export(again)
         val deviceB = newDevice("b")
         val previewB = deviceB.repository.prepareImport(again)
-        assertEquals(2, previewB.backupVersion)
+        assertEquals(BackupFormat.BACKUP_VERSION, previewB.backupVersion)
         deviceB.repository.commitImport(previewB)
         assertFixtureImported(deviceB.snapshot())
     }

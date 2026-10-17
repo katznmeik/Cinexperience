@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.core.model
 
 import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * A cinema (spec §4.1).
@@ -94,6 +95,10 @@ enum class ScreeningFormat(val storageKey: String, val displayName: String) {
 /**
  * One cinema visit (spec §4.4, §4.5). Everything except [hallId] and [date] is optional.
  *
+ * @property startTime the showing's start, Berlin clock time (spec §4.4), to the
+ *   minute (seconds and below are 0, checked when the visit is created). Filled
+ *   in by the ticket import, optional otherwise. [ShowingTime] says which moment
+ *   it stands for ([startInstant], [isUpcoming]).
  * @property seatId the seat sat in, see [SeatId]; may point to a seat that was
  *   later removed from the layout (then it has no label any more).
  * @property cinemaRatings the cinema-level ratings (§4.5), stored per visit.
@@ -111,7 +116,12 @@ data class Visit(
     val cinemaRatings: CinemaRatings = CinemaRatings.NONE,
     val note: String? = null,
     val photoPath: String? = null,
-)
+    val startTime: LocalTime? = null,
+) {
+    init {
+        require(startTime == null || ShowingTime.isWholeMinute(startTime)) { "A start time is to the minute, was $startTime" }
+    }
+}
 
 /** Manual seat colour (spec §4.6) and the automatic seat colours (spec §5). */
 enum class SeatColour(val storageKey: String) {

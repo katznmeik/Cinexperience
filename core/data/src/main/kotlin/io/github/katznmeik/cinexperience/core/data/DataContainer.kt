@@ -16,8 +16,10 @@ import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomCinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomHallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomSeatOverrideRepository
+import io.github.katznmeik.cinexperience.core.data.repository.RoomTicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomVisitRepository
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
+import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
 import kotlinx.coroutines.CancellationException
@@ -27,6 +29,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
+import java.time.Instant
 
 /**
  * The data layer's entry point for the app's manual DI container.
@@ -97,6 +100,11 @@ class DataContainer internal constructor(
 
     val seatOverrideRepository: SeatOverrideRepository by lazy {
         RoomSeatOverrideRepository(database).also { seeding.start() }
+    }
+
+    /** Tickets of visits (spec §4.7). */
+    val ticketRepository: TicketRepository by lazy {
+        RoomTicketRepository(database, computeDispatcher, awaitReady).also { seeding.start() }
     }
 
     /** Reference screenshots of the layout editor (spec §6.5), in app-private storage. */
@@ -190,6 +198,25 @@ class DataContainer internal constructor(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Sweeping visit photos failed", e)
+                0
+            }
+        }
+
+    /**
+     * Removes the QR modules of tickets whose showing is more than 7 days past at
+     * [now] (spec §4.7, [TicketRepository.removeExpiredQrModules]); the app runs it
+     * at start with its clock. Returns how many were removed. Failures are logged,
+     * not thrown, like the sweep's ([sweepOrphanReferenceImages]): the next start
+     * tries again.
+     */
+    suspend fun removeExpiredQrModules(now: Instant): Int =
+        withContext(ioDispatcher) {
+            try {
+                ticketRepository.removeExpiredQrModules(now)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Removing expired QR codes failed", e)
                 0
             }
         }

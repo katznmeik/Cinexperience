@@ -43,7 +43,7 @@ internal class BackupLimitsTest : BackupTestBase() {
     )
 
     private fun visit() = BackupVisit(
-        id = 3, hallId = 2, date = "2026-10-01", filmTitle = "Film", seatId = 1, screeningFormat = null,
+        id = 3, hallId = 2, date = "2026-10-01", startTime = null, filmTitle = "Film", seatId = 1, screeningFormat = null,
         hallRatings = BackupHallRatings(null, null, null, null, null, null), seatRating = null,
         cinemaRatings = BackupCinemaRatings(null, null, null, null), note = "Note", photoPath = null,
     )
@@ -59,6 +59,7 @@ internal class BackupLimitsTest : BackupTestBase() {
         cinemas = listOf(cinema),
         halls = listOf(hall),
         visits = listOf(visit),
+        tickets = emptyList(),
         seatOverrides = listOf(BackupSeatOverride(2, 1, "GREEN", isFavourite = true)),
         seedSnapshots = listOf(snapshot),
         metadata = listOf(metadata),
