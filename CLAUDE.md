@@ -159,7 +159,8 @@ Don't duplicate config in module build files.
   `TicketSeat`, `QrModules`, checked in `init`), written only through
   `TicketRepository`: at most one per visit, deleted with it, a booking number
   of another visit is refused (`SaveTicketResult.BookingNumberInUse`, nothing
-  saved). `Visit.startTime` is Berlin clock time; `ShowingTime` (core:model)
+  saved). Visits are always updated, never REPLACEd: a replace would
+  cascade-delete the ticket. `Visit.startTime` is Berlin clock time; `ShowingTime` (core:model)
   computes the start, upcoming visits and the QR modules' expiry (7 days), which
   `DataContainer.removeExpiredQrModules` applies at app start.
 - **Seats** are identified by a stable `SeatId` stored in the layout (see
