@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.github.takahirom.roborazzi.captureRoboImage
+import io.github.katznmeik.cinexperience.core.data.repository.CinemaRankingsRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeBackupRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
@@ -55,6 +56,7 @@ internal class FakeAppContainer(
     override val hallRepository = repository
     override val visitRepository = repository
     override val seatOverrideRepository = repository
+    override val rankingsRepository = CinemaRankingsRepository(repository, repository)
     override val referenceImageStore = FakeReferenceImageStore()
     override val visitPhotoStore = FakeVisitPhotoStore()
     override val programFilterStore = InMemoryProgramFilterStore()

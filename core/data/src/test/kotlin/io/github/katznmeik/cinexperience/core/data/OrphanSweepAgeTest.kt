@@ -40,7 +40,7 @@ class OrphanSweepAgeTest {
         it.setLastModified(now - ageMs)
     }
 
-    private fun data(scope: CoroutineScope) = DataContainer(context, scope, Dispatchers.Default, Dispatchers.IO)
+    private fun data(scope: CoroutineScope) = DataContainer(context, scope, "1.2.3", Dispatchers.Default, Dispatchers.IO)
 
     @Test
     fun anUnsavedVisitPhotoOutlivesALongFilm() = runTest {

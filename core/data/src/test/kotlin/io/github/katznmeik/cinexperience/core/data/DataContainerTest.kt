@@ -16,7 +16,7 @@ class DataContainerTest {
 
     @Test
     fun firstEmissionAlreadyContainsTheShippedSeed() = runTest {
-        val data = DataContainer(ApplicationProvider.getApplicationContext(), backgroundScope)
+        val data = DataContainer(ApplicationProvider.getApplicationContext(), backgroundScope, appVersion = "1.2.3")
         val cinemas = data.cinemaRepository.observeCinemas().first()
         assertEquals(14, cinemas.size)
         assertTrue(cinemas.all { it.cinema.isPreloaded && it.cinema.address != null })

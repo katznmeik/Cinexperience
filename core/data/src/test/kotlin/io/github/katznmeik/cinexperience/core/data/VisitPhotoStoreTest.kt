@@ -200,7 +200,7 @@ class VisitPhotoStoreTest {
 
     @Test
     fun dataContainerSweepUsesTheVisitsPhotos() = runTest {
-        val data = DataContainer(context, backgroundScope, Dispatchers.Default, Dispatchers.IO)
+        val data = DataContainer(context, backgroundScope, "1.2.3", Dispatchers.Default, Dispatchers.IO)
         val keep = storedFile("visit-keep.jpg", ageMs = 8 * DAY)
         val orphan = storedFile("visit-orphan.jpg", ageMs = 8 * DAY)
         val hallId = data.hallRepository.createHall(data.cinemaRepository.createCinema("Kino"), "Saal 1")

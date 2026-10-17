@@ -121,7 +121,7 @@ class ProgramStorageTest {
         cacheFile.setLastModified(old)
         leftover.setLastModified(old)
 
-        DataContainer(context, backgroundScope, Dispatchers.Default, Dispatchers.IO).sweepOrphanFiles()
+        DataContainer(context, backgroundScope, "1.2.3", Dispatchers.Default, Dispatchers.IO).sweepOrphanFiles()
 
         assertTrue(cacheFile.exists())
         assertTrue(leftover.exists())

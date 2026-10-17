@@ -57,7 +57,7 @@ class TallHallScreenshotTest {
 
     /** The hall [seedKey] as the app seeds it (a fresh [DataContainer] seeds from the real asset). */
     private fun seededHall(seedKey: String): Hall = runBlocking {
-        val data = DataContainer(ApplicationProvider.getApplicationContext(), scope)
+        val data = DataContainer(ApplicationProvider.getApplicationContext(), scope, appVersion = "1.2.3")
         val id = data.cinemaRepository.observeCinemaDetails().first()
             .flatMap { it.halls }
             .single { it.hall.seedKey == seedKey }

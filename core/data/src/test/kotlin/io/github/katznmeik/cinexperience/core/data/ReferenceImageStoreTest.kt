@@ -105,7 +105,7 @@ class ReferenceImageStoreTest {
 
     @Test
     fun dataContainerSweepUsesTheHallsReferences() = runTest {
-        val data = DataContainer(context, backgroundScope, Dispatchers.Default, Dispatchers.IO)
+        val data = DataContainer(context, backgroundScope, "1.2.3", Dispatchers.Default, Dispatchers.IO)
         val keep = storedFile("hall-x-keep.jpg", ageMs = DAY)
         val orphan = storedFile("hall-x-orphan.jpg", ageMs = DAY)
         val halls = data.hallRepository

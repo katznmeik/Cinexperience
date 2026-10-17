@@ -42,6 +42,8 @@ import kotlinx.coroutines.withContext
 class DataContainer internal constructor(
     context: Context,
     private val scope: CoroutineScope,
+    /** The app's version name, written to every backup's manifest (`appVersion`). */
+    private val appVersion: String,
     private val computeDispatcher: CoroutineDispatcher,
     private val ioDispatcher: CoroutineDispatcher,
     /** Reads the seed JSON; `null` = the shipped asset. Replaceable for tests. */
@@ -50,9 +52,10 @@ class DataContainer internal constructor(
     constructor(
         context: Context,
         scope: CoroutineScope,
+        appVersion: String,
         computeDispatcher: CoroutineDispatcher = Dispatchers.Default,
         ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    ) : this(context, scope, computeDispatcher, ioDispatcher, seedSource = null)
+    ) : this(context, scope, appVersion, computeDispatcher, ioDispatcher, seedSource = null)
 
     private val appContext = context.applicationContext
 
@@ -114,9 +117,7 @@ class DataContainer internal constructor(
             lastExportStore = LastExportStore(
                 appContext.getSharedPreferences(LastExportStore.PREFERENCES_NAME, Context.MODE_PRIVATE),
             ),
-            appVersion = {
-                appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName.orEmpty()
-            },
+            appVersion = { appVersion },
             readSeed = readSeed,
             ioDispatcher = ioDispatcher,
             awaitReady = awaitReady,

@@ -43,7 +43,7 @@ interface AppContainer {
     val seatOverrideRepository: SeatOverrideRepository
 
     /** Halls and cinemas with their scores for the Rankings tab, derived from [cinemaRepository]. */
-    val rankingsRepository: RankingsRepository get() = CinemaRankingsRepository(cinemaRepository, visitRepository)
+    val rankingsRepository: RankingsRepository
     val referenceImageStore: ReferenceImageStore
     val visitPhotoStore: VisitPhotoStore
 
@@ -69,7 +69,10 @@ interface AppContainer {
 class DefaultAppContainer(context: Context) : AppContainer {
     override val applicationContext: Context = context.applicationContext
 
-    /** The one version source of the container: Settings → About and the program's User-Agent use it. */
+    /**
+     * The one version source of the container: Settings → About, the program's
+     * User-Agent and the backup manifest use it.
+     */
     override val appVersion: String = BuildConfig.VERSION_NAME
 
     override val buildId: String = BuildConfig.BUILD_ID
@@ -78,7 +81,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** Opens the database lazily on first repository use, which also starts seeding. */
-    private val data = DataContainer(applicationContext, applicationScope)
+    private val data = DataContainer(applicationContext, applicationScope, appVersion)
 
     override val cinemaRepository: CinemaRepository get() = data.cinemaRepository
     override val hallRepository: HallRepository get() = data.hallRepository
@@ -87,6 +90,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val referenceImageStore: ReferenceImageStore get() = data.referenceImageStore
     override val visitPhotoStore: VisitPhotoStore get() = data.visitPhotoStore
     override val backupRepository: BackupRepository get() = data.backupRepository
+
+    override val rankingsRepository: RankingsRepository by lazy {
+        CinemaRankingsRepository(cinemaRepository, visitRepository)
+    }
 
     /**
      * Created on first use; it then reads the stored permission and the cached
