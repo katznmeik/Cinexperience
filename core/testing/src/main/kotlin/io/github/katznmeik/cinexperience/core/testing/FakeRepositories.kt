@@ -4,7 +4,6 @@ import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.DeleteResult
 import io.github.katznmeik.cinexperience.core.data.repository.HallLimitReachedException
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
-import io.github.katznmeik.cinexperience.core.data.repository.NameOrder
 import io.github.katznmeik.cinexperience.core.data.repository.SaveVisitResult
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
@@ -15,6 +14,7 @@ import io.github.katznmeik.cinexperience.core.model.DataLimits
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
+import io.github.katznmeik.cinexperience.core.model.NameOrder
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.ScreenSizeRules
 import io.github.katznmeik.cinexperience.core.model.SeatColour

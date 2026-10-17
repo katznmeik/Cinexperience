@@ -1,4 +1,4 @@
-package io.github.katznmeik.cinexperience.core.data.repository
+package io.github.katznmeik.cinexperience.core.model
 
 import java.math.BigInteger
 import java.text.Collator

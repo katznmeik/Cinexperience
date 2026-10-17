@@ -5,11 +5,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import io.github.katznmeik.cinexperience.core.data.repository.NameOrder
 import io.github.katznmeik.cinexperience.core.data.repository.Rankings
 import io.github.katznmeik.cinexperience.core.data.repository.RankingsRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaCategory
 import io.github.katznmeik.cinexperience.core.model.HallCategory
+import io.github.katznmeik.cinexperience.core.model.NameOrder
 import io.github.katznmeik.cinexperience.core.model.ScoreOrder
 import io.github.katznmeik.cinexperience.core.ui.flow.asResult
 import io.github.katznmeik.cinexperience.core.ui.text.countText
