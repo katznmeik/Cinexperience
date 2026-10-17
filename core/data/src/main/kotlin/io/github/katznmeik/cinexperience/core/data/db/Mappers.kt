@@ -2,16 +2,20 @@ package io.github.katznmeik.cinexperience.core.data.db
 
 import android.util.Log
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
+import io.github.katznmeik.cinexperience.core.data.json.TicketSeatsJson
+import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.model.Cinema
 import io.github.katznmeik.cinexperience.core.model.CinemaRatings
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallRatings
+import io.github.katznmeik.cinexperience.core.model.QrModules
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatOverride
+import io.github.katznmeik.cinexperience.core.model.Ticket
 import io.github.katznmeik.cinexperience.core.model.Visit
 
 internal fun CinemaEntity.toModel() = Cinema(
@@ -83,6 +87,7 @@ internal fun VisitEntity.toModel() = Visit(
     ),
     note = note,
     photoPath = photoPath,
+    startTime = startTime,
 )
 
 internal fun Visit.toEntity() = VisitEntity(
@@ -105,6 +110,31 @@ internal fun Visit.toEntity() = VisitEntity(
     cinemaRatingSeatComfort = cinemaRatings.seatComfort?.value,
     note = note,
     photoPath = photoPath,
+    startTime = startTime,
+)
+
+/**
+ * Never throws: a row this app can't read (only damaged data; the repository
+ * writes nothing else) gives `null`, so it can't break a Flow, and QR modules it
+ * can't read give a ticket without them. The stored row stays untouched.
+ */
+internal fun TicketEntity.toModel(): Ticket? {
+    val number = BookingNumber.ofOrNull(bookingNumber)
+    val seatList = TicketSeatsJson.decodeOrNull(seats)
+    if (number == null || seatList == null) {
+        Log.w(TAG, "Unreadable ticket of visit $visitId")
+        return null
+    }
+    val modules = qrModules?.let(QrModules::decodeOrNull)
+    if (qrModules != null && modules == null) Log.w(TAG, "Unreadable QR code of the ticket of visit $visitId")
+    return Ticket(visitId, number, seatList, modules)
+}
+
+internal fun Ticket.toEntity() = TicketEntity(
+    visitId = visitId,
+    bookingNumber = bookingNumber.value,
+    seats = TicketSeatsJson.encode(seats),
+    qrModules = qrModules?.encode(),
 )
 
 internal fun SeatOverrideEntity.toModel() = SeatOverride(

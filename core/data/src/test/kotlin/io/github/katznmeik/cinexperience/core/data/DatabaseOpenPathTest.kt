@@ -52,7 +52,7 @@ internal class DatabaseOpenPathTest {
 
         val room = CinexDatabase.build(ApplicationProvider.getApplicationContext())
         try {
-            assertEquals(2, room.openHelper.readableDatabase.version)
+            assertEquals(3, room.openHelper.readableDatabase.version)
             // Rows and ids kept; the version 2 columns get their defaults (not a favourite, screen centred).
             assertEquals(
                 listOf(CinemaEntity(5, "Kiezkino", "Weserstraße 1", "Mine", false, null, isFavourite = false)),

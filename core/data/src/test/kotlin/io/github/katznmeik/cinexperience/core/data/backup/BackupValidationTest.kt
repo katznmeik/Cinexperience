@@ -93,9 +93,9 @@ internal class BackupValidationTest : BackupTestBase() {
     fun newerBackupVersionAsksForAnUpdate() = runTest {
         exportValid()
         val newer = modified("newer.zip") {
-            editJson(BackupFormat.MANIFEST) { JsonObject(it + ("backupVersion" to JsonPrimitive(3)) + ("newField" to JsonPrimitive(true))) }
+            editJson(BackupFormat.MANIFEST) { JsonObject(it + ("backupVersion" to JsonPrimitive(4)) + ("newField" to JsonPrimitive(true))) }
         }
-        assertEquals(2, BackupFormat.BACKUP_VERSION)
+        assertEquals(3, BackupFormat.BACKUP_VERSION)
         val e = assertRejected(newer, BackupError.NEWER_VERSION)
         assertTrue(e.message!!.contains("newer version"))
     }

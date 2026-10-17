@@ -9,14 +9,18 @@ import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
 import io.github.katznmeik.cinexperience.core.data.repository.RoomVisitRepository
 import io.github.katznmeik.cinexperience.core.data.save
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
+import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.model.CellType
 import io.github.katznmeik.cinexperience.core.model.CinemaRatings
 import io.github.katznmeik.cinexperience.core.model.HallRatings
 import io.github.katznmeik.cinexperience.core.model.NumberingDirection
+import io.github.katznmeik.cinexperience.core.model.QrModules
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatKind
+import io.github.katznmeik.cinexperience.core.model.Ticket
+import io.github.katznmeik.cinexperience.core.model.TicketSeat
 import io.github.katznmeik.cinexperience.core.model.Visit
 import kotlinx.coroutines.Dispatchers
 import org.junit.After
@@ -32,6 +36,7 @@ import java.io.OutputStream
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.Base64
@@ -208,7 +213,9 @@ internal abstract class BackupTestBase : DatabaseTest() {
      * user-added), two halls with a shifted screen, a renamed preloaded hall with a reference image,
      * visits with seats, ratings, photos and formats, seat colours and a favourite,
      * a user-added cinema whose hall has seat kinds, an aisle, a seat id mark above
-     * its layout's ids and a visit on a seat that was removed since.
+     * its layout's ids and a visit on a seat that was removed since, and two
+     * visits with tickets: one with a start time and QR modules, one for two
+     * seats (one without a row name) without either.
      */
     protected suspend fun buildRealisticData() {
         val dev = deviceA
@@ -235,7 +242,11 @@ internal abstract class BackupTestBase : DatabaseTest() {
                 photoPath = dev.writeFile("photos/visit-1.jpg"),
             ),
         )
-        visits.save(Visit(hallId = lux.id, date = LocalDate.of(2026, 9, 20), seatId = luxSeats[10], seatRating = Rating(2)))
+        // A visit from an (invented) ticket with its QR code and a start time.
+        tickets.saveVisitWithTicket(
+            Visit(hallId = lux.id, date = LocalDate.of(2026, 9, 20), seatId = luxSeats[10], seatRating = Rating(2), startTime = LocalTime.of(17, 45)),
+            Ticket(0, BookingNumber("TEST123"), listOf(TicketSeat("2", "4")), QrModules.of(21) { row, column -> (row * column) % 3 == 1 }),
+        )
         overrides.setSeatColour(lux.id, luxSeats[5], SeatColour.RED)
         overrides.setFavouriteSeat(lux.id, luxSeats[3])
 
@@ -267,7 +278,8 @@ internal abstract class BackupTestBase : DatabaseTest() {
             ),
         )
         overrides.setSeatColour(hallId, userHall.layout!!.seatIds.minBy { it.value }, SeatColour.GREEN)
-        visits.save(
+        // A ticket for two seats (one in a row without a name), without QR code or start time.
+        tickets.saveVisitWithTicket(
             Visit(
                 hallId = hallId,
                 date = LocalDate.of(2026, 10, 1),
@@ -275,6 +287,7 @@ internal abstract class BackupTestBase : DatabaseTest() {
                 screeningFormat = ScreeningFormat.OV,
                 photoPath = dev.writeFile("photos/visit-2.jpg"),
             ),
+            Ticket(0, BookingNumber("TEST456"), listOf(TicketSeat(null, "12"), TicketSeat("R1", "R"))),
         )
     }
 }

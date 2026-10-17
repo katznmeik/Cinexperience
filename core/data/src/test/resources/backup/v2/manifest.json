@@ -1,0 +1,14 @@
+{
+    "format": "cinexperience-backup",
+    "backupVersion": 2,
+    "appVersion": "1.3.0",
+    "exportedAt": "2026-10-10T19:45:00Z",
+    "counts": {
+        "cinemas": 1,
+        "halls": 1,
+        "visits": 2,
+        "overrides": 1,
+        "photos": 0,
+        "referenceImages": 0
+    }
+}

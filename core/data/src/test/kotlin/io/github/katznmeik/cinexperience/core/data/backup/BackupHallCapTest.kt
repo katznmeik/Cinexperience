@@ -31,6 +31,7 @@ internal class BackupHallCapTest : BackupTestBase() {
             )
         },
         visits = emptyList(),
+        tickets = emptyList(),
         seatOverrides = emptyList(),
         seedSnapshots = emptyList(),
         metadata = emptyList(),
