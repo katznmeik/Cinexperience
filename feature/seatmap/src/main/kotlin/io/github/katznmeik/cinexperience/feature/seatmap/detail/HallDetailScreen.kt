@@ -158,8 +158,7 @@ internal fun HallDetailScreen(
     onToggleFavourite: (SeatId) -> Unit = {},
     onMessageShown: () -> Unit = {},
 ) {
-    val message = (state as? HallDetailUiState.Loaded)?.message
-    val snackbarHostState = rememberMessageSnackbarState(message, onMessageShown)
+    val snackbarHostState = rememberMessageSnackbarState(state.snackbarMessage, onMessageShown)
     Box(modifier.fillMaxSize()) {
         Column(
             Modifier
