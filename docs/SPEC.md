@@ -1,8 +1,8 @@
 # Cinexperience — Product Specification
 
-**Status:** v1.3.0 released (2026-10-17)
+**Status:** v1.3.0 released (2026-10-17); v1.4 (ticket import, ticket QR code, reminders) specified
 **Owner:** katznmeik
-**Last updated:** 2026-10-17 (rev. 29)
+**Last updated:** 2026-10-17 (rev. 30)
 
 ---
 
@@ -18,6 +18,10 @@ cinema, which hall and which seat to book next time.
 
 From v1.1 the app also shows Yorck's current program with the filters the Yorck
 app and website lack (e.g. "this week at delphi LUX, starting 16–17 o'clock").
+
+From v1.4 a Yorck ticket PDF can be shared to the app: it fills in the visit
+(cinema, hall, seat, date and time, film), shows the ticket's QR code for the
+entrance, and reminds before the showing and to rate the visit afterwards.
 
 ## 2. Goals & non-goals
 
@@ -35,6 +39,11 @@ app and website lack (e.g. "this week at delphi LUX, starting 16–17 o'clock").
   filters by cinema, day, start time, version and film (§11.1).
 - Link each showing to its seat selection on yorck.de, and log a visit from a
   showing.
+
+### Goals (v1.4)
+- Import a Yorck ticket PDF from the Share menu into an upcoming visit (§11.2).
+- Show the ticket's QR code for the entrance, offline and sharp (§6.11).
+- Remind before the showing and to rate the visit afterwards (§11.3).
 
 ### Non-goals (v1)
 - Multiple users, accounts, login, cloud sync or a backend server.
@@ -139,6 +148,7 @@ back as a seat keeps its id and its fixed label.
 | id | Long | |
 | hallId | Long | FK → Hall |
 | date | LocalDate | defaults to today |
+| startTime | LocalTime? | v1.4: the showing's start, Berlin clock time; filled in by the ticket import, optional otherwise; needed for reminders (§11.3) |
 | filmTitle | String? | |
 | seatId | Int? | the seat sat in (§4.3 seat identity); picked on the seat map |
 | screeningFormat | Enum? | OV, OmU (OV + German subs), German dub, 3D, 70mm, Other |
@@ -148,6 +158,11 @@ back as a seat keeps its id and its fixed label.
 | photoPath | String? | photo stored in app-private storage (relative path) |
 
 **All ratings are optional.**
+
+A visit whose date and start time lie in the future is an **upcoming visit**
+(v1.4). It is stored like any other visit (it simply has no ratings yet), so
+counts include it from the moment it is saved, and scores are unchanged until
+it is rated.
 
 ### 4.5 CinemaRating
 Cinema-level categories, rated separately from halls (1–5, optional):
@@ -165,6 +180,20 @@ ratings. Shown as an optional section in the "Add visit" form.
 | hallId, seatId | | identifies the seat |
 | colour | GREEN / YELLOW / RED / null | manual override; null = automatic |
 | isFavourite | Boolean | max. one favourite per hall |
+
+### 4.7 Ticket (v1.4)
+At most one per visit; created by the ticket import (§11.2), deleted with its
+visit.
+
+| Field | Type | Notes |
+|---|---|---|
+| visitId | Long | FK → Visit, unique |
+| bookingNumber | String | Yorck's "Buchungsnummer" (letters and digits); unique across tickets, so a ticket is recognised when imported again. It is also what the QR code contains. |
+| seats | list of (row, seat) labels | every seat of the booking as printed; the visit's own seat is one of them |
+| qrModules | bit grid? | the QR code's modules as read from the PDF (21 × 21 for Yorck's tickets); removed 7 days after the showing |
+
+Never stored: the PDF itself, the "booked by" name, prices, transaction and
+ticket numbers.
 
 ## 5. Rating logic
 
@@ -199,6 +228,10 @@ From v1.1 there are four: **Cinemas**, **Program** (§6.9), **Rankings**,
   **Favourites**, shows only the favourite cinemas (in score order); favourite
   cinemas carry a ★ marker in the list.
 - FAB "Add visit" (quick entry: pick cinema → hall).
+- **Next visit** (v1.4): while an upcoming visit (§4.4) exists, a card above
+  the list shows the soonest one: film, day and start time, cinema · hall,
+  seat, and "Show ticket" (§6.11) when it has a QR code. Tapping the card opens
+  the visit.
 
 ### 6.2 Cinema detail
 - Header: name, address, overall score, cinema category scores, and a ☆/★
@@ -229,8 +262,11 @@ From v1.1 there are four: **Cinemas**, **Program** (§6.9), **Rankings**,
 ### 6.4 Add / edit visit
 Single scrolling form:
 1. Cinema & hall (pre-filled when opened from a hall)
-2. Date, film title, screening format
+2. Date, start time (optional, v1.4), film title, screening format
 3. Seat — picked by tapping the seat map, which shows the seat numbers (or skipped)
+   - v1.4: a visit with a ticket shows a **Ticket** section here: booking
+     number, all seats of the booking, "Show ticket" (§6.11) and "Remove
+     ticket".
 4. Seat rating
 5. Hall ratings (six star rows)
 6. Cinema ratings (collapsible)
@@ -277,7 +313,13 @@ Save is always allowed — nothing besides hall is required.
 - **Backup:** Export backup (shows date and contents of the last export),
   Import backup (validates, previews, warns that it replaces all data), Restore safety copy, Android Auto Backup shown as "On" (§8)
 - **Data:** Manage cinemas & halls (add, rename, delete user-added ones; shows
-  counts and how many layouts are drawn); All visits (§6.8)
+  counts and how many layouts are drawn); All visits (§6.8); Import ticket
+  (v1.4: picks a ticket PDF with the file picker, §6.10)
+- **Reminders** (v1.4, §11.3): "Before the showing" switch with the lead time
+  (1, 2 or 3 hours; default 2) and "Rate after the visit" switch, both off
+  until switched on. Switching one on asks for Android's notification
+  permission; if it is refused, the switch stays off and a note explains how to
+  allow notifications in Android's settings.
 - **About:** version and build ID (the short commit hash the APK was built
   from; it matches the APK file name from CI), note that the app is unofficial
   and not affiliated with Yorck Kinos
@@ -287,6 +329,8 @@ Save is always allowed — nothing besides hall is required.
 
 ### 6.8 All visits
 - One chronological list of every visit across all cinemas, newest first.
+  v1.4: upcoming visits (§4.4) come first in their own **Upcoming** section,
+  soonest first, with their start time.
 - Each entry: film, date, cinema · hall, seat, screening format, seat rating.
 - Tap to open/edit the visit (§6.4).
 - Reached from Settings → Data → All visits.
@@ -319,6 +363,37 @@ Save is always allowed — nothing besides hall is required.
   page could not be read (the last good program stays visible).
 - No posters or other images from Yorck.
 
+### 6.10 Ticket import (v1.4)
+- **Entry:** share the ticket PDF from the email app to Cinexperience (Share
+  menu), open it with Cinexperience ("Open with"), or Settings → Data →
+  Import ticket. The file name does not matter (Yorck names every ticket
+  `ticket.pdf`).
+- The app reads the ticket (§11.2) and opens **Add visit** (§6.4) pre-filled:
+  cinema, hall, date, start time, film title, the seat, and the Ticket section.
+  If the downloaded program (§11.1) has the showing (same cinema and start
+  time), the screening format is filled in too. Anything that could not be
+  matched (e.g. a hall or seat missing from the app's layout) stays empty for
+  manual entry, with a note saying what was printed on the ticket.
+- **Several seats:** the first seat of the booking is pre-selected as the
+  owner's seat; the seat map shows which seats belong to the booking so another
+  one can be picked.
+- Nothing is stored until Save; Back discards the import.
+- **Imported before** (same booking number): the app says so and opens that
+  visit instead; if its QR code had been removed, it is stored again.
+- **Not readable** (not a Yorck ticket, damaged, a format the app does not
+  know): a clear message; nothing is stored.
+
+### 6.11 Ticket (v1.4)
+- Opened from the Next visit card (§6.1), the visit's Ticket section (§6.4) and
+  the reminder (§11.3).
+- Shows the QR code as large as fits, drawn sharply from its modules, **black
+  on white** (see §7), with the brightness at maximum and the screen kept on
+  while it is shown. Below: film, day and start time, cinema · hall, all seats,
+  and the booking number in large type, as a fallback if the code can't be
+  scanned.
+- Works offline. Seven days after the showing the QR code is removed; the
+  screen then shows the booking number with a note.
+
 ## 7. Look & feel
 
 - **Dark theme only** in v1 (comfortable to use in a dark auditorium).
@@ -327,6 +402,9 @@ Save is always allowed — nothing besides hall is required.
   (green / yellow / red) are the only colours in the UI, so the seat map stands out
   (the one exception: the layout editor highlights the selected screen in green). No Yorck logos or trademarks are
   used in the app.
+- **Ticket QR code** (v1.4): the only light surface in the app. The QR code is
+  drawn black on a white panel with a quiet zone, because entrance scanners
+  read dark-on-light codes reliably; the rest of the ticket screen stays dark.
 - Mockups of all v1 screens: https://claude.ai/artifact/24gq7hLsHPUoABFm2Ro8Q9
 - Seats to avoid carry a × mark; the favourite seat carries a ⭐. Seats without
   data have a subtle light rim so they stay visible (≥3:1 contrast).
@@ -366,6 +444,11 @@ Save is always allowed — nothing besides hall is required.
   Backup (it can always be downloaded again). Saved program filters and the
   download switch are app settings, covered by Auto Backup, not by the backup
   file; the backup format does not change.
+- **Tickets (v1.4):** the backup (`backupVersion` 3) adds each visit's start
+  time and each ticket's booking number and seats. The QR code's modules are
+  not in the backup; after a restore, importing the ticket PDF again brings
+  the QR code back (the booking number identifies the visit). The reminder
+  settings are app settings (Auto Backup, not the backup file).
 
 ## 9. Preloaded data
 
@@ -436,6 +519,8 @@ can be renamed but not deleted).
 | Images | Decoded by the app's own file stores, no image library (§11.1 forbids image libraries); photos copied into app-private storage |
 | Serialization | kotlinx.serialization (backup JSON; v1.1 also the program data) |
 | Network (v1.1) | Android's built-in HTTPS client, only in `core:program`; no third-party network or HTML library (§11.1) |
+| Ticket PDF (v1.4) | The app's own small reader for Yorck's ticket PDFs, in `core:ticket`; no PDF, OCR or QR-code library (§11.2) |
+| Reminders (v1.4) | Android's AlarmManager and notifications; no new library (§11.3) |
 | Seat map | Custom Compose `Canvas` with zoom/pan |
 | Build | Gradle (Kotlin DSL), version catalog |
 | Testing | Unit tests for rating logic & backup; Compose UI tests for key flows |
@@ -554,26 +639,72 @@ Yorck account or booking system.
 - The showing link opens that showing's seat selection (checked without
   selecting a seat).
 
-### 11.2 v1.2: Ticket import
+### 11.2 v1.4: Ticket import
 
 Linking directly to a Yorck customer account is **not planned**: there is no
 public API, and it would require storing the Yorck password and relying on
 undocumented endpoints that can break at any time.
 
-Instead, v1.2 adds **ticket import via Android's Share menu**:
-- Share a booking-confirmation email or ticket PDF to Cinexperience.
-- The app extracts cinema, hall, date/time, film, row and seat.
-- Opens a pre-filled "Add visit" form; the user adds ratings.
-- Unrecognised fields are left empty for manual entry.
+Instead, v1.4 imports the **ticket PDF** that Yorck attaches to the booking
+email (screens: §6.10, §6.11). The email itself is not read; the app never
+accesses the mailbox, the Yorck account or the network for this. It also fills
+in the hall that the program (§11.1) cannot provide.
 
-This also fills in the hall that the program (§11.1) cannot provide.
+**The ticket** (checked on a real ticket, 2026-10-17): one A3 page created by
+Yorck's ticket system (PDF 1.4, producer "Qt 5.5.1"); German labels; the text
+is embedded (Arial with a Unicode table), and the QR code is a small embedded
+JPEG image.
+- Read: **Buchungsnummer** (booking number), film title (the line after
+  "Ticket"), **Kino** (cinema), **Datum** (dd.MM.yyyy), **Zeit** (HH:mm, Berlin
+  clock time), **Saal** (hall), **Reihe** (row), **Platz** (seat).
+- Ignored and never stored: "Gebucht von" (the booker's name), prices,
+  categories, transaction and ticket numbers, the address block and the
+  conditions text.
+- **QR code:** a version-1 QR code (21 × 21 modules) whose content is the
+  booking number. The app does not decode or generate QR codes: it reads the
+  module grid from the embedded image (threshold, then the centre of each
+  module) and checks it (the three finder patterns, the timing patterns and the
+  format information). Only a grid that passes is kept, and the ticket screen
+  redraws it sharply from these modules. Versions 1–4 (up to 33 × 33 modules)
+  are accepted, in case longer booking numbers appear.
+- **Still open:** a booking with several seats (one page per ticket? "Platz 8,
+  9"?). Until a sample exists, the reader accepts several seats where the
+  layout is unambiguous and otherwise leaves the seat for manual entry.
 
-**Prerequisite:** one or two real sample tickets/emails (personal data
-redacted) to build and test the parser.
+**Matching:** the cinema through the Yorck-name table of §11.1 ("Kino
+Rollberg" → Rollberg); the hall by name within that cinema; row and seat
+through the hall layout's labels (§4.3, which match Yorck's booking); the
+showing in the downloaded program by cinema and start time, for the screening
+format (§11.1 mapping) and the runtime (§11.3).
 
-### 11.3 Later: notifications (ideas, not planned for a version yet)
+**Security & privacy** (binding, like §11.1):
+1. The PDF is untrusted. The app's own reader handles only the structure
+   above (classic cross-reference table, compressed content streams, Type 0
+   fonts with a Unicode table, JPEG images) and refuses anything else: files
+   over 2 MB, more than 4 pages, encrypted files, compressed streams over 2 MB
+   unpacked, more than 2,000 objects. Only images of at most 512 × 512 pixels
+   are decoded, as QR code candidates (Yorck's is 116 × 116; the large logo is
+   skipped). It never runs scripts, opens links or loads anything referenced
+   by the file.
+2. Every field is checked like the program data (§11.1 rule 7): lengths,
+   allowed characters, a valid date and time; control and format characters
+   are removed; all texts are shown as plain text.
+3. Only the fields listed above are kept; the file itself is never stored.
+4. No PDF, OCR or QR-code library, no network code, no new permission for the
+   import.
+5. Tests: invented fixture PDFs with the same structure (not copies of a real
+   ticket), plus damaged, oversized and manipulated variants; the app shows a
+   message and never crashes. A real ticket is only checked locally (path in an
+   environment variable, file in a git-ignored folder), like the program's
+   real-page test. **No real ticket, booking number, name or QR code is ever
+   committed.**
+6. Review: a security review and an independent review agent before merging.
 
-Not part of v1.1. Possible notifications, all opt-in:
+### 11.3 Notifications
+
+Possible notifications, all opt-in. **v1.4 implements e and f** for upcoming
+visits (§4.4) that have a start time, whether from a ticket or entered by hand;
+a–d stay ideas.
 
 | # | Notification | Example | Background download? |
 |---|---|---|---|
@@ -581,15 +712,33 @@ Not part of v1.1. Possible notifications, all opt-in:
 | b | Saved filter | A saved filter (§6.9) gets new showings | yes, once a day |
 | c | Weekly digest | Monday morning: "This week at your favourite cinemas: 12 showings match your filters" | yes, once a week |
 | d | Last chance | A watchlist film has its last showings this week | yes, once a day |
-| e | Showtime reminder | For a showing marked "I'm going": "Hope starts at 17:15 at delphi LUX" (e.g. 2 h before) | no |
-| f | Rate your visit | After a marked showing has ended: "How was Hope? Log your visit" opens Add visit pre-filled | no |
+| e | Showtime reminder (v1.4) | "Hope starts at 17:15 · delphi LUX, Saal 1 · Row 7 · Seat 10", with "Show ticket" when the visit has a QR code; 1, 2 or 3 hours before (Settings, default 2) | no |
+| f | Rate your visit (v1.4) | "How was Hope? Rate your visit" about 30 minutes after the film has ended; opens the visit's form | no |
 
-- All need Android's notification permission (asked once).
 - a–d would download the program in the background, which §11.1 excludes
   (downloads only when the Program tab is opened). They would need their own
   switch (off by default, optionally Wi-Fi only) and the same single fixed
   request.
-- e and f work entirely on the phone. Suggested order: e and f first, then a.
+
+**Rules for e and f (v1.4):**
+1. Both are off until switched on in Settings (§6.7); switching one on asks
+   for Android's notification permission once.
+2. Times are computed from the visit's date and start time in Berlin time. The
+   end of the film is start + runtime when the downloaded program has the
+   showing (§11.2 matching), otherwise start + 2.5 hours.
+3. A reminder whose time has already passed when it is scheduled is not shown
+   (so nothing arrives late, e.g. after a restart); "Rate your visit" is
+   skipped if the visit already has a rating by then.
+4. Reminders are scheduled again whenever a visit is saved, changed or
+   deleted, the settings change, the phone restarts, the app is updated, the
+   time zone changes or a backup is imported.
+5. They use Android's normal (inexact) alarms, so a reminder can arrive a few
+   minutes late; the app does not ask for the exact-alarm permission.
+6. New permissions: notifications (`POST_NOTIFICATIONS`, asked at runtime) and
+   receiving the restart broadcast (`RECEIVE_BOOT_COMPLETED`). Nothing is
+   downloaded; the reminders work entirely on the phone.
+7. Tapping "Show ticket" opens the ticket (§6.11); tapping the notification
+   itself opens the visit (§6.4).
 
 ## 12. Milestones
 
@@ -605,7 +754,8 @@ Not part of v1.1. Possible notifications, all opt-in:
 | M7 | Polish & release prep | Accessibility pass, app icon, signed release APK, release workflow |
 | M8 | Polish from testing | Fixes and improvements from the owner's tests on the phone, delivered in batches → v1.0 release |
 | M9 | Program | Yorck's program with filters, film page, "Now showing", links to yorck.de, log visit from a showing (v1.1, §11.1) |
-| M10 | Ticket import | Share-intent parser (v1.2, §11.2) |
+| M10 | Ticket import & QR code | Ticket PDF reader, import into Add visit, ticket screen with the QR code, Next visit card, Upcoming in All visits; schema and backup version 3 (v1.4, §11.2, §6.10, §6.11) |
+| M11 | Reminders | Showtime reminder and "Rate your visit" (v1.4, §11.3) |
 
 ## 13. Development approach
 
@@ -626,7 +776,9 @@ complexity:
 | `feature:backup` | The Settings tab (§6.7): backup export / import with preview, restore safety copy, Settings → Program, About, entries to Manage cinemas & halls and All visits | Medium |
 | `core:program` | v1.1: downloading, checking and caching Yorck's program; the only module with network code (§11.1) | High |
 | `feature:program` | v1.1: Program tab, filters, saved filters, film page (§6.9) | Medium |
-| `feature:ticketimport` | Share-intent parser (v1.2) | High |
+| `core:ticket` | v1.4: the ticket PDF reader, the ticket fields and checks, the QR module grid (§11.2) | High |
+| `feature:tickets` | v1.4: ticket import entry (Share menu, Open with, file picker), the ticket screen with the QR code (§6.10, §6.11) | Medium |
+| Reminders | v1.4: scheduling rules (`core:model`), alarms, notifications and the restart receiver (`app`) (§11.3) | Medium |
 
 Working rules:
 - **Sequential first:** M0 (project setup) and `core:model` / `core:data` are
@@ -663,7 +815,9 @@ complexity (higher effort = more careful reasoning, but more time and usage):
 | M8 polish items | medium (high when data, backup or the seat map change) | Small changes, but existing data must stay intact |
 | `core:program`: download, parser, cache (v1.1) | xhigh | First network access; parses untrusted data (§11.1 security rules) |
 | `feature:program`: Program tab & film page (v1.1) | medium | Standard screens on top of `core:program` |
-| `feature:ticketimport` parser (v1.2) | xhigh | Error-prone free-text parsing |
+| `core:ticket`: ticket PDF reader (v1.4) | xhigh | Parses untrusted files (§11.2 security rules) |
+| Schema & backup version 3 (v1.4) | high | Existing data must survive the migration |
+| `feature:tickets`, reminders (v1.4) | medium (high for scheduling) | Standard screens; reminders must not fire wrongly |
 | Review agents | high (xhigh for seat map & backup) | Independent check before merge |
 | Stubborn bugs | max | Only when needed |
 
@@ -732,6 +886,7 @@ but cannot run an emulator there — hands-on verification is done by the owner.
 ## 15. Open items
 
 - Verify the current list of Yorck cinemas and hall names (M1).
-- Sample ticket email/PDF for the v1.2 parser.
+- A ticket PDF for a booking with several seats (§11.2); the one-seat ticket
+  was checked on 2026-10-17.
 - v1.1 Program: the meaning of the `SV` label (§11.1).
 - Yorck-app screenshots of hall seat plans (for preloaded layouts).
