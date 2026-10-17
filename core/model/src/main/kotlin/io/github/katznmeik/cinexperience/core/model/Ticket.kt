@@ -16,17 +16,42 @@ import java.util.Base64
  * @property qrModules the QR code as read from the PDF; `null` once it was removed
  *   (7 days after the showing, see [ShowingTime.qrModulesExpireAt]) or for a
  *   ticket restored from a backup, which never holds QR codes (§8).
+ *
+ * Behaves like a data class (equality by content, [copy]), except that it keeps
+ * its own copy of [seats] and [toString] hides the booking number.
  */
-data class Ticket(
+class Ticket(
     val visitId: Long,
     val bookingNumber: BookingNumber,
-    val seats: List<TicketSeat>,
+    seats: List<TicketSeat>,
     val qrModules: QrModules? = null,
 ) {
+    val seats: List<TicketSeat> = seats.toList()
+
     init {
-        require(seats.size in 1..MAX_SEATS) { "A ticket has 1 to $MAX_SEATS seats, not ${seats.size}" }
-        require(seats.toSet().size == seats.size) { "A ticket lists every seat once" }
+        require(this.seats.size in 1..MAX_SEATS) { "A ticket has 1 to $MAX_SEATS seats, not ${this.seats.size}" }
+        require(this.seats.toSet().size == this.seats.size) { "A ticket lists every seat once" }
     }
+
+    fun copy(
+        visitId: Long = this.visitId,
+        bookingNumber: BookingNumber = this.bookingNumber,
+        seats: List<TicketSeat> = this.seats,
+        qrModules: QrModules? = this.qrModules,
+    ): Ticket = Ticket(visitId, bookingNumber, seats, qrModules)
+
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            other is Ticket &&
+            visitId == other.visitId &&
+            bookingNumber == other.bookingNumber &&
+            seats == other.seats &&
+            qrModules == other.qrModules
+
+    override fun hashCode(): Int = listOf(visitId, bookingNumber, seats, qrModules).hashCode()
+
+    /** Without the booking number (see [BookingNumber.toString]) and the QR code's modules. */
+    override fun toString(): String = "Ticket(visitId=$visitId, bookingNumber=$bookingNumber, seats=$seats, qrModules=$qrModules)"
 
     companion object {
         /** Most seats of one booking: far above a real booking, small enough for any list. */
@@ -37,13 +62,20 @@ data class Ticket(
 /**
  * Yorck's booking number ("Buchungsnummer", spec §4.7, §11.2): [MIN_LENGTH] to
  * [MAX_LENGTH] characters, only `A`–`Z` and `0`–`9` (checked when it is created).
- * Yorck's are 7 characters long; the QR code (versions 1–4) holds up to 16.
+ * Yorck's are 7 characters long. [MAX_LENGTH] is a design choice with room to
+ * spare, not a QR code limit (a version 1 code alone holds 7 to 25 such
+ * characters, depending on its mode and error correction level).
+ *
+ * The booking number is what the QR code holds, so [toString] hides it (for logs
+ * and messages); use [value] for the text itself.
  */
 @JvmInline
 value class BookingNumber(val value: String) {
     init {
         require(isValid(value)) { "A booking number has $MIN_LENGTH to $MAX_LENGTH characters A–Z and 0–9" }
     }
+
+    override fun toString(): String = "BookingNumber(hidden)"
 
     companion object {
         const val MIN_LENGTH: Int = 4
