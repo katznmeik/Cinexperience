@@ -215,7 +215,8 @@ interface TicketRepository {
      * ticket still has [bookingNumber] and no QR modules, so a ticket that changed
      * since it was read (removed, replaced, or given a QR code meanwhile) is left
      * alone. False if nothing was stored. Modules that are already expired are
-     * stored too and go with the next [removeExpiredQrModules].
+     * stored too and go with the next [removeExpiredQrModules]. A damaged stored value
+     * (read as "no QR code") isn't empty, so it isn't replaced either: accepted.
      */
     suspend fun restoreQrModules(visitId: Long, bookingNumber: BookingNumber, qrModules: QrModules): Boolean
 
