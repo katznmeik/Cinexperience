@@ -128,6 +128,12 @@ object CinexIcons {
 
     val Delete: ImageVector by lazy { strokeIcon("Delete", "M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6") }
 
+    /** A ticket, e.g. the mark of a seat of the booking: the same glyph as [Program]. */
+    val Ticket: ImageVector get() = Program
+
+    /** A page with an arrow into it: importing a file, e.g. a ticket PDF (Settings → Import ticket). */
+    val ImportFile: ImageVector by lazy { strokeIcon("ImportFile", "M6 3h8l4 4v14H6z", "M14 3v4h4", "M12 10v7M9 14l3 3l3-3") }
+
     /** Seat kind glyphs (see [SeatKindGlyphs]), as icons for the editor's seat type chips. */
     val Wheelchair: ImageVector by lazy { strokeIcon("Wheelchair", *SeatKindGlyphs.Wheelchair.toTypedArray()) }
 

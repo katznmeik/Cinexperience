@@ -117,6 +117,17 @@ class TicketViewModelTest {
     }
 
     @Test
+    fun aTicketWithoutSeatsShowsTheVisitsOwnSeatOrNone() = runTest {
+        val noSeats = SampleTickets.ticket().copy(seats = emptyList())
+        val own = viewModel(SampleTickets.store(tickets = listOf(noSeats))).shown()
+        assertEquals(listOf("Row 7 · Seat 10"), own.seats.map { it.label.shortText })
+        assertEquals(listOf(true), own.seats.map { it.isOwn })
+
+        val none = viewModel(SampleTickets.store(visits = listOf(visit.copy(seatId = null)), tickets = listOf(noSeats))).shown()
+        assertEquals(emptyList<TicketSeatLine>(), none.seats)
+    }
+
+    @Test
     fun withoutTicketOrVisitTheTicketIsNotFound() = runTest {
         assertEquals(TicketContent.NotFound, viewModel(SampleTickets.store(tickets = emptyList())).uiState.value)
         assertEquals(TicketContent.NotFound, viewModel(SampleTickets.store(visits = emptyList(), tickets = emptyList())).uiState.value)

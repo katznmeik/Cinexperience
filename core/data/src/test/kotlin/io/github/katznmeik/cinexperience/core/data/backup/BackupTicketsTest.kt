@@ -3,12 +3,14 @@ package io.github.katznmeik.cinexperience.core.data.backup
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.data.repository.RoomTicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomVisitRepository
+import io.github.katznmeik.cinexperience.core.data.repository.SaveTicketResult
 import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.model.QrModules
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.TextLimits
 import io.github.katznmeik.cinexperience.core.model.Ticket
 import io.github.katznmeik.cinexperience.core.model.TicketSeat
+import io.github.katznmeik.cinexperience.core.model.Visit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -19,6 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.io.File
+import java.time.LocalDate
 import java.time.LocalTime
 
 /**
@@ -69,8 +72,28 @@ internal class BackupTicketsTest : BackupTestBase() {
 
         // Imported again, the ticket finds its visit by the booking number and gets its QR code back.
         assertEquals(visitA, ticketsB.findVisitId(BookingNumber("TEST123")))
-        assertTrue(ticketsB.storeQrModules(visitA, qr))
+        assertTrue(ticketsB.restoreQrModules(visitA, BookingNumber("TEST123"), qr))
         assertEquals(qr, ticketsB.getTicket(visitA)!!.qrModules)
+    }
+
+    @Test
+    fun aTicketWithoutSeatsRoundTrips() = runTest {
+        buildRealisticData()
+        val hallId = visits.getVisit(tickets.findVisitId(BookingNumber("TEST123"))!!)!!.hallId
+        // The seats couldn't be read from this (invented) ticket.
+        val saved = tickets.saveVisitWithTicket(Visit(hallId = hallId, date = LocalDate.of(2026, 10, 24)), Ticket(0, BookingNumber("TEST789"), emptyList()))
+        val visitId = (saved as SaveTicketResult.Saved).visitId
+        val doc = deviceA.document("backup.zip")
+        deviceA.repository.export(doc)
+
+        val dataJson = readZip(File(doc)).single { it.first == BackupFormat.DATA }.second.decodeToString()
+        val data = BackupFormat.strictJson.decodeFromString(BackupData.serializer(), dataJson)
+        assertEquals(BackupTicket(visitId, "TEST789", emptyList()), data.tickets.single { it.visitId == visitId })
+
+        val deviceB = newDevice("b")
+        deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
+        assertEquals(deviceA.snapshot(), deviceB.snapshot())
+        assertEquals(Ticket(visitId, BookingNumber("TEST789"), emptyList()), RoomTicketRepository(deviceB.db, Dispatchers.Default).getTicket(visitId))
     }
 
     @Test
@@ -198,7 +221,6 @@ internal class BackupTicketsTest : BackupTestBase() {
     fun seatsMustBeWhatTheAppCouldHaveWritten() {
         val tooMany = List(Ticket.MAX_SEATS + 1) { BackupTicketSeat("5", "${it + 1}") }
         val badSeats = listOf(
-            emptyList(),
             tooMany,
             listOf(BackupTicketSeat("1", "2"), BackupTicketSeat("1", "2")), // twice
             listOf(BackupTicketSeat("-", "2")), // a row without a name is null

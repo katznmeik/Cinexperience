@@ -16,8 +16,9 @@ import kotlinx.serialization.json.Json
  *
  * `row` is `null` for a seat without a row name. Reading is strict (unknown or
  * missing fields are errors) and every seat is checked by [TicketSeat] and the
- * list by [Ticket]'s rules (1 to [Ticket.MAX_SEATS] seats, none twice). The
- * database holds only what [encode] wrote; the backup has its own DTOs.
+ * list by [Ticket]'s rules (0 to [Ticket.MAX_SEATS] seats, none twice; `[]` when
+ * the seats couldn't be read from the ticket). The database holds only what
+ * [encode] wrote; the backup has its own DTOs.
  */
 internal object TicketSeatsJson {
 
@@ -40,7 +41,7 @@ internal object TicketSeatsJson {
     fun decode(text: String): List<TicketSeat> {
         require(text.length <= MAX_JSON_LENGTH) { "Ticket seats JSON is too long" }
         val seats = json.decodeFromString(serializer, text).map { TicketSeat(it.row, it.seat) }
-        require(seats.size in 1..Ticket.MAX_SEATS && seats.toSet().size == seats.size) { "Invalid ticket seats" }
+        require(seats.size <= Ticket.MAX_SEATS && seats.toSet().size == seats.size) { "Invalid ticket seats" }
         return seats
     }
 

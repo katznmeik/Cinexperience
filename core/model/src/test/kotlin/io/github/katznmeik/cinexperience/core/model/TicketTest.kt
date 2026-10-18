@@ -65,13 +65,14 @@ class TicketTest {
     }
 
     @Test
-    fun aTicketHas1To20DifferentSeats() {
+    fun aTicketHasUpTo20DifferentSeats() {
         val number = BookingNumber("TEST123")
         val twenty = List(Ticket.MAX_SEATS) { TicketSeat("5", "${it + 1}") }
         assertEquals(20, Ticket(0, number, twenty).seats.size)
         assertNull(Ticket(1, number, listOf(seat)).qrModules)
 
-        assertFailsWith<IllegalArgumentException> { Ticket(1, number, emptyList()) }
+        // None when they couldn't be read from the ticket.
+        assertEquals(emptyList(), Ticket(1, number, emptyList()).seats)
         assertFailsWith<IllegalArgumentException> { Ticket(1, number, twenty + TicketSeat("5", "21")) }
         assertFailsWith<IllegalArgumentException> { Ticket(1, number, listOf(seat, TicketSeat("8", "1"), seat)) }
         // The same seat number in two rows is two seats.

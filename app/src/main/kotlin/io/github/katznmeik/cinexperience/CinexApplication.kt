@@ -4,8 +4,9 @@ import android.app.Application
 import io.github.katznmeik.cinexperience.di.AppContainer
 import io.github.katznmeik.cinexperience.di.DefaultAppContainer
 
-class CinexApplication : Application() {
+/** Open so that activity tests can run [MainActivity] with a container of fakes. */
+open class CinexApplication : Application() {
 
     /** Manual dependency injection: one container per process, created lazily. */
-    val container: AppContainer by lazy { DefaultAppContainer(this) }
+    open val container: AppContainer by lazy { DefaultAppContainer(this) }
 }

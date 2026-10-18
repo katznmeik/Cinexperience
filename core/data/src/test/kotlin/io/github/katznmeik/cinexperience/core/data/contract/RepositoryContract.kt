@@ -396,12 +396,44 @@ internal abstract class RepositoryContract {
         assertTrue(listOf(timed, untimed, noModules).all { tickets.getTicket(it)!!.qrModules == null })
 
         // Imported again: the modules are stored again, and expire again.
-        assertTrue(tickets.storeQrModules(timed, qr))
+        assertTrue(tickets.restoreQrModules(timed, booking, qr))
         assertEquals(ticket(timed), tickets.getTicket(timed))
         assertEquals(qr, tickets.observeTicket(timed).first()!!.qrModules)
-        assertFalse(tickets.storeQrModules(visits.save(Visit(hallId = hall.id, date = date)), qr)) // a visit without a ticket
-        assertFalse(tickets.storeQrModules(999_999, qr))
+        assertFalse(tickets.restoreQrModules(visits.save(Visit(hallId = hall.id, date = date)), booking, qr)) // a visit without a ticket
+        assertFalse(tickets.restoreQrModules(999_999, booking, qr))
         assertEquals(1, tickets.removeExpiredQrModules(Instant.parse("2026-10-20T18:15:00Z")))
         assertNull(tickets.getTicket(timed)!!.qrModules)
+    }
+
+    @Test
+    fun qrModulesAreRestoredOnlyForTheSameTicketWithoutThem() = runTest {
+        val hall = hallWith(grid)
+        val id = saved(Visit(hallId = hall.id, date = date, startTime = evening), ticket(qrModules = null))
+        val other = QrModules.of(25) { row, column -> row == column }
+
+        // The visit's ticket has another booking number now (replaced since it was read): left alone.
+        assertFalse(tickets.restoreQrModules(id, BookingNumber("OTHER42"), qr))
+        assertNull(tickets.getTicket(id)!!.qrModules)
+
+        assertTrue(tickets.restoreQrModules(id, booking, qr))
+        // It has a QR code now (stored meanwhile): never replaced.
+        assertFalse(tickets.restoreQrModules(id, booking, other))
+        assertEquals(qr, tickets.getTicket(id)!!.qrModules)
+
+        // Removed since it was read: nothing comes back.
+        assertTrue(tickets.removeTicket(id))
+        assertFalse(tickets.restoreQrModules(id, booking, qr))
+        assertNull(tickets.getTicket(id))
+    }
+
+    @Test
+    fun aTicketWithoutSeatsIsSavedAndReadBack() = runTest {
+        val hall = hallWith(grid)
+        // The seats couldn't be read from the (invented) ticket.
+        val id = saved(Visit(hallId = hall.id, date = date, seatId = SeatId(2)), ticket(seats = emptyList()))
+        assertEquals(ticket(id, seats = emptyList()), tickets.getTicket(id))
+        assertEquals(emptyList<TicketSeat>(), tickets.observeTicket(id).first()!!.seats)
+        assertEquals(id, tickets.findVisitId(booking))
+        assertEquals(SeatId(2), visits.getVisit(id)!!.seatId)
     }
 }

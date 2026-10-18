@@ -4,12 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.lifecycle.SavedStateHandle
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.model.BookingNumber
+import io.github.katznmeik.cinexperience.core.model.TicketSeat
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
@@ -26,6 +31,7 @@ import io.github.katznmeik.cinexperience.feature.visits.list.AllVisitsViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -67,6 +73,25 @@ class VisitTicketScreenshotTest {
         capture("edit_visit_ticket_full") { VisitEditScreen(state, photo = null, actions = object : VisitEditActions {}) }
     }
 
+    /** A stored ticket whose seats couldn't be read: the visit's own seat as "Your seat", or no seat line (spec §4.7). */
+    @Test
+    fun aStoredTicketWithoutSeatsShowsTheVisitsSeat() {
+        val withSeat = VisitTicketStates.editWithTicket(seats = emptyList())
+        var state by mutableStateOf(withSeat)
+        composeRule.setContent { CinexTheme { VisitEditScreen(state, photo = null, actions = object : VisitEditActions {}) } }
+        fun count(text: String) = composeRule.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().size
+        // The seat card's label and the Ticket section's.
+        assertEquals(2, count("Your seat"))
+        assertEquals("Row 7 · Seat 10", withSeat.seatLabel!!.shortText)
+        assertEquals(1, count("Row 7 · Seat 10"))
+        assertEquals(0, count("Seat of the booking") + count("Seats of the booking"))
+
+        state = withSeat.copy(seatLabel = null)
+        composeRule.waitForIdle()
+        assertEquals("only the seat card's", 1, count("Your seat"))
+        assertEquals(0, count("Seat of the booking") + count("Seats of the booking"))
+    }
+
     @Test
     @Config(qualifiers = "w412dp-h915dp-port-night-xxhdpi")
     fun allVisitsWithUpcoming() {
@@ -79,8 +104,10 @@ internal object VisitTicketStates {
     /** The longest booking number the app accepts (16 characters, invented). */
     val LONG_BOOKING_NUMBER = BookingNumber("ABCD1234EFGH5678")
 
-    fun editWithTicket(bookingNumber: BookingNumber = SampleTickets.BOOKING_NUMBER): VisitEditUiState {
-        val store = UpcomingVisitFixtures.store().let { s -> s.copy(tickets = s.tickets.map { it.copy(bookingNumber = bookingNumber) }) }
+    fun editWithTicket(bookingNumber: BookingNumber = SampleTickets.BOOKING_NUMBER, seats: List<TicketSeat>? = null): VisitEditUiState {
+        val store = UpcomingVisitFixtures.store().let { s ->
+            s.copy(tickets = s.tickets.map { it.copy(bookingNumber = bookingNumber, seats = seats ?: it.seats) })
+        }
         val repository = FakeCinexRepository(store)
         val vm = VisitEditViewModel(
             VisitEditMode.Edit(SampleTickets.VISIT), repository, repository, FakeVisitPhotoStore(), SavedStateHandle(),

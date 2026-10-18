@@ -130,6 +130,10 @@ fun seatChoices(layout: SeatLayout): List<SeatRowChoice> = seatChoices(layout.la
  *
  * @param seatVisuals the map's seat states; when not empty, each chip also
  *   announces its seat's state ("Row 7, Seat 10, great, favourite").
+ * @param bookingSeatIds the seats of an imported ticket's booking (spec §6.10), in the
+ *   booking's order: their chips carry a ticket mark after the number and are announced
+ *   "…, in this booking". Without a selected seat, the picker starts on the row of the
+ *   first of them.
  */
 @Composable
 fun SeatPicker(
@@ -138,10 +142,11 @@ fun SeatPicker(
     onSeatSelected: (SeatId) -> Unit,
     modifier: Modifier = Modifier,
     seatVisuals: Map<SeatId, SeatVisual> = emptyMap(),
+    bookingSeatIds: Set<SeatId> = emptySet(),
 ) {
     if (choices.isEmpty()) return
-    val initialRow = remember(choices, selectedSeatId) {
-        choices.indexOfFirst { row -> row.seats.any { it.seatId == selectedSeatId } }.coerceAtLeast(0)
+    val initialRow = remember(choices, selectedSeatId, bookingSeatIds) {
+        choices.rowOf(selectedSeatId) ?: bookingSeatIds.firstNotNullOfOrNull { choices.rowOf(it) } ?: 0
     }
     var rowIndex by rememberSaveable(choices.size) { mutableIntStateOf(initialRow) }
     LaunchedEffect(choices, selectedSeatId) {
@@ -178,16 +183,19 @@ fun SeatPicker(
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 block.forEach { seat ->
-                    val description = if (seatVisuals.isEmpty()) {
+                    val booked = seat.seatId in bookingSeatIds
+                    val state = if (seatVisuals.isEmpty()) {
                         row.descriptionOf(seat)
                     } else {
                         "${row.descriptionOf(seat)}, ${(seatVisuals[seat.seatId] ?: SeatVisual.Neutral).stateText}"
                     }
+                    val description = if (booked) state + IN_THIS_BOOKING else state
                     ChoiceChip(
                         text = seat.shortText,
                         selected = seat.seatId == selectedSeatId,
                         onClick = { onSeatSelected(seat.seatId) },
                         icon = seat.label.kind.icon,
+                        trailingIcon = if (booked) CinexIcons.Ticket else null,
                         modifier = Modifier.semantics { contentDescription = description },
                     )
                 }
@@ -195,6 +203,10 @@ fun SeatPicker(
         }
     }
 }
+
+/** The index of the row choice that holds [seatId]; `null` if none does. */
+private fun List<SeatRowChoice>.rowOf(seatId: SeatId?): Int? =
+    seatId?.let { id -> indexOfFirst { row -> row.seats.any { it.seatId == id } }.takeIf { it >= 0 } }
 
 @Composable
 private fun PickerHeader(text: String) {

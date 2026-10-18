@@ -136,6 +136,8 @@ class ProgramNavigationTest {
         showApp(backup = backup)
         backup.isImporting.value = true
         composeRule.onNodeWithTag(TopLevelDestination.Program.testTag).assertIsNotEnabled().performClick()
-        composeRule.onNodeWithText("13 venues · 0 visits").assertExists()
+        // Still the Cinemas tab, under the lock of an import in another window (BackupImportLockTest).
+        composeRule.onNodeWithText(BACKUP_IMPORT_LOCK_TITLE).assertExists()
+        composeRule.onNodeWithText("13 venues · 0 visits", useUnmergedTree = true).assertExists()
     }
 }

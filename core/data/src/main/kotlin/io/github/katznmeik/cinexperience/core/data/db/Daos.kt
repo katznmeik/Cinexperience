@@ -196,8 +196,14 @@ internal interface TicketDao {
     @Query("DELETE FROM ticket WHERE visit_id = :visitId")
     suspend fun delete(visitId: Long): Int
 
-    @Query("UPDATE ticket SET qr_modules = :qrModules WHERE visit_id = :visitId")
-    suspend fun setQrModules(visitId: Long, qrModules: String?): Int
+    /** Only for the visit's ticket with [bookingNumber] that has no QR modules: one guarded statement. */
+    @Query(
+        """
+        UPDATE ticket SET qr_modules = :qrModules
+        WHERE visit_id = :visitId AND booking_number = :bookingNumber AND qr_modules IS NULL
+        """,
+    )
+    suspend fun restoreQrModules(visitId: Long, bookingNumber: String, qrModules: String): Int
 
     @Query(
         """

@@ -47,8 +47,8 @@ internal class RoomTicketRepository(
 
     override suspend fun removeTicket(visitId: Long): Boolean = dao.delete(visitId) > 0
 
-    override suspend fun storeQrModules(visitId: Long, qrModules: QrModules): Boolean =
-        dao.setQrModules(visitId, qrModules.encode()) > 0
+    override suspend fun restoreQrModules(visitId: Long, bookingNumber: BookingNumber, qrModules: QrModules): Boolean =
+        dao.restoreQrModules(visitId, bookingNumber.value, qrModules.encode()) > 0
 
     override suspend fun removeExpiredQrModules(now: Instant): Int = db.withTransaction {
         // The expiry comes from the model (Berlin days), not from SQL date math.

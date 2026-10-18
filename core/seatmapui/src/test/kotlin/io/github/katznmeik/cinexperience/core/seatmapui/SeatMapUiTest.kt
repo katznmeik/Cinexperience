@@ -150,6 +150,18 @@ class SeatMapUiTest {
         composeRule.onNodeWithText("Centre").assertExists()
     }
 
+    @Test
+    fun seatPickerStartsOnTheRowOfTheBookingsFirstSeat() {
+        val rows = SampleLayouts.splitHall.rows
+        // Row 7, seat 10 first, then a seat in row 8 (spec §6.10, an imported ticket).
+        val booking = linkedSetOf(rows[6].seatIds[13], rows[7].seatIds[13])
+        composeRule.setContent {
+            CinexTheme { SeatPicker(seatChoices(SampleLayouts.splitHall), selectedSeatId = null, onSeatSelected = {}, bookingSeatIds = booking) }
+        }
+        composeRule.onNodeWithContentDescription("Row 7").assertIsSelected()
+        composeRule.onNodeWithContentDescription("Row 7, Seat 10, centre block, in this booking").assertExists()
+    }
+
     /** Kant Kino Saal 3: every row is unnamed, so there is no row step; the seats come by number. */
     @Test
     fun seatPickerOffersUnnamedRowsBySeatNumber() {

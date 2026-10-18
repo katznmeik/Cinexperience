@@ -156,6 +156,10 @@ val MAX_ZOOM_SEAT_SIZE: Dp = 44.dp
  *   When it is not empty, the selected seat's state is part of its screen-reader
  *   description ("Selected: Row 7, Seat 10, great, favourite"). Pair the map with a
  *   [SeatLegend].
+ * @param bookingSeatIds the seats of an imported ticket's booking (spec §6.10), drawn
+ *   with a dashed rim just inside the seat's edge ([drawBookingMark]), so another
+ *   seat of the booking can be picked; a selected one is announced "…, in this
+ *   booking". Pair the map with a [BookingLegend].
  * @param onSeatClick called with the tapped seat; `null` makes the map display-only.
  * @param onChooseSeatByLabel accessibility alternative to tapping a seat: shown to
  *   screen readers as a custom action (e.g. opening a [SeatPicker]).
@@ -176,6 +180,7 @@ fun SeatMap(
     screenOffset: Float = 0f,
     seatVisuals: Map<SeatId, SeatVisual> = emptyMap(),
     selectedSeatId: SeatId? = null,
+    bookingSeatIds: Set<SeatId> = emptySet(),
     onSeatClick: ((SeatId) -> Unit)? = null,
     onChooseSeatByLabel: (() -> Unit)? = null,
     maxHeight: Dp = DEFAULT_SEAT_MAP_MAX_HEIGHT,
@@ -218,8 +223,8 @@ fun SeatMap(
         SeatNumberTexts(textMeasurer, numberStyle, metrics.seatSize, density)
     }
     // Prepared once per layout and seat states; selecting a seat only redraws.
-    val drawing = remember(geometry, labels, seatVisuals, colors, rowLabelTexts, caption, numbers, density) {
-        SeatMapDrawing(geometry, labels, seatVisuals, colors, rowLabelTexts, caption, numbers, density)
+    val drawing = remember(geometry, labels, seatVisuals, bookingSeatIds, colors, rowLabelTexts, caption, numbers, density) {
+        SeatMapDrawing(geometry, labels, seatVisuals, bookingSeatIds, colors, rowLabelTexts, caption, numbers, density)
     }
     val selectedState = rememberUpdatedState(selectedSeatId)
 
@@ -253,7 +258,8 @@ fun SeatMap(
                     } else {
                         seatDescription(selectedLabel, selectedSeatId?.let { seatVisuals[it] } ?: SeatVisual.Neutral)
                     }
-                    stateDescription = "Selected: $description"
+                    val booked = if (selectedSeatId in bookingSeatIds) IN_THIS_BOOKING else ""
+                    stateDescription = "Selected: $description$booked"
                 }
                 if (onChooseSeatByLabel != null) {
                     customActions = listOf(
@@ -403,6 +409,7 @@ private class SeatMapDrawing(
     private val geometry: SeatMapGeometry,
     labels: LayoutLabels,
     visuals: Map<SeatId, SeatVisual>,
+    bookingSeatIds: Set<SeatId>,
     private val colors: CinexColors,
     /** The row labels, measured ([measureRowLabels]). */
     private val rowLabels: List<TextLayoutResult?>,
@@ -424,6 +431,9 @@ private class SeatMapDrawing(
     private val noDataRims = Path()
     private val seats = ArrayList<SeatDecoration>()
 
+    /** The booking's seats ([bookingSeatIds]) with their tones, for their dashed rims. */
+    private val bookingSeats = ArrayList<Pair<Rect, SeatTone>>()
+
     /** How far a seat's decoration (favourite outline, corner badges) reaches beyond its cell. */
     private val decorationReach = geometry.metrics.seatSize * 0.25f
 
@@ -438,6 +448,7 @@ private class SeatMapDrawing(
                 paths.getOrPut(visual.tone) { Path() }.addRoundRect(seatRoundRect(rect))
                 if (visual.tone == SeatTone.NO_DATA) noDataRims.addRoundRect(seatRoundRect(rect.noDataRim(dp)))
                 seats += SeatDecoration(rect, cell.kind, visual, labels.labelOf(cell.id)?.seatNumberText)
+                if (cell.id in bookingSeatIds) bookingSeats += rect to visual.tone
             }
         }
         seatPaths = paths
@@ -467,6 +478,7 @@ private class SeatMapDrawing(
 
         seatPaths.forEach { (tone, path) -> drawPath(path, colors.seat.colorOf(tone)) }
         drawPath(noDataRims, colors.seat.noDataOutline, style = Stroke(width = NO_DATA_RIM_WIDTH * dp))
+        for ((rect, tone) in bookingSeats) drawBookingMark(rect, colors.seat.onColorOf(tone), dp)
         val area = visible.inflate(decorationReach)
         for (seat in seats) {
             if (!seat.rect.overlaps(area)) continue

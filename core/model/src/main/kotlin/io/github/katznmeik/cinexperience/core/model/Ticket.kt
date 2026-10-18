@@ -11,8 +11,9 @@ import java.util.Base64
  *   saved together with it (see `TicketRepository.saveVisitWithTicket`).
  * @property bookingNumber Yorck's "Buchungsnummer": unique across tickets, so a
  *   ticket is recognised when it is imported again. The QR code contains it.
- * @property seats every seat of the booking as printed on the ticket, 1 to
- *   [MAX_SEATS], no seat twice. The visit's own seat is one of them.
+ * @property seats every seat of the booking as printed on the ticket, 0 to
+ *   [MAX_SEATS], no seat twice; empty when they couldn't be read from the ticket.
+ *   The visit's own seat is normally one of them.
  * @property qrModules the QR code as read from the PDF; `null` once it was removed
  *   (7 days after the showing, see [ShowingTime.qrModulesExpireAt]) or for a
  *   ticket restored from a backup, which never holds QR codes (§8).
@@ -29,7 +30,7 @@ class Ticket(
     val seats: List<TicketSeat> = seats.toList()
 
     init {
-        require(this.seats.size in 1..MAX_SEATS) { "A ticket has 1 to $MAX_SEATS seats, not ${this.seats.size}" }
+        require(this.seats.size <= MAX_SEATS) { "A ticket has at most $MAX_SEATS seats, not ${this.seats.size}" }
         require(this.seats.toSet().size == this.seats.size) { "A ticket lists every seat once" }
     }
 
@@ -123,6 +124,10 @@ data class TicketSeat(val row: String?, val seat: String) {
 
         /** Whether [seat] is a valid [TicketSeat.seat] (see there). */
         fun isValidSeat(seat: String): Boolean = LayoutCell.Seat.isValidFixedLabel(seat) || isSeatNumber(seat)
+
+        /** The seat [row] / [seat], or `null` if either isn't valid (see the class comment). */
+        fun ofOrNull(row: String?, seat: String): TicketSeat? =
+            if ((row == null || isValidRow(row)) && isValidSeat(seat)) TicketSeat(row, seat) else null
 
         private fun isSeatNumber(text: String): Boolean = text.toIntOrNull()?.let { it >= 0 && it.toString() == text } == true
 

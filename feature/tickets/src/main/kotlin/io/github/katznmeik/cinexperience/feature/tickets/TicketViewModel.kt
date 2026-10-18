@@ -125,7 +125,10 @@ class TicketViewModel(
     }
 }
 
-/** [ticket] of [visit] in [hall] at [now]. */
+/**
+ * [ticket] of [visit] in [hall] at [now]. A ticket whose seats couldn't be read (none
+ * stored) shows the visit's own seat, if it has one, as "Your seat".
+ */
 internal fun details(visit: Visit, ticket: Ticket, hall: HallDetail?, now: Instant): TicketDetails {
     val expired = !now.isBefore(visit.qrModulesExpireAt)
     val ownSeat = visit.seatId?.let { hall?.labels?.labelOf(it) }
@@ -136,8 +139,12 @@ internal fun details(visit: Visit, ticket: Ticket, hall: HallDetail?, now: Insta
         today = ShowingTime.today(now),
         cinemaName = hall?.cinema?.name,
         hallName = hall?.hall?.name,
-        seats = ticket.seats.map { seat ->
-            TicketSeatLine(seat.label, isOwn = ownSeat != null && ownSeat.row == seat.row && ownSeat.seat == seat.seat)
+        seats = if (ticket.seats.isEmpty()) {
+            listOfNotNull(ownSeat?.let { TicketSeatLine(it, isOwn = true) })
+        } else {
+            ticket.seats.map { seat ->
+                TicketSeatLine(seat.label, isOwn = ownSeat != null && ownSeat.row == seat.row && ownSeat.seat == seat.seat)
+            }
         },
         bookingNumber = ticket.bookingNumber,
         qrModules = ticket.qrModules.takeUnless { expired },

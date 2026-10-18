@@ -22,8 +22,9 @@ yorck-pages/
 
 # Real ticket PDFs for RealTicketTest (CINEX_TICKET_PDF): they hold a booking
 # number, a name and a QR code and are never committed (spec §11.2). Keep them in
-# tickets/ or name them *.ticket.pdf.
-tickets/
+# tickets/ at the repository root (anchored, so feature/tickets/ isn't ignored) or
+# name them *.ticket.pdf.
+/tickets/
 *.ticket.pdf
 
 # Signing material — never commit (spec §14.4)

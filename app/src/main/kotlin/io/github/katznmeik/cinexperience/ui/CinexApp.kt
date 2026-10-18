@@ -12,13 +12,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -51,12 +55,18 @@ import io.github.katznmeik.cinexperience.feature.seatmap.hallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.layoutEditorScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToHallDetail
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToLayoutEditor
+import io.github.katznmeik.cinexperience.feature.tickets.ImportTicketRoute
+import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketUris
+import io.github.katznmeik.cinexperience.feature.tickets.navigateToImportTicket
 import io.github.katznmeik.cinexperience.feature.tickets.navigateToTicket
+import io.github.katznmeik.cinexperience.feature.tickets.ticketImportScreen
 import io.github.katznmeik.cinexperience.feature.tickets.ticketScreen
+import io.github.katznmeik.cinexperience.feature.visits.AddVisitRoute
 import io.github.katznmeik.cinexperience.feature.visits.allVisitsScreen
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAddVisit
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAllVisits
 import io.github.katznmeik.cinexperience.feature.visits.navigateToEditVisit
+import io.github.katznmeik.cinexperience.feature.visits.navigateToImportedVisit
 import io.github.katznmeik.cinexperience.feature.visits.visitEditScreens
 
 /**
@@ -69,12 +79,22 @@ import io.github.katznmeik.cinexperience.feature.visits.visitEditScreens
  * wrap every navigation callback in dropUnlessResumed, so double taps during a
  * transition are ignored.
  * Screen transitions (also for predictive back) come from [CinexTransitions].
+ *
+ * [pendingTicketImport] is a shared or opened ticket PDF (spec §6.10): its import
+ * opens once nothing blocks writes (a running backup import is waited for), and
+ * [onPendingTicketImportOpened] then marks it as handled. The import replaces itself
+ * with Add visit or with the visit that has the ticket already.
+ *
+ * While a backup import runs, in this window of the app or another one, the screens
+ * are covered by [BackupImportLock], except the Settings screen here that runs it.
  */
 @Composable
 fun CinexApp(
     container: AppContainer,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
+    pendingTicketImport: ImportTicketRoute? = null,
+    onPendingTicketImportOpened: () -> Unit = {},
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -86,6 +106,21 @@ fun CinexApp(
     // While a backup import replaces the data, nothing else may write: tabs are locked
     // (Settings itself blocks Back and its other rows).
     val importing by container.backupRepository.isImporting.collectAsStateWithLifecycle()
+    // The import blocks every write in the whole app, also in another window of it (a share opens
+    // one in the email app's task): the screens are covered meanwhile, except the Settings screen
+    // here that runs the import, which locks itself.
+    var runsBackupImport by rememberSaveable { mutableStateOf(false) }
+    val lockedByImport = importing && !runsBackupImport
+    val ticketImportOpened by rememberUpdatedState(onPendingTicketImportOpened)
+    // A shared ticket never interrupts a backup import: it waits until the import has ended
+    // (and until the navigation graph is set up, at the first frame).
+    val navigationReady = backStackEntry != null
+    LaunchedEffect(pendingTicketImport, importing, navigationReady) {
+        val route = pendingTicketImport ?: return@LaunchedEffect
+        if (importing || !navigationReady) return@LaunchedEffect
+        navController.navigate(route)
+        ticketImportOpened()
+    }
 
     Scaffold(
         modifier = modifier,
@@ -119,7 +154,8 @@ fun CinexApp(
         NavHost(
             navController = navController,
             startDestination = CinemasRoute,
-            modifier = Modifier.padding(innerPadding),
+            // Under the lock nothing below may be reached, not even by an accessibility service.
+            modifier = Modifier.padding(innerPadding).then(if (lockedByImport) Modifier.clearAndSetSemantics {} else Modifier),
             // One consistent set of transitions (spec §7), see CinexTransitions.
             enterTransition = CinexTransitions.enter(tabSwitch),
             exitTransition = CinexTransitions.exit(tabSwitch),
@@ -177,8 +213,13 @@ fun CinexApp(
                 visitRepository = container.visitRepository,
                 ticketRepository = container.ticketRepository,
                 visitPhotoStore = container.visitPhotoStore,
+                clock = container.clock,
                 onClose = navController::navigateUp,
                 onShowTicket = navController::navigateToTicket,
+                // The imported ticket's booking number belongs to another visit (imported meanwhile).
+                onOpenImportedVisit = { visitId ->
+                    navController.navigateToImportedVisit(visitId) { popUpTo<AddVisitRoute> { inclusive = true } }
+                },
             )
             // The ticket with its QR code (v1.4, spec §6.11).
             ticketScreen(
@@ -187,6 +228,25 @@ fun CinexApp(
                 ticketRepository = container.ticketRepository,
                 clock = container.clock,
                 onBack = navController::navigateUp,
+            )
+            // The ticket import (v1.4, spec §6.10): Share, Open with, Settings → Import ticket.
+            // It replaces itself with Add visit, or with the visit that has the ticket already.
+            ticketImportScreen(
+                cinemaRepository = container.cinemaRepository,
+                visitRepository = container.visitRepository,
+                ticketRepository = container.ticketRepository,
+                programRepository = container.programRepository,
+                fileSource = container.ticketFileSource,
+                reader = container.ticketReader,
+                clock = container.clock,
+                isBackupImporting = container.backupRepository.isImporting,
+                onBack = navController::navigateUp,
+                onOpenNewVisit = { hallId, prefill ->
+                    navController.navigateToAddVisit(hallId, prefill) { popUpTo<ImportTicketRoute> { inclusive = true } }
+                },
+                onOpenImportedVisit = { visitId, qrCodeNotStored ->
+                    navController.navigateToImportedVisit(visitId, qrCodeNotStored) { popUpTo<ImportTicketRoute> { inclusive = true } }
+                },
             )
 
             // Program tab (v1.1)
@@ -222,6 +282,12 @@ fun CinexApp(
                 buildId = container.buildId,
                 onOpenManage = navController::navigateToManageCinemas,
                 onOpenAllVisits = navController::navigateToAllVisits,
+                // Settings blocks its rows during a backup import; checked again for the picker's late result.
+                // An address too long to read opens the import without it: "Couldn't open the file".
+                onImportTicket = { uri ->
+                    if (!importing) navController.navigateToImportTicket(uri.takeIf { it.length <= TicketUris.MAX_LENGTH })
+                },
+                onRunsBackupImportChanged = { runsBackupImport = it },
             )
             manageCinemasScreen(
                 cinemaRepository = container.cinemaRepository,
@@ -236,6 +302,8 @@ fun CinexApp(
                 onOpenVisit = navController::navigateToEditVisit,
             )
         }
+        // The lock is a dialog of its own, above everything this window shows.
+        if (lockedByImport) BackupImportLock()
     }
 }
 

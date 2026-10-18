@@ -24,6 +24,9 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.katznmeik.cinexperience.core.model.LayoutLabels
+import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.seatmapui.BookingLegend
 import io.github.katznmeik.cinexperience.core.seatmapui.SeatMap
 import io.github.katznmeik.cinexperience.core.seatmapui.SeatPicker
 import io.github.katznmeik.cinexperience.core.seatmapui.rememberSeatMapViewState
@@ -106,19 +109,23 @@ internal fun SeatPickerScreen(state: VisitEditUiState, picker: SeatPickerState, 
                     .padding(start = 6.dp, end = 6.dp, top = 16.dp, bottom = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                val booking = state.bookingSeatIds
                 SeatMap(
                     layout = layout,
                     labels = labels,
-                    contentDescription = seatMapDescription(state.hallName.orEmpty(), labels),
+                    contentDescription = seatMapDescription(state.hallName.orEmpty(), labels) + bookingDescription(booking, labels),
                     screenWidth = state.screenWidth,
                     screenDistance = state.screenDistance,
                     screenOffset = state.screenOffset,
                     selectedSeatId = picker.seatId,
+                    bookingSeatIds = booking,
                     onSeatClick = actions::onPickerTap,
                     maxHeight = 560.dp,
                     viewState = viewState,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                // Several seats in the booking (spec §6.10): which they are, so another one can be picked.
+                if (booking.isNotEmpty()) BookingLegend(Modifier.padding(top = 12.dp))
                 Text(
                     text = selected?.shortText?.uppercase() ?: "Tap your seat. Pinch to zoom.",
                     style = if (selected != null) CinexTheme.textStyles.cardTitle else MaterialTheme.typography.bodySmall,
@@ -134,6 +141,7 @@ internal fun SeatPickerScreen(state: VisitEditUiState, picker: SeatPickerState, 
                 SeatPicker(
                     choices = choices,
                     selectedSeatId = picker.seatId,
+                    bookingSeatIds = state.bookingSeatIds,
                     onSeatSelected = actions::onPickerChoose,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -142,4 +150,11 @@ internal fun SeatPickerScreen(state: VisitEditUiState, picker: SeatPickerState, 
             }
         }
     }
+}
+
+/** " Seats in this booking: Row 7, Seat 10; Row 7, Seat 11." for the map's description; empty without any. */
+internal fun bookingDescription(booking: Set<SeatId>, labels: LayoutLabels): String {
+    val seats = booking.mapNotNull { labels.labelOf(it)?.description }
+    if (seats.isEmpty()) return ""
+    return " ${if (seats.size == 1) "Seat" else "Seats"} in this booking: ${seats.joinToString("; ")}."
 }

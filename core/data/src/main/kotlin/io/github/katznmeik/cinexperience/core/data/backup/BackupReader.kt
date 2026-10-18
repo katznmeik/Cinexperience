@@ -85,9 +85,9 @@ internal class ValidationProblem(val detail: String, val missingFile: Boolean = 
  * layout it can't read is rejected, never carried along silently); known enum
  * keys; ratings 1–5; valid dates and start times ("HH:mm"); tickets → visits,
  * at most one per visit, valid booking numbers ([BookingNumber]) that no other
- * ticket has, 1 to [Ticket.MAX_SEATS] different seats that [TicketSeat]
- * accepts; a seat id mark in 1..[SeatLayout.MAX_SEAT_ID]
- * and visit seat ids below it; a screen width and distance that
+ * ticket has, 0 to [Ticket.MAX_SEATS] different seats that [TicketSeat]
+ * accepts (none when they couldn't be read from the ticket); a seat id mark in
+ * 1..[SeatLayout.MAX_SEAT_ID] and visit seat ids below it; a screen width and distance that
  * [ScreenSizeRules] accepts (positive and at most [ScreenSizeRules.MAX_WIDTH],
  * 0 to [ScreenSizeRules.MAX_DISTANCE]); a screen offset that
  * [ScreenOffsetRules.isValid] accepts (finite, 0.5 steps, within
@@ -199,7 +199,7 @@ internal object BackupValidator {
             if (!BookingNumber.isValid(ticket.bookingNumber)) problem("$label has an invalid booking number.")
             if (!bookingNumbers.add(ticket.bookingNumber)) problem("two tickets have the same booking number.")
             val seats = ticket.seats
-            if (seats.size !in 1..Ticket.MAX_SEATS || seats.toSet().size != seats.size ||
+            if (seats.size > Ticket.MAX_SEATS || seats.toSet().size != seats.size ||
                 seats.any { (it.row != null && !TicketSeat.isValidRow(it.row)) || !TicketSeat.isValidSeat(it.seat) }
             ) {
                 problem("$label has invalid seats.")

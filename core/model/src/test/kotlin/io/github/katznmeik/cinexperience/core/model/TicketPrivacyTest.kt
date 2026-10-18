@@ -44,6 +44,6 @@ class TicketPrivacyTest {
         assertNotEquals(ticket, ticket.copy(bookingNumber = BookingNumber("TEST456")))
         assertNotEquals(ticket, ticket.copy(seats = listOf(TicketSeat("7", "11"))))
         // copy checks the rules again.
-        assertFailsWith<IllegalArgumentException> { ticket.copy(seats = emptyList()) }
+        assertFailsWith<IllegalArgumentException> { ticket.copy(seats = ticket.seats + ticket.seats) }
     }
 }

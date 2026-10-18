@@ -158,6 +158,8 @@ private fun VisitEditViewModel.actions(choosePhoto: () -> Unit, showTicket: () -
 /**
  * @param onShowTicket opens the ticket screen (spec §6.11) for the visit with this id
  *   (the Ticket section's "Show ticket"); the form stays below it, unsaved changes included.
+ * @param onOpenImportedVisit leaves the form for the visit with this id, which has the
+ *   imported ticket already (spec §6.10); called once.
  */
 @Composable
 internal fun VisitEditEntry(
@@ -165,6 +167,7 @@ internal fun VisitEditEntry(
     photoStore: VisitPhotoStore,
     onClose: () -> Unit,
     onShowTicket: (visitId: Long) -> Unit = {},
+    onOpenImportedVisit: (visitId: Long) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -192,8 +195,17 @@ internal fun VisitEditEntry(
     val path = state.form.photoPath
     val photo by rememberLoadedImage(path) { photoStore.loadPhoto(it, THUMBNAIL_DECODE_SIZE) }
     CloseOnce(state.isClosed, onClose)
+    val openImported by rememberUpdatedState(onOpenImportedVisit)
+    var leftForImported by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.openImportedVisit) {
+        val visitId = state.openImportedVisit ?: return@LaunchedEffect
+        if (!leftForImported) {
+            leftForImported = true
+            openImported(visitId)
+        }
+    }
     // Stays enabled while saving: Back is then swallowed instead of leaving mid-save.
-    BackHandler(enabled = !state.isClosed) { actions.onClose() }
+    BackHandler(enabled = !state.isLeaving) { actions.onClose() }
     VisitEditScreen(state, photo, actions)
 }
 
@@ -292,6 +304,9 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
+        // An imported ticket's notes: what to fill in by hand (spec §6.10).
+        if (state.importNotes.isNotEmpty()) ImportNotes(state.importNotes)
+
         // 1–2: cinema, hall, date, start time, film
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             FieldPair(
@@ -367,8 +382,12 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
 
         // 3–4: seat (and the ticket, if the visit has one) and seat rating
         SeatCard(state, actions)
-        state.ticket?.let {
-            TicketSection(it, removing = state.isRemovingTicket, enabled = !state.isSaving && !state.isClosed, actions = actions)
+        val ticketActionsEnabled = !state.isSaving && !state.isLeaving
+        val draft = state.ticketDraft
+        when {
+            state.ticket != null ->
+                TicketSection(state.ticket, state.seatLabel, removing = state.isRemovingTicket, enabled = ticketActionsEnabled, actions = actions)
+            draft != null -> TicketDraftSection(draft, state.draftQrCode, enabled = ticketActionsEnabled, actions = actions)
         }
 
         // 5: hall ratings
@@ -532,7 +551,7 @@ private fun SeatCard(state: VisitEditUiState, actions: VisitEditActions) {
  */
 @Composable
 private fun VisitDatePicker(date: LocalDate, onDate: (LocalDate) -> Unit, onDismiss: () -> Unit) {
-    val pickerState = rememberDatePickerState(initialSelectedDateMillis = date.toPickerMillis())
+    val pickerState = rememberDatePickerState(initialSelectedDateMillis = date.toPickerMillis(), yearRange = VisitDates.YEARS)
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
