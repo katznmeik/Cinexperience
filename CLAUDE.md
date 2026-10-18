@@ -67,12 +67,12 @@ Look at the screenshot PNGs after every UI change.
 
 | Module | Type | Content |
 |---|---|---|
-| `app` | application | `MainActivity`, `CinexApp` (NavHost + bottom bar), manual DI `AppContainer`, screenshot tests |
-| `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic (no Android) |
-| `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos), backup export/import engine |
+| `app` | application | `MainActivity`, `CinexApp` (NavHost + bottom bar), manual DI `AppContainer`, the reminders (`reminders/`: coordinator, alarms, notifications, receivers, intents), screenshot tests |
+| `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic, the reminders' schedule (`ReminderSchedule`) (no Android) |
+| `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos), backup export/import engine, `ReminderSettingsStore` |
 | `core:program` | Android lib + kotlinx.serialization | Yorck's program (v1.1, spec §11.1): model (`Program`, `Film`, `Showing`), page parser, Yorck-name → seed-key table, `ProgramLinks`, visit pre-fill, the HTTPS download (the app's **only network code**), cache `files/program/program.json`, `ProgramRepository` |
 | `core:ticket` | Android lib (+ Robolectric tests), uses core:model | Yorck's ticket PDF (v1.4, spec §11.2): the own small PDF reader (`pdf/`), text in reading order (`text/`), the ticket fields (`TicketPdfReader` → `TicketPdfContent`, `TicketPdfRules`), the QR code's module grid (`qr/`, `QrModuleGrid`); pure Kotlin except the JPEG decoding (`BitmapLuminanceDecoder`) |
-| `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories (incl. `FakeProgramRepository`) and file stores, illustrative screenshot fixtures (incl. `buildProgram`, `SampleProgram`, `SampleTickets`), `MutableClock`, `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
+| `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories (incl. `FakeProgramRepository`) and file stores, `FakeReminderSettingsStore`, illustrative screenshot fixtures (incl. `buildProgram`, `SampleProgram`, `SampleTickets`), `MutableClock`, `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips, messages, the message snackbar, `rememberLoadedImage`, `rememberTextWidth`, picker date conversions), date and time texts (`text/Dates.kt`), `spelledOut` (codes read letter by letter), `flow/Flows.kt` (`minuteTicks`, `asResult`), `navigation/` (result message for the screen below, `CloseOnce`) |
 | `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker`, the booking's seats (`bookingSeatIds`: dashed rim, ticket mark on the chip, "…, in this booking", `BookingLegend`) |
 | `feature:cinemas` | feature | cinema list (start tab; Next visit card, sort chips and the Favourites filter), cinema detail (☆/★ favourite toggle, "Now showing"), manage cinemas & halls |
@@ -80,7 +80,7 @@ Look at the screenshot PNGs after every UI change.
 | `feature:visits` | feature | add/edit visit (seat picker, photos, start time, Ticket section), all visits (Upcoming section) |
 | `feature:tickets` | feature | ticket screen (v1.4, spec §6.11): `TicketRoute(visitId)`, QR code drawn from `QrModules`, `KeepScreenBrightAndOn`; the ticket import (§6.10, `importing/`): `ImportTicketRoute(uri)`, `TicketIntents`/`TicketUris`, `ContentTicketFileSource`, `TicketImportViewModel`, `TicketMatching` |
 | `feature:rankings` | feature | rankings tab |
-| `feature:backup` | feature | settings tab, export/import UI (file pickers, preview, progress), restore safety copy, Settings → Program, Data → Import ticket (the PDF picker; the URI goes to the app's callback) |
+| `feature:backup` | feature | settings tab, export/import UI (file pickers, preview, progress), restore safety copy, Settings → Reminders (switches, lead time, notification permission), Settings → Program, Data → Import ticket (the PDF picker; the URI goes to the app's callback) |
 | `feature:program` | feature | Program tab (v1.1, spec §6.9: consent, filters, saved filters, results), film page, `ProgramFilterStore` (filters in shared preferences) |
 
 Build configuration lives in the convention plugins in `build-logic/convention`
@@ -204,6 +204,27 @@ Don't duplicate config in module build files.
   `KeepScreenBrightAndOn` holds the window at full brightness with
   `FLAG_KEEP_SCREEN_ON` and restores both when it leaves the composition
   (Back, predictive back; counted, so overlapping screens restore once).
+- **Reminders** (v1.4, spec §11.3 e and f, §6.7): `ReminderSettings` (both off by
+  default) in `reminder_settings.xml` behind `ReminderSettingsStore` (Auto Backup, not the
+  backup file), written only by Settings → Reminders (`ReminderSettingsViewModel`).
+  Switching one on asks for `POST_NOTIFICATIONS`; refused, it stays off and a note opens
+  Android's notification settings; revoked later, it stays on with the note. The times
+  are pure (`ReminderSchedule`, Berlin time via `ShowingTime`): e = start − 1/2/3 h,
+  f = start + runtime (`ReminderRuntimes`: the cached program's showing at the cinema's
+  seed key and start) or 2.5 h, + 30 min, unrated visits only; passed ones are never
+  planned; at most 50. `ReminderCoordinator` (started in `onAppStart`) reschedules on
+  every change of visits, settings and program (debounced, one run at a time, never
+  during a backup import), `rescheduleNow` after every alarm and from
+  `ReminderRestartReceiver` (exported; boot, package replaced, time zone; checks the
+  action). `AlarmReminderScheduler`: `setAndAllowWhileIdle(RTC_WAKEUP)`, never exact
+  alarms, one immutable broadcast per (visit, kind) to the non-exported
+  `ReminderAlarmReceiver`, keys in `reminder_alarms.xml`. At fire time `ReminderNotifier`
+  checks `isStillDue` and the permission. Notifications: channels "Showtime reminders"
+  and "Rate your visit", `VISIBILITY_PRIVATE` with a public version without film,
+  cinema or seat, never the booking number, texts through `isolate()`, "Show ticket"
+  only with a kept QR code. Taps go to `MainActivity` (`ReminderIntents`,
+  `IncomingReminderViewModel`; once, like the ticket intents) and only navigate
+  (`EditVisitRoute`, `TicketRoute`). No logs with visit data.
 - **Seats** are identified by a stable `SeatId` stored in the layout (see
   `core/model/.../SeatLayout.kt`), never by grid position or label. Ids are never
   reused within a hall (`Hall.nextSeatId` is the hall's mark; the repository
