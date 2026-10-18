@@ -27,6 +27,8 @@ internal data class TicketSpec(
     val bookedByBold: Boolean = true,
     /** The name on its own line, with the label on the line below it. */
     val bookedByNameFirst: Boolean = false,
+    /** How far below the name the label is, with [bookedByNameFirst]. */
+    val bookedByLabelGap: Double = 19.0,
     /** The label at its own indent, apart from the name (two segments on one line); `null`: label and name as one text. */
     val bookedByLabelIndent: Double? = null,
     /** A label without a value on its own line right above the booker's line(s). */
@@ -36,6 +38,9 @@ internal data class TicketSpec(
     /** Labels with a colon ("Kino: delphi LUX"). */
     val colons: Boolean = false,
 )
+
+/** A text drawn anywhere on the page, [top] its baseline from the top of the page. */
+internal data class ExtraText(val x: Double, val top: Double, val text: String, val bold: Boolean = false, val size: Double = 12.0)
 
 /** One page of an invented ticket. */
 internal data class PageSpec(
@@ -49,6 +54,8 @@ internal data class PageSpec(
     val conditions: Boolean = true,
     val qrImage: Boolean = true,
     val logo: Boolean = true,
+    /** More texts, e.g. to build layouts other than Yorck's. */
+    val extraTexts: List<ExtraText> = emptyList(),
 )
 
 /**
@@ -133,6 +140,7 @@ internal object InventedTicketPdf {
         }
         if (page.leftColumn) leftColumn(out, page, regular, bold)
         if (page.conditions && page.tickets.size <= 1) conditions(out, regular, bold)
+        for (extra in page.extraTexts) out.text(if (extra.bold) bold else regular, extra.size, extra.x, extra.top, extra.text)
         return out.toString()
     }
 
@@ -167,7 +175,7 @@ internal object InventedTicketPdf {
         when {
             ticket.bookedByNameFirst -> {
                 out.text(font, 15.0, x, top, name)
-                out.text(font, 15.0, x, top + 19.0, ticket.bookedByLabel)
+                out.text(font, 15.0, x, top + ticket.bookedByLabelGap, ticket.bookedByLabel)
             }
             ticket.bookedByLabelIndent != null -> {
                 out.text(font, 15.0, blockX + ticket.bookedByLabelIndent, top, ticket.bookedByLabel)

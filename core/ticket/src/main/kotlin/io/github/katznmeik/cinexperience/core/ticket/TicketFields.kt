@@ -32,23 +32,29 @@ internal class TicketTextFields(
  *   "Zeit HH:mm Uhr", "Saal …", "Reihe …", "Platz …" (the last three side by side),
  *   then "Kat. …" and the bold "Gebucht von …", which close the block and are never read.
  *
- * The booker's name must never become a field. A booker line is any line with
- * "gebucht" in its letters, whatever the case, spaces or format characters
- * ("GEBUCHT VON", "Gebucht von:", "gebuchtvon"). A block covers the segments below
- * "Ticket" from its column rightwards, up to the next "Ticket" below it or the first
- * booker line, wherever on the page that line starts; nothing from that line on is
- * ever looked at. The title comes first: the bold lines right below "Ticket" (labels
- * are regular, so a title may start with "Zeit" or end in "Kino"). The labels are
- * looked for only below the title and above the next bold line (the booker's name is
- * bold, no label or value is), each with its value on the same line or on the next
- * line in its column within the block, with or without a colon; the first occurrence
- * of each label counts. No value may be a label line, mention "gebucht" or start
- * like a category ("Kat", "Kat.1", "Kategorie"), and no value is taken from right
- * above a booker line.
+ * The booker's name must never become a field. A booker segment has "gebucht" in its
+ * letters, whatever the case, spaces or format characters ("GEBUCHT VON",
+ * "Gebucht von:", "gebuchtvon"). A block covers the segments below "Ticket" from its
+ * column rightwards, up to the next "Ticket" below it. The title comes first: the bold
+ * lines right below "Ticket" (labels are regular, so a title may start with "Zeit" or
+ * end in "Kino"; it may be "Ausgebucht", but a line that starts with "gebucht" or
+ * says "gebucht von" is no title line). After the title, the first line with a booker
+ * segment anywhere on the page and a segment in the block closes the block (so also
+ * a "Gebucht von" left of the block's column); nothing from that line on is ever
+ * looked at. A note mentioning "gebucht" left of the block, with nothing of the block
+ * on its line, closes nothing. The labels are looked for only below the title and
+ * above the next bold line (the booker's name is bold, no label or value is), each
+ * with its value on the same line or on the next line in its column within the block,
+ * with or without a colon; the first occurrence of each label counts. No value may be
+ * a label line, mention "gebucht" or (but the title) start like a category ("Kat",
+ * "Kat.1", "Kategorie"). A value from the line below its label is refused if its own
+ * line or its label's line has a booker segment, or if the next line below it, or the
+ * next segment below it in its column, is a booker line, however far down.
  *
  * The booking number is looked for only outside the ticket blocks (each block's
  * area reaching down to the next "Ticket" or the page's end): in Yorck's left
- * column, label and value in one column.
+ * column, label and value in one column; only booker segments outside the blocks
+ * count for it, so the block's own "Gebucht von" line never refuses it.
  *
  * Several blocks (e.g. one page per ticket) must agree on all fields but the seats;
  * their seats are joined only if every block has the same title, cinema, date, time
@@ -67,6 +73,9 @@ internal object TicketFields {
 
     /** In the letters of a booker line ("Gebucht von …"), in lower case. */
     private const val BOOKED = "gebucht"
+
+    /** The letters of "Gebucht von", in lower case. */
+    private const val BOOKED_BY = "gebuchtvon"
 
     /** Texts that start a label line: such a line is never another label's value. */
     private val LABELS = listOf(BOOKING_NUMBER, TICKET, CINEMA, DATE, TIME, HALL, ROW, SEAT)
@@ -100,10 +109,17 @@ internal object TicketFields {
         val text: String get() = segment.text
     }
 
-    /** A page's segments in reading order, and those on booker lines. */
+    /** A page's segments in reading order, and the booker segments among them. */
     private class Page(val segments: List<Placed>) {
         val bookers: List<Placed> = segments.filter { isBookerLine(it.text) }
     }
+
+    /**
+     * Where a value is looked for: [segments], and the booker segments that count for
+     * it ([bookers], in reading order; they may lie outside [segments], e.g. the line
+     * that closed a block).
+     */
+    private class Scope(val segments: List<Placed>, val bookers: List<Placed>)
 
     /** A ticket block's area: from its anchor's line down to the next anchor's, from its column rightwards. */
     private class Area(val firstLine: Int, val endLine: Int, val left: Double) {
@@ -149,7 +165,8 @@ internal object TicketFields {
         val bookingValues = placedPages.asSequence()
             .flatMap { page ->
                 val outside = outsideBlocks(page)
-                outside.asSequence().mapNotNull { labelValue(BOOKING_NUMBER, it, outside, page) }
+                val scope = Scope(outside, outside.filter { isBookerLine(it.text) })
+                outside.asSequence().mapNotNull { labelValue(BOOKING_NUMBER, it, scope) }
             }
             .take(MAX_BOOKING_LABELS)
             .toList()
@@ -195,19 +212,23 @@ internal object TicketFields {
         return anchors.map { anchor ->
             if (anchors.any { it !== anchor && it.line == anchor.line }) return@map ambiguousBlock()
             val area = area(anchor, anchors)
-            // The first booker line below the anchor closes the block, wherever it starts: nothing from it on is ever looked at.
-            val end = page.bookers.firstOrNull { it.line > anchor.line && it.line < area.endLine }?.line ?: area.endLine
-            block(anchor, page.segments.filter { it in area && it.line > anchor.line && it.line < end }, page)
+            block(anchor, page.segments.filter { it in area && it.line > anchor.line }, page)
         }
     }
 
-    /** The fields of one block; [segments] are the block's, values are looked for only there. */
-    private fun block(anchor: Placed, segments: List<Placed>, page: Page): Block {
-        val (title, titleEnd) = title(anchor, segments)
+    /** The fields of one block; [inArea] are the segments of its area below "Ticket", values are looked for only there. */
+    private fun block(anchor: Placed, inArea: List<Placed>, page: Page): Block {
+        val (title, titleEnd) = title(anchor, inArea)
+        // After the title, the first booker line that reaches into the block closes it,
+        // wherever its booker segment starts: nothing from it on is ever looked at.
+        val areaLines = inArea.mapTo(HashSet()) { it.line }
+        val end = page.bookers.firstOrNull { it.line > titleEnd && it.line in areaLines }?.line ?: Int.MAX_VALUE
+        val segments = inArea.filter { it.line < end }
         // The booker's name is bold, no label or value is: the first bold line after the title ends the labels.
         val boldLine = segments.firstOrNull { it.line > titleEnd && it.segment.isBold }?.line ?: Int.MAX_VALUE
         val labelled = segments.filter { it.line > titleEnd && it.line < boldLine }
-        fun match(label: String): LabelValue? = labelled.firstNotNullOfOrNull { labelValue(label, it, labelled, page) }
+        val scope = Scope(labelled, page.bookers.filter { it.line == end })
+        fun match(label: String): LabelValue? = labelled.firstNotNullOfOrNull { labelValue(label, it, scope) }
         // A label without a (usable) value is "" (invalid), a missing label null.
         fun field(label: String): String? = match(label)?.let { found -> found.value?.takeIf(::isUsable) ?: "" }
         fun <T> checkedField(label: String, check: (String) -> T?): TicketPdfField<T> =
@@ -224,8 +245,9 @@ internal object TicketFields {
 
     /**
      * The title: the bold lines right below "Ticket" in its column, each the only
-     * segment of its line (labels and values are regular, so no label check here),
-     * and the index of the last of them (the anchor's line if there is none).
+     * segment of its line in the block (labels and values are regular, so no label
+     * check here) and none a booker's ([isBookerTitleLine]), and the index of the last
+     * of them (the anchor's line if there is none).
      */
     private fun title(anchor: Placed, segments: List<Placed>): Pair<TicketPdfField<String>, Int> {
         val parts = ArrayList<String>()
@@ -233,7 +255,7 @@ internal object TicketFields {
         var last = anchor.line
         for ((line, placed) in segments.groupBy { it.line }.toSortedMap()) {
             val first = placed.first().segment
-            val isTitleLine = placed.size == 1 && first.isBold && sameColumn(first, anchor.segment) &&
+            val isTitleLine = placed.size == 1 && first.isBold && sameColumn(first, anchor.segment) && !isBookerTitleLine(first.text) &&
                 above.y - first.y <= TITLE_LINE_DISTANCE * max(above.size, first.size)
             if (!isTitleLine) break
             parts += first.text
@@ -252,10 +274,10 @@ internal object TicketFields {
     private class LabelValue(val value: String?)
 
     /** The value of [label] if [placed] starts with it, else `null`; a value on the next line is looked for in [scope]. */
-    private fun labelValue(label: String, placed: Placed, scope: List<Placed>, page: Page): LabelValue? {
+    private fun labelValue(label: String, placed: Placed, scope: Scope): LabelValue? {
         val text = placed.text
         return when {
-            text == label || text == "$label:" -> LabelValue(valueBelow(placed, scope, page))
+            text == label || text == "$label:" -> LabelValue(valueBelow(placed, scope))
             text.startsWith("$label: ") -> LabelValue(text.substring(label.length + 2))
             text.startsWith("$label ") -> LabelValue(text.substring(label.length + 1))
             else -> null
@@ -264,13 +286,25 @@ internal object TicketFields {
 
     /**
      * The first segment of [scope] below [label] in its column, close enough to belong
-     * to it, not a label itself and not right above a booker line anywhere on the
-     * [page] (a name on its own line before "Gebucht von").
+     * to it and not a label itself. It is no value if its own line or its label's line
+     * has a booker segment of the scope, or if the next line below it or the next
+     * segment below it in its column is a booker line, however far down (a name on its
+     * own line before "Gebucht von").
      */
-    private fun valueBelow(label: Placed, scope: List<Placed>, page: Page): String? {
-        val below = scope.firstOrNull { it.line > label.line && sameColumn(it.segment, label.segment) } ?: return null
+    private fun valueBelow(label: Placed, scope: Scope): String? {
+        val segments = scope.segments
+        val below = segments.firstOrNull { it.line > label.line && sameColumn(it.segment, label.segment) } ?: return null
         if (!isNextLine(label, below) || isLabelLine(below.text)) return null
-        if (page.bookers.any { it.line > below.line && isNextLine(below, it) }) return null
+        if (scope.bookers.any { it.line == below.line || it.line == label.line }) return null
+        val nextLine = minOf(
+            segments.firstOrNull { it.line > below.line }?.line ?: Int.MAX_VALUE,
+            scope.bookers.firstOrNull { it.line > below.line }?.line ?: Int.MAX_VALUE,
+        )
+        if (scope.bookers.any { it.line == nextLine }) return null
+        val nextInColumn = (segments.asSequence() + scope.bookers.asSequence())
+            .filter { it.line > below.line && sameColumn(it.segment, below.segment) }
+            .minByOrNull { it.line }
+        if (nextInColumn != null && isBookerLine(nextInColumn.text)) return null
         return below.text
     }
 
@@ -285,6 +319,12 @@ internal object TicketFields {
 
     /** "Gebucht von …" in any case, with or without spaces (the cleaning has removed format characters). */
     private fun isBookerLine(text: String): Boolean = BOOKED in letters(text)
+
+    /** A bold line below "Ticket" that is the booker's, not the title: it starts with "gebucht" or says "gebucht von". */
+    private fun isBookerTitleLine(text: String): Boolean {
+        val letters = letters(text)
+        return letters.startsWith(BOOKED) || BOOKED_BY in letters
+    }
 
     /** "Kat. …", "Kat.1 …", "KAT …" or "Kategorie …": the category, never a value. */
     private fun isCategory(text: String): Boolean {
@@ -303,10 +343,13 @@ internal object TicketFields {
     /** No value mentions "gebucht" or starts like a category. */
     private fun isUsable(value: String): Boolean = !isBookerLine(value) && !isCategory(value)
 
-    /** [value] checked; one that mentions "gebucht" (or, but in a title, starts like a category) is never used. */
+    /**
+     * [value] checked; one that mentions "gebucht" or starts like a category is never
+     * used, a title only if it is a booker's line ([isBookerTitleLine]).
+     */
     private fun <T> checked(value: LabelValue, check: (String) -> T?, isTitle: Boolean = false): TicketPdfField<T> {
         val raw = value.value ?: return TicketPdfField.NotFound(NotFoundReason.INVALID)
-        if (if (isTitle) isBookerLine(raw) else !isUsable(raw)) return TicketPdfField.NotFound(NotFoundReason.INVALID)
+        if (if (isTitle) isBookerTitleLine(raw) else !isUsable(raw)) return TicketPdfField.NotFound(NotFoundReason.INVALID)
         return check(raw)?.let { TicketPdfField.Found(it) } ?: TicketPdfField.NotFound(NotFoundReason.INVALID)
     }
 

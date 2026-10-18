@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.core.ticket
 
+import io.github.katznmeik.cinexperience.core.ticket.testing.ExtraText
 import io.github.katznmeik.cinexperience.core.ticket.testing.ImageIoLuminanceDecoder
 import io.github.katznmeik.cinexperience.core.ticket.testing.InventedTicketPdf
 import io.github.katznmeik.cinexperience.core.ticket.testing.PageSpec
@@ -117,6 +118,63 @@ class TicketFieldsScopeTest {
 
         assertEquals(TicketPdfField.NotFound(NotFoundReason.MISSING), content.filmTitle)
         assertNeverShown(content, "Erika", "Mustermann", "gebucht")
+    }
+
+    @Test(timeout = 10_000)
+    fun aThreeLineTitleKeepsTheBookingNumber() {
+        // The block's own "Gebucht von" line then comes within three font sizes below the booking number.
+        val content = read(page(TicketSpec(title = listOf("The Long Night", "of the Quiet", "Projectionist"))))
+
+        assertEquals(TicketPdfField.Found("TEST123"), content.bookingNumber)
+        assertEquals(TicketPdfField.Found("The Long Night of the Quiet Projectionist"), content.filmTitle)
+        assertEquals(TicketPdfField.Found("4"), content.hall)
+    }
+
+    @Test(timeout = 10_000)
+    fun theBookingNumberIsNeverANameBesideOrBelowABookerLabel() {
+        // An empty "Buchungsnummer" in the left column, the name below it, and "Gebucht von"
+        // left of the block on the name's line or on the label's line.
+        for (bookerTop in listOf(398.0, 379.0)) {
+            val texts = listOf(ExtraText(56.0, 398.0, "MUELLER", bold = true, size = 14.0), ExtraText(200.0, bookerTop, "Gebucht von:", bold = true, size = 15.0))
+            val content = read(PageSpec(bookingNumber = "", extraTexts = texts))
+
+            assertEquals("booker at $bookerTop", invalid, content.bookingNumber)
+            assertNeverShown(content, "MUELLER")
+        }
+    }
+
+    @Test(timeout = 10_000)
+    fun aNameAboveAFarBookerLabelIsNeverAValue() {
+        // The (regular) name right below "Saal" without a value, "Gebucht von" more than three font sizes below it.
+        val content = read(
+            page(TicketSpec(hall = "", category = null, bookedByIndent = 0.0, bookedByTop = 290.0, bookedByNameFirst = true, bookedByBold = false, bookedByLabelGap = 70.0)),
+        )
+
+        assertEquals(invalid, content.hall)
+        assertNeverShown(content, "Erika", "Mustermann")
+    }
+
+    @Test(timeout = 10_000)
+    fun aNoteMentioningBookingsLeftOfTheBlockClosesNothing() {
+        // Beside the title, and on a line of its own between the labels.
+        for (top in listOf(117.0, 230.0)) {
+            val content = read(PageSpec(extraTexts = listOf(ExtraText(56.0, top, "Bereits gebuchte Tickets", size = 10.0))))
+
+            assertEquals("note at $top", TicketPdfField.Found("The Quiet Projectionist"), content.filmTitle)
+            assertEquals("note at $top", TicketPdfField.Found("delphi LUX"), content.cinema)
+            assertEquals("note at $top", TicketPdfField.Found("4"), content.hall)
+            assertEquals("note at $top", TicketPdfField.Found(listOf(PrintedSeat("7", "10"))), content.seats)
+        }
+    }
+
+    @Test(timeout = 10_000)
+    fun aTitleMayMentionBookingsOrStartLikeACategory() {
+        for (title in listOf("Ausgebucht", "Kategorie C")) {
+            val content = read(page(TicketSpec(title = listOf(title))))
+
+            assertEquals(TicketPdfField.Found(title), content.filmTitle)
+            assertEquals(title, TicketPdfField.Found("4"), content.hall)
+        }
     }
 
     @Test(timeout = 10_000)
