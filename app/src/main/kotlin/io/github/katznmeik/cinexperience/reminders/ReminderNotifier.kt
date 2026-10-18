@@ -99,7 +99,8 @@ class ReminderNotifier(
 
     /**
      * The alarm of [reminder] fired: posts its notification if it is still due. Returns
-     * whether it was posted. Never throws, except cancellation of the caller.
+     * whether it was posted. A repository failure is thrown (the receiver's runner,
+     * [Reminders.runForReceiver], catches it: nothing is posted).
      */
     suspend fun onAlarm(reminder: PlannedReminder): Boolean {
         if (!notificationsAllowed()) return false
