@@ -278,6 +278,7 @@ fun CinexApp(
                 cinemaRepository = container.cinemaRepository,
                 backupRepository = container.backupRepository,
                 programRepository = container.programRepository,
+                reminderSettingsStore = container.reminderSettingsStore,
                 appVersion = container.appVersion,
                 buildId = container.buildId,
                 onOpenManage = navController::navigateToManageCinemas,

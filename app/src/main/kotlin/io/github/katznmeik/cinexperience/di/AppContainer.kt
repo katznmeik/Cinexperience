@@ -13,6 +13,7 @@ import io.github.katznmeik.cinexperience.core.data.repository.RankingsRepository
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
 import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
+import io.github.katznmeik.cinexperience.core.data.settings.ReminderSettingsStore
 import io.github.katznmeik.cinexperience.core.program.DefaultProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.feature.program.ProgramFilterStore
@@ -67,6 +68,9 @@ interface AppContainer {
     /** The Program tab's current and saved filters (app settings, spec §6.9, §8). */
     val programFilterStore: ProgramFilterStore
 
+    /** The reminder settings (spec §6.7, §11.3; app settings, spec §8): Settings writes them, the reminders follow them. */
+    val reminderSettingsStore: ReminderSettingsStore
+
     /**
      * Opens the ticket PDF of the ticket import (spec §6.10): a `content:` URI of
      * another app (the email app's attachment, the file picker's document).
@@ -112,6 +116,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val referenceImageStore: ReferenceImageStore get() = data.referenceImageStore
     override val visitPhotoStore: VisitPhotoStore get() = data.visitPhotoStore
     override val backupRepository: BackupRepository get() = data.backupRepository
+    override val reminderSettingsStore: ReminderSettingsStore get() = data.reminderSettingsStore
 
     override val rankingsRepository: RankingsRepository by lazy {
         CinemaRankingsRepository(cinemaRepository, visitRepository)

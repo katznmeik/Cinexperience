@@ -131,6 +131,9 @@ object CinexIcons {
     /** A ticket, e.g. the mark of a seat of the booking: the same glyph as [Program]. */
     val Ticket: ImageVector get() = Program
 
+    /** A bell: the reminders (Settings → Reminders, spec §6.7). */
+    val Bell: ImageVector by lazy { strokeIcon("Bell", "M6 10a6 6 0 0 1 12 0v4l2 3H4l2-3z", "M10 20a2 2 0 0 0 4 0") }
+
     /** A page with an arrow into it: importing a file, e.g. a ticket PDF (Settings → Import ticket). */
     val ImportFile: ImageVector by lazy { strokeIcon("ImportFile", "M6 3h8l4 4v14H6z", "M14 3v4h4", "M12 10v7M9 14l3 3l3-3") }
 

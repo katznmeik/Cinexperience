@@ -2,7 +2,11 @@ package io.github.katznmeik.cinexperience
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import io.github.katznmeik.cinexperience.core.data.settings.SharedPreferencesReminderSettingsStore
+import io.github.katznmeik.cinexperience.core.model.ReminderKind
 import io.github.katznmeik.cinexperience.core.program.ProgramFiles
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -62,6 +66,21 @@ class BackupRulesTest {
         val (includes, _) = rules(R.xml.data_extraction_rules)
         val (legacy, _) = rules(R.xml.backup_rules)
         assertTrue((includes + legacy).none { it.second == "file" || it.second == "root" })
+    }
+
+    /**
+     * The reminder settings (spec §8) are app settings: shared preferences, which Auto
+     * Backup covers (the "sharedpref" domain); the backup file doesn't hold them.
+     */
+    @Test
+    fun theReminderSettingsAreBackedUpAsPreferences() {
+        val store = SharedPreferencesReminderSettingsStore(context, Dispatchers.Unconfined)
+        assertTrue(runBlocking { store.update { it.with(ReminderKind.BEFORE_SHOWING, true) } })
+        val file = File(context.dataDir, "shared_prefs/${SharedPreferencesReminderSettingsStore.PREFERENCES_NAME}.xml")
+        assertTrue(file.path, file.isFile)
+        val (includes, _) = rules(R.xml.data_extraction_rules)
+        assertTrue(includes.contains("cloud-backup" to "sharedpref"))
+        assertTrue(includes.contains("device-transfer" to "sharedpref"))
     }
 
     @Test

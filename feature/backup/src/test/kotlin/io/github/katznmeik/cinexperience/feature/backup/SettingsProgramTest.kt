@@ -143,6 +143,9 @@ class SettingsProgramScreenshotTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    /** The download switch (Settings has the reminder switches too). */
+    private val programSwitch = androidx.compose.ui.test.isToggleable() and androidx.compose.ui.test.hasText("Download program from yorck.de")
+
     private fun show(program: ProgramSettingsState, importing: Boolean = false, actions: ProgramSettingsActions = ProgramSettingsActions.None) {
         val backup = if (importing) BackupUiState(task = BackupTask.Importing(0.3f, ImportSource.FILE)) else BackupUiState()
         val state = SettingsUiState(appVersion = "1.1.0", buildId = "abc1234", backup = backup, program = program)
@@ -170,7 +173,7 @@ class SettingsProgramScreenshotTest {
         composeRule.onNodeWithText("Last download: 15 Oct 2026, 10:00").performScrollTo().assertExists()
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/settings-program-on.png")
         composeRule.onNodeWithText("Download program from yorck.de").assertExists()
-        composeRule.onNode(androidx.compose.ui.test.isToggleable()).assertIsOn().performClick()
+        composeRule.onNode(programSwitch).assertIsOn().performClick()
         assertEquals(listOf(false), changes)
     }
 
@@ -178,7 +181,7 @@ class SettingsProgramScreenshotTest {
     fun downloadsOff() {
         show(ProgramSettingsState(isLoaded = true, downloadsOn = false))
         composeRule.onNodeWithText("No program downloaded").performScrollTo().assertExists()
-        composeRule.onNode(androidx.compose.ui.test.isToggleable()).assertIsOff()
+        composeRule.onNode(programSwitch).assertIsOff()
         composeRule.onNodeWithText("Delete downloaded program").assertIsNotEnabled()
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/settings-program-off.png")
     }
@@ -201,7 +204,7 @@ class SettingsProgramScreenshotTest {
     fun lockedWhileImporting() {
         show(ProgramSettingsState(isLoaded = true, downloadsOn = true, lastDownload = SampleProgram.FETCHED_AT), importing = true)
         composeRule.onNodeWithText("Delete downloaded program").performScrollTo().assertIsNotEnabled()
-        composeRule.onNode(androidx.compose.ui.test.isToggleable()).assertIsNotEnabled()
+        composeRule.onNode(programSwitch).assertIsNotEnabled()
     }
 
     @OptIn(ExperimentalRoborazziApi::class)

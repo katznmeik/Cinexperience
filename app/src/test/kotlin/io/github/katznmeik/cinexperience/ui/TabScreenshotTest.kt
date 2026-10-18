@@ -18,6 +18,7 @@ import io.github.katznmeik.cinexperience.core.data.repository.CinemaRankingsRepo
 import io.github.katznmeik.cinexperience.core.testing.FakeBackupRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
+import io.github.katznmeik.cinexperience.core.testing.FakeReminderSettingsStore
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
@@ -54,6 +55,7 @@ internal class FakeAppContainer(
     override val clock: Clock = Clock.fixed(SampleProgram.FETCHED_AT, ZoneOffset.UTC),
     override val ticketFileSource: TicketFileSource = ContentTicketFileSource(RuntimeEnvironment.getApplication()),
     override val ticketReader: TicketReader = DefaultTicketReader,
+    override val reminderSettingsStore: FakeReminderSettingsStore = FakeReminderSettingsStore(),
 ) : AppContainer {
     override val applicationContext: Context = RuntimeEnvironment.getApplication()
     override val appVersion: String = "0.1.0"
