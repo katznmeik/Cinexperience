@@ -43,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -81,6 +82,7 @@ import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.visits.chipText
 import io.github.katznmeik.cinexperience.feature.visits.formLabel
 import java.time.LocalDate
+import java.time.LocalTime
 
 /** Everything the form can do; the defaults do nothing (screenshots, previews). */
 internal interface VisitEditActions {
@@ -89,6 +91,9 @@ internal interface VisitEditActions {
     fun onSelectCinema(cinemaId: Long) {}
     fun onSelectHall(hallId: Long) {}
     fun onDate(date: LocalDate) {}
+
+    /** A start time from the time picker, or `null` to clear it. */
+    fun onStartTime(time: LocalTime?) {}
     fun onFilmTitle(text: String) {}
     fun onToggleFormat(format: ScreeningFormat) {}
     fun onOpenSeatPicker() {}
@@ -106,6 +111,11 @@ internal interface VisitEditActions {
     fun onDismissDialog() {}
     fun onMessageShown() {}
 
+    // Ticket section
+    fun onShowTicket() {}
+    fun onRemoveTicket() {}
+    fun onConfirmRemoveTicket() {}
+
     // Seat picker
     fun onPickerTap(seatId: SeatId) {}
     fun onPickerChoose(seatId: SeatId) {}
@@ -113,12 +123,16 @@ internal interface VisitEditActions {
     fun onPickerClose() {}
 }
 
-private fun VisitEditViewModel.actions(choosePhoto: () -> Unit) = object : VisitEditActions {
+private fun VisitEditViewModel.actions(choosePhoto: () -> Unit, showTicket: () -> Unit) = object : VisitEditActions {
     override fun onClose() = requestClose()
     override fun onSave() = save()
     override fun onSelectCinema(cinemaId: Long) = selectCinema(cinemaId)
     override fun onSelectHall(hallId: Long) = selectHall(hallId)
     override fun onDate(date: LocalDate) = setDate(date)
+    override fun onStartTime(time: LocalTime?) = setStartTime(time)
+    override fun onShowTicket() = showTicket()
+    override fun onRemoveTicket() = requestRemoveTicket()
+    override fun onConfirmRemoveTicket() = confirmRemoveTicket()
     override fun onFilmTitle(text: String) = setFilmTitle(text)
     override fun onToggleFormat(format: ScreeningFormat) = toggleFormat(format)
     override fun onOpenSeatPicker() = openSeatPicker()
@@ -141,11 +155,16 @@ private fun VisitEditViewModel.actions(choosePhoto: () -> Unit) = object : Visit
     override fun onPickerClose() = closeSeatPicker()
 }
 
+/**
+ * @param onShowTicket opens the ticket screen (spec §6.11) for the visit with this id
+ *   (the Ticket section's "Show ticket"); the form stays below it, unsaved changes included.
+ */
 @Composable
 internal fun VisitEditEntry(
     viewModel: VisitEditViewModel,
     photoStore: VisitPhotoStore,
     onClose: () -> Unit,
+    onShowTicket: (visitId: Long) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -154,10 +173,12 @@ internal fun VisitEditEntry(
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
         viewModel.onCameraResult(taken)
     }
+    val currentShowTicket by rememberUpdatedState(onShowTicket)
     val actions = remember(viewModel, gallery) {
-        viewModel.actions(choosePhoto = {
-            gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        })
+        viewModel.actions(
+            choosePhoto = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            showTicket = { viewModel.ticketToShow()?.let { currentShowTicket(it) } },
+        )
     }
     LaunchedEffect(state.cameraRequest) {
         val uri = state.cameraRequest ?: return@LaunchedEffect
@@ -261,6 +282,7 @@ private fun LightButton(text: String, enabled: Boolean, onClick: () -> Unit) {
 private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: VisitEditActions) {
     val form = state.form
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showTimePicker by rememberSaveable { mutableStateOf(false) }
     var cinemaExpanded by rememberSaveable { mutableStateOf(form.cinemaRatings != CinemaRatings.NONE) }
     Column(
         Modifier
@@ -270,7 +292,7 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        // 1–2: cinema, hall, date, film
+        // 1–2: cinema, hall, date, start time, film
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             FieldPair(
                 first = { fieldModifier ->
@@ -308,17 +330,24 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
                     }
                 },
                 second = { fieldModifier ->
-                    LabelledField("Film", fieldModifier) {
-                        TextInput(
-                            value = form.filmTitle,
-                            onValueChange = actions::onFilmTitle,
-                            placeholder = "Film title",
-                            contentDescription = "Film title",
-                            singleLine = true,
+                    LabelledField("Start time", fieldModifier) {
+                        StartTimeField(
+                            time = form.startTime,
+                            onOpen = { showTimePicker = true },
+                            onClear = { actions.onStartTime(null) },
                         )
                     }
                 },
             )
+            LabelledField("Film") {
+                TextInput(
+                    value = form.filmTitle,
+                    onValueChange = actions::onFilmTitle,
+                    placeholder = "Film title",
+                    contentDescription = "Film title",
+                    singleLine = true,
+                )
+            }
         }
 
         LabelledField("Format") {
@@ -336,8 +365,11 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
             }
         }
 
-        // 3–4: seat and seat rating
+        // 3–4: seat (and the ticket, if the visit has one) and seat rating
         SeatCard(state, actions)
+        state.ticket?.let {
+            TicketSection(it, removing = state.isRemovingTicket, enabled = !state.isSaving && !state.isClosed, actions = actions)
+        }
 
         // 5: hall ratings
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -402,6 +434,20 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
                 actions.onDate(it)
             },
             onDismiss = { showDatePicker = false },
+        )
+    }
+    if (showTimePicker) {
+        VisitTimePicker(
+            time = form.startTime,
+            onTime = {
+                showTimePicker = false
+                actions.onStartTime(it)
+            },
+            onClear = {
+                showTimePicker = false
+                actions.onStartTime(null)
+            },
+            onDismiss = { showTimePicker = false },
         )
     }
 }
@@ -514,6 +560,13 @@ private fun DialogHost(dialog: VisitEditDialog?, actions: VisitEditActions) {
             title = { Text("Delete this visit?") },
             text = { MutedText("The visit, its ratings and its photo are deleted. This can't be undone.") },
             confirmButton = { TextButton(onClick = actions::onConfirmDelete) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = actions::onDismissDialog) { Text("Cancel") } },
+        )
+        VisitEditDialog.ConfirmRemoveTicket -> AlertDialog(
+            onDismissRequest = actions::onDismissDialog,
+            title = { Text("Remove the ticket?") },
+            text = { MutedText(REMOVE_TICKET_TEXT) },
+            confirmButton = { TextButton(onClick = actions::onConfirmRemoveTicket) { Text("Remove") } },
             dismissButton = { TextButton(onClick = actions::onDismissDialog) { Text("Cancel") } },
         )
     }

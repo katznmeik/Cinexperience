@@ -51,6 +51,8 @@ import io.github.katznmeik.cinexperience.feature.seatmap.hallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.layoutEditorScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToHallDetail
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToLayoutEditor
+import io.github.katznmeik.cinexperience.feature.tickets.navigateToTicket
+import io.github.katznmeik.cinexperience.feature.tickets.ticketScreen
 import io.github.katznmeik.cinexperience.feature.visits.allVisitsScreen
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAddVisit
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAllVisits
@@ -129,8 +131,14 @@ fun CinexApp(
             // Cinemas tab
             cinemasScreen(
                 cinemaRepository = container.cinemaRepository,
+                visitRepository = container.visitRepository,
+                ticketRepository = container.ticketRepository,
+                clock = container.clock,
                 onOpenCinema = navController::navigateToCinemaDetail,
                 onAddVisit = { navController.navigateToAddVisit() },
+                // The Next visit card (spec §6.1): the card opens the visit, "Show ticket" its ticket.
+                onOpenVisit = navController::navigateToEditVisit,
+                onShowTicket = navController::navigateToTicket,
             )
             cinemaDetailScreen(
                 cinemaRepository = container.cinemaRepository,
@@ -167,8 +175,18 @@ fun CinexApp(
             visitEditScreens(
                 cinemaRepository = container.cinemaRepository,
                 visitRepository = container.visitRepository,
+                ticketRepository = container.ticketRepository,
                 visitPhotoStore = container.visitPhotoStore,
                 onClose = navController::navigateUp,
+                onShowTicket = navController::navigateToTicket,
+            )
+            // The ticket with its QR code (v1.4, spec §6.11).
+            ticketScreen(
+                visitRepository = container.visitRepository,
+                hallRepository = container.hallRepository,
+                ticketRepository = container.ticketRepository,
+                clock = container.clock,
+                onBack = navController::navigateUp,
             )
 
             // Program tab (v1.1)
@@ -213,6 +231,7 @@ fun CinexApp(
             )
             allVisitsScreen(
                 visitRepository = container.visitRepository,
+                clock = container.clock,
                 onBack = navController::navigateUp,
                 onOpenVisit = navController::navigateToEditVisit,
             )

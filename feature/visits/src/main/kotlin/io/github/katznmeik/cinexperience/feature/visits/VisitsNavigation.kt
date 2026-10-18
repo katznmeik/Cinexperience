@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
+import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
@@ -19,6 +20,7 @@ import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditViewModel
 import io.github.katznmeik.cinexperience.feature.visits.list.AllVisitsEntry
 import io.github.katznmeik.cinexperience.feature.visits.list.AllVisitsViewModel
 import kotlinx.serialization.Serializable
+import java.time.Clock
 import java.time.LocalDate
 
 /**
@@ -76,22 +78,31 @@ fun NavController.navigateToAllVisits() = navigate(AllVisitsRoute)
  * The add and edit forms. They close themselves through [onClose] once saved,
  * discarded or deleted (closing with unsaved changes asks first). [onClose] is
  * called once, from the form's state, so it is not limited to the resumed state.
+ *
+ * @param ticketRepository the Ticket section of a visit with a ticket (spec §6.4);
+ *   the forms only read and remove tickets, Save never writes them.
+ * @param onShowTicket opens the visit's ticket ("Show ticket", spec §6.11) on top of the form.
  */
 fun NavGraphBuilder.visitEditScreens(
     cinemaRepository: CinemaRepository,
     visitRepository: VisitRepository,
+    ticketRepository: TicketRepository,
     visitPhotoStore: VisitPhotoStore,
     onClose: () -> Unit,
+    onShowTicket: (visitId: Long) -> Unit,
 ) {
     composable<AddVisitRoute> { entry ->
         val route = entry.toRoute<AddVisitRoute>()
         ScreenBackground {
             VisitEditEntry(
                 viewModel = viewModel(
-                    factory = VisitEditViewModel.factory(VisitEditMode.Add(route.hallId, route.prefill()), cinemaRepository, visitRepository, visitPhotoStore),
+                    factory = VisitEditViewModel.factory(
+                        VisitEditMode.Add(route.hallId, route.prefill()), cinemaRepository, visitRepository, ticketRepository, visitPhotoStore,
+                    ),
                 ),
                 photoStore = visitPhotoStore,
                 onClose = onClose,
+                onShowTicket = dropUnlessResumedWith(onShowTicket),
             )
         }
     }
@@ -100,24 +111,27 @@ fun NavGraphBuilder.visitEditScreens(
         ScreenBackground {
             VisitEditEntry(
                 viewModel = viewModel(
-                    factory = VisitEditViewModel.factory(VisitEditMode.Edit(visitId), cinemaRepository, visitRepository, visitPhotoStore),
+                    factory = VisitEditViewModel.factory(VisitEditMode.Edit(visitId), cinemaRepository, visitRepository, ticketRepository, visitPhotoStore),
                 ),
                 photoStore = visitPhotoStore,
                 onClose = onClose,
+                onShowTicket = dropUnlessResumedWith(onShowTicket),
             )
         }
     }
 }
 
+/** @param clock "now" for the Upcoming section (spec §6.8). */
 fun NavGraphBuilder.allVisitsScreen(
     visitRepository: VisitRepository,
+    clock: Clock = Clock.systemDefaultZone(),
     onBack: () -> Unit,
     onOpenVisit: (visitId: Long) -> Unit,
 ) {
     composable<AllVisitsRoute> {
         ScreenBackground {
             AllVisitsEntry(
-                viewModel = viewModel(factory = AllVisitsViewModel.factory(visitRepository)),
+                viewModel = viewModel(factory = AllVisitsViewModel.factory(visitRepository, clock)),
                 onBack = dropUnlessResumed(block = onBack),
                 onOpenVisit = dropUnlessResumedWith(onOpenVisit),
             )

@@ -39,6 +39,22 @@ fun shortDayText(date: LocalDate): String = SHORT_DAY.format(date)
 /** "15 Oct" */
 fun dayMonthText(date: LocalDate): String = DAY_MONTH.format(date)
 
+/**
+ * A visit's showing, short (the Next visit card, upcoming visits): "Today · 20:15",
+ * "Tomorrow · 20:15", "Sat 17 Oct · 20:15", with the year when it isn't [today]'s
+ * ("Sat 2 Jan 2027 · 20:15"); without a start time only the day ("Sat 17 Oct").
+ * [date], [startTime] and [today] are Berlin values, like a visit's.
+ */
+fun showingDayText(date: LocalDate, startTime: LocalTime?, today: LocalDate): String {
+    val day = when {
+        date == today -> "Today"
+        date == today.plusDays(1) -> "Tomorrow"
+        date.year != today.year -> "${shortDayText(date)} ${date.year}"
+        else -> shortDayText(date)
+    }
+    return if (startTime == null) day else "$day · ${timeText(startTime)}"
+}
+
 /** Day header: "Today · Thursday 15 Oct", "Tomorrow · Friday 16 Oct", "Saturday 17 Oct". */
 fun dayHeaderText(date: LocalDate, today: LocalDate): String = when (date) {
     today -> "Today · ${dayText(date)}"

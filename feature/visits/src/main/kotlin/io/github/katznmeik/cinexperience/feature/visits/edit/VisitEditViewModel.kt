@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
+import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.model.CinemaCategory
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
@@ -20,13 +21,17 @@ import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.model.labels
 import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 
 /** Which visit the form edits. */
 sealed interface VisitEditMode {
@@ -55,6 +60,15 @@ sealed interface VisitEditMode {
  * in [savedState], so the edit also survives process death (e.g. while the camera
  * app is in front). A restored form first drops the session photos whose files are
  * gone (see [checkRestoredPhotos]); the visit's saved photo is never touched.
+ *
+ * A stored visit with a ticket shows it in the Ticket section (spec §6.4). Save
+ * never writes the ticket ([VisitRepository.saveVisit] keeps it and its QR code);
+ * "Remove ticket" removes it at once after a confirmation, like "Delete visit",
+ * because it can't be undone by discarding the form (the QR code only comes back
+ * with the ticket PDF).
+ *
+ * @param ticketRepository the visits' tickets; `null` leaves out the Ticket section
+ *   (only tests that don't deal with tickets pass `null`; the [factory] passes the app's).
  */
 class VisitEditViewModel(
     private val mode: VisitEditMode,
@@ -62,6 +76,7 @@ class VisitEditViewModel(
     private val visitRepository: VisitRepository,
     private val photoStore: VisitPhotoStore,
     private val savedState: SavedStateHandle,
+    private val ticketRepository: TicketRepository? = null,
     today: () -> LocalDate = LocalDate::now,
 ) : ViewModel() {
 
@@ -110,6 +125,19 @@ class VisitEditViewModel(
             viewModelScope.launch { loadVisit(mode.visitId) }
         }
         viewModelScope.launch { observeCinemas() }
+        if (visitId != 0L) viewModelScope.launch { observeTicket(visitId) }
+    }
+
+    /** Keeps [VisitEditUiState.ticket] up to date; a failure only leaves out the Ticket section. */
+    private suspend fun observeTicket(id: Long) {
+        val repository = ticketRepository ?: return
+        try {
+            repository.observeTicket(id).collect { ticket -> _uiState.update { it.copy(ticket = ticket) } }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _uiState.update { it.copy(ticket = null) }
+        }
     }
 
     private fun restore(draft: VisitDraft) {
@@ -239,6 +267,9 @@ class VisitEditViewModel(
     }
 
     fun setDate(date: LocalDate) = editForm { it.copy(date = date) }
+
+    /** The optional start time (Berlin clock time, to the minute); `null` clears it. */
+    fun setStartTime(time: LocalTime?) = editForm { it.copy(startTime = time?.truncatedTo(ChronoUnit.MINUTES)) }
 
     fun setFilmTitle(text: String) = editForm { it.copy(filmTitle = text.takeCodePoints(MAX_FILM_LENGTH)) }
 
@@ -411,9 +442,9 @@ class VisitEditViewModel(
         }
     }
 
-    /** Close ("×" or Back): asks first if there are unsaved changes. Ignored while saving. */
+    /** Close ("×" or Back): asks first if there are unsaved changes. Ignored while saving or removing the ticket. */
     fun requestClose() {
-        if (state.isSaving || state.isClosed) return
+        if (state.isSaving || state.isClosed || state.isRemovingTicket) return
         when {
             state.seatPicker != null -> closeSeatPicker()
             state.status == VisitEditStatus.Ready && state.hasUnsavedChanges ->
@@ -424,7 +455,7 @@ class VisitEditViewModel(
 
     /** Leaves without saving; photos added in this session are deleted. */
     fun discard() {
-        if (state.isSaving || state.isClosed) return
+        if (state.isSaving || state.isClosed || state.isRemovingTicket) return
         _uiState.update { it.copy(dialog = null, isClosed = true) }
         persist()
         pendingCapture?.let { capture ->
@@ -435,7 +466,7 @@ class VisitEditViewModel(
     }
 
     fun requestDelete() {
-        if (visitId == 0L || state.isSaving || state.isClosed) return
+        if (visitId == 0L || state.isSaving || state.isClosed || state.isRemovingTicket) return
         _uiState.update { it.copy(dialog = VisitEditDialog.ConfirmDelete) }
     }
 
@@ -456,6 +487,55 @@ class VisitEditViewModel(
             baseline.photoPath?.let { deleteQuietly(it) }
             _uiState.update { it.copy(isSaving = false, isClosed = true) }
             persist()
+        }
+    }
+
+    // ---- Ticket (spec §6.4) ----
+
+    /**
+     * The visit whose ticket "Show ticket" opens (spec §6.11); `null` without a
+     * ticket and while the visit is being saved or deleted or the ticket removed.
+     */
+    fun ticketToShow(): Long? =
+        state.ticket?.visitId?.takeUnless { state.isSaving || state.isClosed || state.isRemovingTicket }
+
+    /** Asks to confirm "Remove ticket". */
+    fun requestRemoveTicket() {
+        if (state.ticket == null || state.isSaving || state.isClosed || state.isRemovingTicket) return
+        _uiState.update { it.copy(dialog = VisitEditDialog.ConfirmRemoveTicket) }
+    }
+
+    /**
+     * Removes the visit's ticket with its QR code now (the visit and the form stay as
+     * they are). Not tied to Save: the form never writes tickets. Closing the form
+     * waits for it ([requestClose]), and the write runs to the end even if the form
+     * goes away meanwhile, so a removal the owner confirmed is never half done.
+     */
+    fun confirmRemoveTicket() {
+        val ticket = state.ticket
+        val repository = ticketRepository
+        if (ticket == null || repository == null || state.isSaving || state.isClosed || state.isRemovingTicket) {
+            _uiState.update { it.copy(dialog = null) }
+            return
+        }
+        _uiState.update { it.copy(dialog = null, isRemovingTicket = true) }
+        viewModelScope.launch {
+            val removed = try {
+                // false: already gone, which is fine too
+                withContext(NonCancellable) { repository.removeTicket(ticket.visitId) }
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            _uiState.update {
+                if (removed) {
+                    it.copy(isRemovingTicket = false, ticket = null, message = TICKET_REMOVED)
+                } else {
+                    it.copy(isRemovingTicket = false, message = REMOVE_TICKET_FAILED)
+                }
+            }
         }
     }
 
@@ -569,14 +649,22 @@ class VisitEditViewModel(
         const val NO_LAYOUT = "This hall has no seat layout yet. Draw it on the hall's page to pick seats."
         const val LAYOUT_UNREADABLE = "This hall's layout can't be shown by this version of the app."
         const val NO_SEATS = "This hall's layout has no seats yet."
+        const val TICKET_REMOVED = "Ticket removed."
+        const val REMOVE_TICKET_FAILED = "Couldn't remove the ticket. Please try again."
 
         fun factory(
             mode: VisitEditMode,
             cinemaRepository: CinemaRepository,
             visitRepository: VisitRepository,
+            ticketRepository: TicketRepository,
             photoStore: VisitPhotoStore,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { VisitEditViewModel(mode, cinemaRepository, visitRepository, photoStore, createSavedStateHandle()) }
+            initializer {
+                VisitEditViewModel(
+                    mode, cinemaRepository, visitRepository, photoStore, createSavedStateHandle(),
+                    ticketRepository = ticketRepository,
+                )
+            }
         }
     }
 }

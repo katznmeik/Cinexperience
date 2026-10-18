@@ -18,12 +18,15 @@ import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleData
+import io.github.katznmeik.cinexperience.core.testing.SampleProgram
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailEntry
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailViewModel
 import io.github.katznmeik.cinexperience.feature.cinemas.list.CinemasEntry
 import io.github.katznmeik.cinexperience.feature.cinemas.list.CinemasViewModel
 import io.github.katznmeik.cinexperience.feature.cinemas.list.NO_FAVOURITES_TEXT
+import io.github.katznmeik.cinexperience.feature.cinemas.list.NextVisitViewModel
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -33,6 +36,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.Clock
+import java.time.ZoneOffset
 
 /** The favourite toggle and the Favourites chip, driven through the real ViewModels. */
 @RunWith(RobolectricTestRunner::class)
@@ -84,9 +89,13 @@ class CinemasUiTest {
 
     private fun showList() {
         val viewModel = CinemasViewModel(repository)
+        val nextVisit = NextVisitViewModel(repository, repository, Clock.fixed(SampleProgram.FETCHED_AT, ZoneOffset.UTC), ticks = flowOf(Unit))
         composeRule.setContent {
             CinexTheme {
-                CinemasEntry(viewModel, onOpenCinema = {}, onAddVisit = {}, message = null, onMessageShown = {})
+                CinemasEntry(
+                    viewModel, nextVisit, onOpenCinema = {}, onAddVisit = {}, onOpenVisit = {}, onShowTicket = {},
+                    message = null, onMessageShown = {},
+                )
             }
         }
     }

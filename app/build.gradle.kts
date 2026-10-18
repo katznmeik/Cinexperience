@@ -167,6 +167,7 @@ dependencies {
     implementation(projects.feature.rankings)
     implementation(projects.feature.backup)
     implementation(projects.feature.program)
+    implementation(projects.feature.tickets)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

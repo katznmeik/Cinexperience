@@ -1,9 +1,11 @@
 package io.github.katznmeik.cinexperience.core.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import io.github.katznmeik.cinexperience.core.testing.NON_TEXT_CONTRAST
 import io.github.katznmeik.cinexperience.core.testing.TEXT_CONTRAST
 import io.github.katznmeik.cinexperience.core.testing.contrastRatio
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -104,6 +106,15 @@ class ThemeContrastTest {
         // The selected screen in the layout editor (bar and handles), the one non-seat hue.
         assertContrast("editorSelection on canvas", c.editorSelection, c.canvas, NON_TEXT_CONTRAST)
         assertContrast("handle arrows on editorSelection", c.onEditorSelection, c.editorSelection, NON_TEXT_CONTRAST)
+    }
+
+    @Test
+    fun ticketQrCodeIsBlackOnWhite() {
+        // The ticket's QR code (spec §6.11): meaningful graphics (3:1), here pure black on pure white.
+        assertContrast("ticketQrModule on ticketQrBackground", c.ticketQrModule, c.ticketQrBackground, NON_TEXT_CONTRAST)
+        assertEquals(21.0, contrastRatio(c.ticketQrModule, c.ticketQrBackground), 0.001)
+        // Dark modules on a light panel, as entrance scanners expect.
+        assertTrue(c.ticketQrModule.luminance() < c.ticketQrBackground.luminance())
     }
 
     @Test

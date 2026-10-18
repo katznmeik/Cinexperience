@@ -72,12 +72,13 @@ Look at the screenshot PNGs after every UI change.
 | `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos), backup export/import engine |
 | `core:program` | Android lib + kotlinx.serialization | Yorck's program (v1.1, spec §11.1): model (`Program`, `Film`, `Showing`), page parser, Yorck-name → seed-key table, `ProgramLinks`, visit pre-fill, the HTTPS download (the app's **only network code**), cache `files/program/program.json`, `ProgramRepository` |
 | `core:ticket` | Android lib (+ Robolectric tests), uses core:model | Yorck's ticket PDF (v1.4, spec §11.2): the own small PDF reader (`pdf/`), text in reading order (`text/`), the ticket fields (`TicketPdfReader` → `TicketPdfContent`, `TicketPdfRules`), the QR code's module grid (`qr/`, `QrModuleGrid`); pure Kotlin except the JPEG decoding (`BitmapLuminanceDecoder`) |
-| `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories (incl. `FakeProgramRepository`) and file stores, illustrative screenshot fixtures (incl. `buildProgram`, `SampleProgram`), `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
-| `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips, messages, the message snackbar, `rememberLoadedImage`, `rememberTextWidth`, picker date conversions), date and time texts (`text/Dates.kt`), `flow/Flows.kt` (`minuteTicks`, `asResult`), `navigation/` (result message for the screen below, `CloseOnce`) |
+| `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories (incl. `FakeProgramRepository`) and file stores, illustrative screenshot fixtures (incl. `buildProgram`, `SampleProgram`, `SampleTickets`), `MutableClock`, `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
+| `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips, messages, the message snackbar, `rememberLoadedImage`, `rememberTextWidth`, picker date conversions), date and time texts (`text/Dates.kt`), `spelledOut` (codes read letter by letter), `flow/Flows.kt` (`minuteTicks`, `asResult`), `navigation/` (result message for the screen below, `CloseOnce`) |
 | `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
-| `feature:cinemas` | feature | cinema list (start tab; sort chips and the Favourites filter), cinema detail (☆/★ favourite toggle, "Now showing"), manage cinemas & halls |
+| `feature:cinemas` | feature | cinema list (start tab; Next visit card, sort chips and the Favourites filter), cinema detail (☆/★ favourite toggle, "Now showing"), manage cinemas & halls |
 | `feature:seatmap` | feature | hall detail with seat map, layout editor |
-| `feature:visits` | feature | add/edit visit (seat picker, photos), all visits |
+| `feature:visits` | feature | add/edit visit (seat picker, photos, start time, Ticket section), all visits (Upcoming section) |
+| `feature:tickets` | feature | ticket screen (v1.4, spec §6.11): `TicketRoute(visitId)`, QR code drawn from `QrModules`, `KeepScreenBrightAndOn` |
 | `feature:rankings` | feature | rankings tab |
 | `feature:backup` | feature | settings tab, export/import UI (file pickers, preview, progress), restore safety copy, Settings → Program |
 | `feature:program` | feature | Program tab (v1.1, spec §6.9: consent, filters, saved filters, results), film page, `ProgramFilterStore` (filters in shared preferences) |
@@ -94,6 +95,9 @@ Don't duplicate config in module build files.
   `MaterialTheme.colorScheme/typography`). Never hard-code colours in feature
   modules. Seat colours (`CinexTheme.colors.seat.*`) are the only hues in the app,
   plus `editorSelection` (the layout editor's selected screen, spec §7).
+  The one light surface is the ticket's QR panel: `ticketQrModule` (black) on
+  `ticketQrBackground` (white), only for the QR code; the rest of the ticket
+  screen stays dark.
   `colorScheme.error` is the text colour, not red: an error shows by its
   message and `isError`.
   Titles are uppercase Archivo; body text is Instrument Sans.
@@ -131,7 +135,8 @@ Don't duplicate config in module build files.
   together with callbacks. Four tabs (`TopLevelDestination`), in this order:
   Cinemas · Program · Rankings · Settings. "Show all in Program" (cinema detail)
   switches to `ProgramRoute(cinemaSeedKey)` with the tab options; "Log visit"
-  opens `AddVisitRoute` with pre-fill arguments (`VisitPrefillArgs`, core:model).
+  opens `AddVisitRoute` with pre-fill arguments (`VisitPrefillArgs`, core:model);
+  "Show ticket" (Next visit card, visit form) opens `TicketRoute(visitId)`.
 - **Transitions** (spec §7) live only in `app/.../ui/CinexTransitions.kt`, passed
   to the NavHost in `CinexApp` (features never set their own): opening a screen
   slides it in from the right while the old one slides out left by the full
@@ -163,7 +168,23 @@ Don't duplicate config in module build files.
   saved). Visits are always updated, never REPLACEd: a replace would
   cascade-delete the ticket. `Visit.startTime` is Berlin clock time; `ShowingTime` (core:model)
   computes the start, upcoming visits and the QR modules' expiry (7 days), which
-  `DataContainer.removeExpiredQrModules` applies at app start.
+  `DataContainer.removeExpiredQrModules` applies at app start; screens check
+  `Visit.qrModulesExpireAt` against `AppContainer.clock` too (the removal runs
+  once per process). `UpcomingVisits` (core:model) orders visits soonest first
+  (date, start time, untimed last, id): `of` gives the upcoming visits (§4.4,
+  All visits' Upcoming section); `forNextVisitCard` is the Next visit card's
+  own, wider rule (showings until 30 min after the start, then reading
+  "Started 20:15"; today's visits without a start time until midnight). The
+  card above the cinema list has its own `NextVisitViewModel`, re-picked on
+  `minuteTicks`; "Show ticket" only with a QR code still kept; the card opens
+  the visit. Form saves never wipe tickets: the visit form's
+  Save calls `saveVisit` only, never `saveVisitWithTicket` (which replaces the
+  ticket, its QR code included), so a ticket survives every edit; "Remove
+  ticket" calls `removeTicket` at once after a confirmation (like "Delete visit"). The ticket screen draws the QR code with
+  whole-pixel modules and a 4-module quiet zone; while it shows the code,
+  `KeepScreenBrightAndOn` holds the window at full brightness with
+  `FLAG_KEEP_SCREEN_ON` and restores both when it leaves the composition
+  (Back, predictive back; counted, so overlapping screens restore once).
 - **Seats** are identified by a stable `SeatId` stored in the layout (see
   `core/model/.../SeatLayout.kt`), never by grid position or label. Ids are never
   reused within a hall (`Hall.nextSeatId` is the hall's mark; the repository
