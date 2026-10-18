@@ -74,7 +74,7 @@ class TicketMatchingTest {
             listOf(
                 "Cinema on the ticket: \u2068Kino Atlantis\u2069 (not in the app)",
                 "Hall on the ticket: \u2068Saal 4\u2069",
-                "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (not selected: choose the hall first)",
+                "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (the hall on the ticket wasn't found in the app)",
             ),
             unknown.prefill.notes,
         )
@@ -117,7 +117,7 @@ class TicketMatchingTest {
         assertNull(result.hallId)
         assertEquals(SampleData.DELPHI_LUX, result.prefill.cinemaId)
         assertNull("no hall, no seat", result.prefill.seatId)
-        assertEquals(listOf("Hall on the ticket: \u2068Saal 9\u2069 (not in the app)", "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (not selected: choose the hall first)"), result.prefill.notes)
+        assertEquals(listOf("Hall on the ticket: \u2068Saal 9\u2069 (not in the app)", "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (the hall on the ticket wasn't found in the app)"), result.prefill.notes)
     }
 
     @Test
@@ -125,10 +125,11 @@ class TicketMatchingTest {
         val result = match(content(cinema = "Kino International", hall = "2"))
         assertNull("not matched: Add visit selects the only hall itself", result.hallId)
         assertEquals(international, result.prefill.cinemaId)
-        assertEquals(listOf("Hall on the ticket: \u2068Saal 2\u2069 (not in the app)", "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (not selected: choose the hall first)"), result.prefill.notes)
+        // Add visit still selects the only hall (the form's rule): the note says only what was printed.
+        assertEquals(listOf("Hall on the ticket: \u2068Saal 2\u2069 (not in the app)", "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (the hall on the ticket wasn't found in the app)"), result.prefill.notes)
         val noHall = match(content(cinema = "Kino International", hall = null))
         assertNull(noHall.hallId)
-        assertEquals(listOf("Not on the ticket: hall", "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (not selected: choose the hall first)"), noHall.prefill.notes)
+        assertEquals(listOf("Not on the ticket: hall", "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (the ticket names no hall)"), noHall.prefill.notes)
     }
 
     @Test

@@ -75,7 +75,8 @@ object TicketMatching {
         val unmatched = seats.filterIndexed { index, _ -> seatIds[index] == null }
         if (unmatched.isNotEmpty()) {
             val why = when {
-                hall == null -> SeatsNotSelected.NO_HALL
+                hall == null && printedHall == null -> SeatsNotSelected.NO_HALL_ON_TICKET
+                hall == null -> SeatsNotSelected.HALL_NOT_FOUND
                 hall.layoutUnreadable -> SeatsNotSelected.LAYOUT_UNREADABLE
                 hall.layout == null -> SeatsNotSelected.NO_LAYOUT
                 else -> SeatsNotSelected.NOT_IN_LAYOUT
@@ -183,8 +184,14 @@ object TicketNotes {
 
 /** Why printed seats select no seat in the form ([TicketNotes.seatsNotSelected]). */
 enum class SeatsNotSelected(val text: String) {
-    /** The hall wasn't matched (or the cinema wasn't): there is no layout to look in. */
-    NO_HALL("not selected: choose the hall first"),
+    /**
+     * The printed hall wasn't found in the app (or its cinema wasn't): no layout to look
+     * in. Neutral, because Add visit may still select a one-hall cinema's only hall.
+     */
+    HALL_NOT_FOUND("the hall on the ticket wasn't found in the app"),
+
+    /** The ticket names no hall (or it couldn't be read): no layout to look in. */
+    NO_HALL_ON_TICKET("the ticket names no hall"),
 
     /** The hall has no layout. */
     NO_LAYOUT("the hall has no seat layout yet"),

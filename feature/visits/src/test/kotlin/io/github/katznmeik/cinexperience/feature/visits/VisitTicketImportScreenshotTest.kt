@@ -144,6 +144,6 @@ internal object VisitImportStates {
     /** The import's notes for that ticket (as TicketMatching writes them). */
     val NOTES = listOf(
         "Hall on the ticket: \u2068Saal 9\u2069 (not in the app)",
-        "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (not selected: choose the hall first)",
+        "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (the hall on the ticket wasn't found in the app)",
     )
 }
