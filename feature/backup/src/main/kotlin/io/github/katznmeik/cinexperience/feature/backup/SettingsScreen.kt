@@ -186,7 +186,7 @@ internal fun SettingsScreen(
                 )
                 RowDivider()
                 SettingsRow(
-                    icon = CinexIcons.Ticket,
+                    icon = CinexIcons.ImportFile,
                     title = "Import ticket",
                     subtitle = IMPORT_TICKET_SUBTITLE,
                     enabled = !importing,
