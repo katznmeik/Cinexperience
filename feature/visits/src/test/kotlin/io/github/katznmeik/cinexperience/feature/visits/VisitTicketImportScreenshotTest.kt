@@ -85,7 +85,7 @@ class VisitTicketImportScreenshotTest {
         val state = VisitImportStates.addWithNotes()
         capture("add_visit_ticket_notes") { VisitEditScreen(state, photo = null, actions = object : VisitEditActions {}) }
         composeRule.onNodeWithText(IMPORT_NOTES_TITLE).assertExists()
-        composeRule.onNodeWithText("Hall on the ticket: ⁨Saal 9⁩ (not in the app)").assertExists()
+        composeRule.onNodeWithText("Hall on the ticket: \u2068Saal 9\u2069 (not in the app)").assertExists()
     }
 }
 
@@ -127,6 +127,6 @@ internal object VisitImportStates {
     /** A ticket for a hall the app doesn't have: the cinema is set, the hall and seat stay empty, the notes say why. */
     fun addWithNotes(): VisitEditUiState = viewModel(
         hallId = null,
-        prefill(SampleTickets.seats, notes = listOf("Hall on the ticket: ⁨Saal 9⁩ (not in the app)"), seatId = false),
+        prefill(SampleTickets.seats, notes = listOf("Hall on the ticket: \u2068Saal 9\u2069 (not in the app)"), seatId = false),
     ).uiState.value
 }

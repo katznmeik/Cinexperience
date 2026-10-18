@@ -28,7 +28,7 @@ class VisitImportRouteTest {
         startTime = LocalTime.of(20, 15),
         seatId = SeatId(97),
         ticket = draft,
-        notes = listOf("Not on the ticket: film title", "Hall on the ticket: ⁨Saal 9⁩ (not in the app)"),
+        notes = listOf("Not on the ticket: film title", "Hall on the ticket: \u2068Saal 9\u2069 (not in the app)"),
     )
 
     @Test

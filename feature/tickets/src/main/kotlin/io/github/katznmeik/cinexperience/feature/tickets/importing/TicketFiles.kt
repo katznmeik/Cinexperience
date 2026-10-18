@@ -2,6 +2,7 @@ package io.github.katznmeik.cinexperience.feature.tickets.importing
 
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import io.github.katznmeik.cinexperience.core.model.QrModules
 import io.github.katznmeik.cinexperience.core.ticket.TicketPdfContent
 import io.github.katznmeik.cinexperience.core.ticket.TicketPdfError
@@ -32,7 +33,7 @@ class ContentTicketFileSource(context: Context) : TicketFileSource {
     private val appContext = context.applicationContext
 
     override fun open(uri: String): InputStream {
-        val parsed = Uri.parse(uri)
+        val parsed = uri.toUri()
         if (!TicketUris.isReadable(parsed, appContext.packageName) || isOwnProvider(parsed)) {
             throw SecurityException("The import reads only files of other apps")
         }
