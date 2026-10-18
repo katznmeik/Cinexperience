@@ -26,6 +26,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
@@ -87,6 +88,7 @@ internal fun SettingsEntry(
     viewModel: SettingsViewModel,
     onOpenManage: () -> Unit,
     onOpenAllVisits: () -> Unit,
+    onImportTicket: (uri: String) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(BackupRepository.MIME_TYPE)) { uri ->
@@ -94,6 +96,14 @@ internal fun SettingsEntry(
     }
     val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         viewModel.onImportSourceChosen(uri?.toString())
+    }
+    val currentImportTicket by rememberUpdatedState(onImportTicket)
+    // Import ticket (spec §6.7): the system file picker for PDFs; cancelling does nothing.
+    val ticketPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) currentImportTicket(uri.toString())
+    }
+    val onPickTicket: () -> Unit = remember(viewModel, ticketPicker) {
+        { launchPicker(viewModel) { ticketPicker.launch(arrayOf(TICKET_MIME_TYPE)) } }
     }
     val actions = remember(viewModel) {
         object : BackupActions {
@@ -115,8 +125,11 @@ internal fun SettingsEntry(
             override fun onCancelDelete() = viewModel.onCancelDeleteProgram()
         }
     }
-    SettingsScreen(state, onOpenManage, onOpenAllVisits, actions = actions, programActions = programActions)
+    SettingsScreen(state, onOpenManage, onOpenAllVisits, actions = actions, programActions = programActions, onImportTicket = onPickTicket)
 }
+
+/** What the Import ticket picker offers: Yorck's ticket is a PDF. */
+internal const val TICKET_MIME_TYPE = "application/pdf"
 
 private fun launchPicker(viewModel: SettingsViewModel, launch: () -> Unit) {
     try {
@@ -135,6 +148,7 @@ internal fun SettingsScreen(
     modifier: Modifier = Modifier,
     actions: BackupActions = BackupActions.None,
     programActions: ProgramSettingsActions = ProgramSettingsActions.None,
+    onImportTicket: () -> Unit = {},
 ) {
     val backup = state.backup
     // While an import replaces the data nothing else may write: Back and the Data rows
@@ -169,6 +183,14 @@ internal fun SettingsScreen(
                     subtitle = counts?.let { if (it.visits == 0) "No visits yet" else countText(it.visits, "visit") },
                     enabled = !importing,
                     onClick = onOpenAllVisits,
+                )
+                RowDivider()
+                SettingsRow(
+                    icon = CinexIcons.Ticket,
+                    title = "Import ticket",
+                    subtitle = IMPORT_TICKET_SUBTITLE,
+                    enabled = !importing,
+                    onClick = onImportTicket,
                 )
             }
             Section("Program") { ProgramRows(state.program, enabled = !importing, programActions) }

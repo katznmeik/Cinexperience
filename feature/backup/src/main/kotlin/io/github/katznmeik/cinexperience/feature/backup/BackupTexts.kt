@@ -49,5 +49,8 @@ internal fun safetyCopiesSummary(copies: List<SafetyCopy>, zone: ZoneId = ZoneId
     else -> "${copies.size} copies · newest from ${dateTimeText(copies.first().createdAt, zone)}"
 }
 
+/** Subtitle of Data → "Import ticket" (spec §6.7, §6.10). */
+internal const val IMPORT_TICKET_SUBTITLE = "Fills in a visit from a Yorck ticket PDF"
+
 /** "45%" */
 internal fun percentText(progress: Float): String = "${(progress.coerceIn(0f, 1f) * 100).roundToInt()}%"

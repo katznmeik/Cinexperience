@@ -17,6 +17,9 @@ data object SettingsRoute
 /**
  * @param appVersion the app's version name, shown under About.
  * @param buildId the short commit hash the APK was built from, shown under About.
+ * @param onImportTicket imports the ticket PDF the file picker returned (Data → Import
+ *   ticket, spec §6.7, §6.10), as a `content:` URI; the picker's read permission lasts
+ *   while the app runs (no persistable permission is taken).
  */
 fun NavGraphBuilder.settingsScreen(
     cinemaRepository: CinemaRepository,
@@ -26,6 +29,7 @@ fun NavGraphBuilder.settingsScreen(
     buildId: String,
     onOpenManage: () -> Unit,
     onOpenAllVisits: () -> Unit,
+    onImportTicket: (uri: String) -> Unit = {},
 ) {
     composable<SettingsRoute> {
         ScreenBackground {
@@ -33,6 +37,8 @@ fun NavGraphBuilder.settingsScreen(
                 viewModel = viewModel(factory = SettingsViewModel.factory(cinemaRepository, backupRepository, programRepository, appVersion, buildId)),
                 onOpenManage = dropUnlessResumed(block = onOpenManage),
                 onOpenAllVisits = dropUnlessResumed(block = onOpenAllVisits),
+                // Not dropped unless resumed: the picker's result arrives while the screen is only started.
+                onImportTicket = onImportTicket,
             )
         }
     }
