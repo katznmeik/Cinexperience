@@ -431,36 +431,44 @@ Don't duplicate config in module build files.
   `/ToUnicode`; DCT images) and refuses anything else with a `TicketPdfError`.
   The file-level limits are in `TicketPdfLimits` (2 MB file, 4 pages, 2,000
   objects, 2 MB per unpacked stream, nesting, QR candidates ≤ 512 px and 256 KB);
-  smaller ones sit next to their code (CMap entries, lexer tokens, loading depth,
-  operands, fields). Limits count work, not distinct objects: each object is read
-  only up to the next one's offset, and per document `TicketPdfLimits` counts
+  smaller ones sit next to their code (CMap entries, lexer tokens and strings
+  ≤ 64 KB, loading depth, operands, fields). Limits count work, not distinct
+  objects: each object is read only up to the next one's offset, and per
+  document `TicketPdfLimits` counts
   every value any parser builds (200,000: objects, kept in the cache, content
   streams and CMaps; at most 4,096 in one content operand or CMap object), the
   page tree nodes visited (64), the fonts loaded (16, mappable or not), the CMap
   codes processed in all fonts (16,384, repeated ranges each time), the glyph
   widths (65,536, each `/W` array once however many fonts share it), the codes
-  shown (50,000, mapped or not), and the bytes unpacked (8 MB) and interpreted
-  (8 MB, a stream listed again counting again); each has a test. It never follows
-  links, actions or external data; `read()` never throws for any file content
-  (`content()` is the strict path the fuzz tests use). Fields are checked by
+  shown (50,000, mapped or not), and the bytes unpacked (8 MB; nothing unpacked is
+  kept, so a stream listed again is unpacked and counted again) and interpreted
+  (8 MB); each has a test. It never follows links, actions or external data;
+  `read()` never throws for any file content (`content()` is the strict path the
+  fuzz tests use). Fields are checked by
   `TicketPdfRules` (booking numbers and seats by core:model's `BookingNumber` /
   `TicketSeat` rules; a row "-" becomes `null`) and cleaned like the program's
   texts (`TicketText`); each is `Found` or `NotFound(MISSING/INVALID/AMBIGUOUS)`,
   and no `toString()` shows a value; several seats only where unambiguous. The
-  booker's name never becomes a field: a booker line is any line with "gebucht"
-  in its letters (any case, spaces or format characters), and the first one below
-  "Ticket" ends the block wherever it starts; labels end at the first bold line
-  after the title; no value mentions "gebucht", starts like a category ("Kat",
-  "Kategorie") or stands right above a booker line. Values come only from their
-  own ticket block; the booking number is searched in its column outside the
-  ticket blocks (Yorck's left column), never in a block. Never read or returned
+  booker's name never becomes a field: a booker segment has "gebucht" in its
+  letters (any case, spaces or format characters); after the title (bold lines
+  below "Ticket", "Ausgebucht" allowed, none starting with "gebucht" or saying
+  "gebucht von"), the first line with a booker segment and a segment in the block
+  ends the block, wherever the booker segment starts, while a note left of the
+  block with nothing of it on its line ends nothing; labels end at the first bold
+  line after the title; no value mentions "gebucht" or (but the title) starts
+  like a category ("Kat", "Kategorie"); a value from the line below its label is
+  refused if its line or its label's line has a booker segment, or if the next
+  line or the next segment in its column below it is a booker line, however far.
+  Values come only from their own ticket block; the booking number is searched in
+  its column outside the ticket blocks (Yorck's left column), never in a block,
+  and only booker segments outside the blocks count for it. Never read or returned
   are the booker's name, the category, prices, numbers, address, conditions. QR:
   only a grid whose finder, separator, timing and alignment patterns, dark module
   and both format copies check out, whose pattern centres lie on the grid and
-  whose Reed–Solomon blocks (versions 1–4, all levels) all have zero syndromes,
-  remainder bits 0, is returned: exactly the encoded code. That check reads no
-  content (no mode or character decoding, nothing returned but the grid); the app
-  generates no codes. Tests use invented fixtures (`InventedTicketPdf`;
+  whose Reed–Solomon blocks (versions 1–4, all levels) all have zero syndromes is
+  returned: the encoded code (the remainder bits, which scanners ignore, aren't
+  checked). That check reads no content (no mode or character decoding, nothing
+  returned but the grid); the app generates no codes. Tests use invented fixtures (`InventedTicketPdf`;
   `TestQrCodes`, a test-only writer of codes without content; an independent
   encoder's codes for an invented text in `QrCodewordsTest`; the JDK's JPEG codec
   in plain JVM tests). Never commit a real ticket; `RealTicketTest` reads one
