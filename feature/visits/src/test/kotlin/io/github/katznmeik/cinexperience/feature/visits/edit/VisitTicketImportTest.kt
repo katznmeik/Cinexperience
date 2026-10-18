@@ -293,12 +293,34 @@ class VisitTicketImportTest {
         assertEquals(setOf(SampleTickets.row7Seat10, row7Seat11), vm.state.bookingSeatIds)
     }
 
-    /** Counts the one write the form may do with a ticket. */
+    @Test
+    fun aTicketStoredWithAVisitSavedBeforeShowsOnTheForm() {
+        val vm = viewModel(VisitEditMode.Add(SampleTickets.HALL, prefill(draft.copy(seats = emptyList()), seatId = false)))
+        vm.save()
+        assertEquals(VisitEditViewModel.TICKET_NEEDS_SEAT, vm.state.message)
+        vm.openSeatPicker()
+        vm.tapPickerSeat(SampleTickets.row7Seat10)
+        vm.confirmSeat()
+        // The seat went meanwhile: the form stays open after the second Save.
+        tickets.reportSeatCleared = true
+        vm.save()
+        with(vm.state) {
+            assertEquals(VisitEditViewModel.SEAT_CLEARED_ON_SAVE, message)
+            assertFalse(isClosed)
+            assertNull(ticketDraft)
+            assertEquals("the stored ticket, not the draft", stored.tickets.single(), ticket)
+        }
+    }
+
+    /** Counts the one write the form may do with a ticket; [reportSeatCleared] reports the seat as cleared. */
     private class CountingTickets(private val repository: () -> FakeCinexRepository) : TicketRepository by DelegatingTickets(repository) {
         val saved = mutableListOf<Pair<Visit, Ticket>>()
+        var reportSeatCleared = false
 
-        override suspend fun saveVisitWithTicket(visit: Visit, ticket: Ticket): SaveTicketResult =
-            repository().saveVisitWithTicket(visit, ticket).also { saved += visit to ticket }
+        override suspend fun saveVisitWithTicket(visit: Visit, ticket: Ticket): SaveTicketResult {
+            val result = repository().saveVisitWithTicket(visit, ticket).also { saved += visit to ticket }
+            return if (reportSeatCleared && result is SaveTicketResult.Saved) result.copy(seatCleared = true) else result
+        }
     }
 }
 

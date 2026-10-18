@@ -138,6 +138,9 @@ class VisitEditViewModel(
     /** Id of the stored visit; 0 until a new visit is saved. */
     private var visitId: Long = (mode as? VisitEditMode.Edit)?.visitId ?: 0L
 
+    /** The visit whose ticket [observeTicket] follows; 0 while none. */
+    private var observedTicketVisitId: Long = 0L
+
     /** Photos copied into storage in this session; deleted unless saved. */
     private val sessionPhotos = LinkedHashSet<String>()
 
@@ -159,12 +162,20 @@ class VisitEditViewModel(
             viewModelScope.launch { loadVisit(mode.visitId) }
         }
         viewModelScope.launch { observeCinemas() }
-        if (visitId != 0L) viewModelScope.launch { observeTicket(visitId) }
+        observeStoredTicket()
         if (mode is VisitEditMode.Edit && mode.importedBefore && savedState.get<Boolean>(IMPORTED_BEFORE_SHOWN_KEY) != true) {
             // Once: not again after rotation or process death.
             savedState[IMPORTED_BEFORE_SHOWN_KEY] = true
             _uiState.update { it.copy(message = IMPORTED_BEFORE) }
         }
+    }
+
+    /** Starts [observeTicket] for the stored visit, once per visit; nothing before the visit is stored. */
+    private fun observeStoredTicket() {
+        val id = visitId
+        if (id == 0L || id == observedTicketVisitId) return
+        observedTicketVisitId = id
+        viewModelScope.launch { observeTicket(id) }
     }
 
     /** Keeps [VisitEditUiState.ticket] up to date; a failure only leaves out the Ticket section. */
@@ -531,13 +542,13 @@ class VisitEditViewModel(
         // The kept photo now belongs to the saved visit: a later discard must not delete it.
         sessionPhotos.clear()
         replaced?.let { deleteQuietly(it) }
-        val newVisit = visitId == 0L
         visitId = result.visitId
         if (outcome.ticketStored) {
-            // Stored now: the Ticket section shows the ticket from the database from here on.
+            // Stored now: the Ticket section shows the ticket from the database from here on
+            // (also when the visit itself was stored by an earlier Save, see ticketNeedsSeat).
             baselineTicket = null
             _uiState.update { it.copy(ticketDraft = null) }
-            if (newVisit) viewModelScope.launch { observeTicket(visitId) }
+            observeStoredTicket()
         }
         when {
             result.seatCleared -> {
