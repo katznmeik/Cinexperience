@@ -130,6 +130,8 @@ fun seatChoices(layout: SeatLayout): List<SeatRowChoice> = seatChoices(layout.la
  *
  * @param seatVisuals the map's seat states; when not empty, each chip also
  *   announces its seat's state ("Row 7, Seat 10, great, favourite").
+ * @param bookingSeatIds the seats of an imported ticket's booking (spec §6.10): their
+ *   chips carry a ticket mark after the number and are announced "…, in this booking".
  */
 @Composable
 fun SeatPicker(
@@ -138,6 +140,7 @@ fun SeatPicker(
     onSeatSelected: (SeatId) -> Unit,
     modifier: Modifier = Modifier,
     seatVisuals: Map<SeatId, SeatVisual> = emptyMap(),
+    bookingSeatIds: Set<SeatId> = emptySet(),
 ) {
     if (choices.isEmpty()) return
     val initialRow = remember(choices, selectedSeatId) {
@@ -178,16 +181,19 @@ fun SeatPicker(
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 block.forEach { seat ->
-                    val description = if (seatVisuals.isEmpty()) {
+                    val booked = seat.seatId in bookingSeatIds
+                    val state = if (seatVisuals.isEmpty()) {
                         row.descriptionOf(seat)
                     } else {
                         "${row.descriptionOf(seat)}, ${(seatVisuals[seat.seatId] ?: SeatVisual.Neutral).stateText}"
                     }
+                    val description = if (booked) state + IN_THIS_BOOKING else state
                     ChoiceChip(
                         text = seat.shortText,
                         selected = seat.seatId == selectedSeatId,
                         onClick = { onSeatSelected(seat.seatId) },
                         icon = seat.label.kind.icon,
+                        trailingIcon = if (booked) CinexIcons.Ticket else null,
                         modifier = Modifier.semantics { contentDescription = description },
                     )
                 }

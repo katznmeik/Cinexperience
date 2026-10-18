@@ -112,7 +112,9 @@ fun OutlinedPillButton(
  * Drawn 36 dp tall (taller with large text) with a 48 dp touch target. The default is a pill; the layout
  * editor's tool chips pass [SegmentChipShape]. An optional [icon] precedes the
  * text; with an empty [text] the chip shows only the icon (give it a content
- * description through [modifier]).
+ * description through [modifier]). An optional [trailingIcon] follows the text as a
+ * mark (e.g. a seat of the booking); it is decorative, so the chip's description
+ * should say what it marks.
  */
 @Composable
 fun ChoiceChip(
@@ -122,6 +124,7 @@ fun ChoiceChip(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(18.dp),
     icon: ImageVector? = null,
+    trailingIcon: ImageVector? = null,
 ) {
     val base = modifier
         .minimumInteractiveComponentSize()
@@ -149,6 +152,9 @@ fun ChoiceChip(
                 ),
                 color = contentColor,
             )
+        }
+        if (trailingIcon != null) {
+            Icon(trailingIcon, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
         }
     }
 }

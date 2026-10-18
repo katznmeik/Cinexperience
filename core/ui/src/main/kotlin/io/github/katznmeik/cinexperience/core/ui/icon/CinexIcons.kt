@@ -128,6 +128,15 @@ object CinexIcons {
 
     val Delete: ImageVector by lazy { strokeIcon("Delete", "M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6") }
 
+    /** A ticket with its notched sides and tear-off line: the ticket import, a seat of the booking. */
+    val Ticket: ImageVector by lazy {
+        strokeIcon(
+            "Ticket",
+            "M4 6h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z",
+            "M14 6v2M14 11v2M14 16v2",
+        )
+    }
+
     /** Seat kind glyphs (see [SeatKindGlyphs]), as icons for the editor's seat type chips. */
     val Wheelchair: ImageVector by lazy { strokeIcon("Wheelchair", *SeatKindGlyphs.Wheelchair.toTypedArray()) }
 
