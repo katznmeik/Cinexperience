@@ -26,6 +26,10 @@ import io.github.katznmeik.cinexperience.core.testing.SampleProgram
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.di.AppContainer
 import io.github.katznmeik.cinexperience.feature.cinemas.closeDeletedCinema
+import io.github.katznmeik.cinexperience.feature.tickets.importing.ContentTicketFileSource
+import io.github.katznmeik.cinexperience.feature.tickets.importing.DefaultTicketReader
+import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketFileSource
+import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketReader
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -40,13 +44,16 @@ import java.time.ZoneOffset
 /**
  * App container backed by the in-memory fake repositories. Its [clock] stands at
  * the sample program's download time (15 Oct 2026, 10:00 in Berlin), so the
- * screens that read the time don't depend on the day the tests run.
+ * screens that read the time don't depend on the day the tests run. The ticket
+ * import reads files with the app's own source and reader unless a test passes fakes.
  */
 internal class FakeAppContainer(
     repository: FakeCinexRepository,
     override val backupRepository: FakeBackupRepository = FakeBackupRepository(),
     override val programRepository: FakeProgramRepository = FakeProgramRepository(),
     override val clock: Clock = Clock.fixed(SampleProgram.FETCHED_AT, ZoneOffset.UTC),
+    override val ticketFileSource: TicketFileSource = ContentTicketFileSource(RuntimeEnvironment.getApplication()),
+    override val ticketReader: TicketReader = DefaultTicketReader,
 ) : AppContainer {
     override val applicationContext: Context = RuntimeEnvironment.getApplication()
     override val appVersion: String = "0.1.0"

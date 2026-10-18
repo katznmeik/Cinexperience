@@ -176,4 +176,6 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
 
     testImplementation(projects.core.testing)
+    // The ticket import tests build read tickets (invented) for a fake reader.
+    testImplementation(projects.core.ticket)
 }

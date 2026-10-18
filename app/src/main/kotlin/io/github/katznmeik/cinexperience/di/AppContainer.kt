@@ -17,6 +17,10 @@ import io.github.katznmeik.cinexperience.core.program.DefaultProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.feature.program.ProgramFilterStore
 import io.github.katznmeik.cinexperience.feature.program.SharedPreferencesProgramFilterStore
+import io.github.katznmeik.cinexperience.feature.tickets.importing.ContentTicketFileSource
+import io.github.katznmeik.cinexperience.feature.tickets.importing.DefaultTicketReader
+import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketFileSource
+import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketReader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -62,6 +66,15 @@ interface AppContainer {
 
     /** The Program tab's current and saved filters (app settings, spec §6.9, §8). */
     val programFilterStore: ProgramFilterStore
+
+    /**
+     * Opens the ticket PDF of the ticket import (spec §6.10): a `content:` URI of
+     * another app (the email app's attachment, the file picker's document).
+     */
+    val ticketFileSource: TicketFileSource get() = ContentTicketFileSource(applicationContext)
+
+    /** Reads the ticket PDF (core:ticket's own reader, spec §11.2). */
+    val ticketReader: TicketReader get() = DefaultTicketReader
 
     /**
      * "Now" for the Program tab, the film page, a cinema's "Now showing", the Next
