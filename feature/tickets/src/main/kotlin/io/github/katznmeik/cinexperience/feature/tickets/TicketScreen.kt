@@ -165,6 +165,8 @@ private fun ShowingDetails(ticket: TicketDetails) {
         Text(ticket.showingText(), style = MaterialTheme.typography.bodyLarge, color = CinexTheme.colors.text)
         ticket.placeText()?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text) }
     }
+    // No seat lines (and no heading) for a ticket without seats and a visit without a seat.
+    if (ticket.seats.isEmpty()) return
     Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = if (ticket.seats.size == 1) "Seat" else "Seats",

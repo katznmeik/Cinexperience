@@ -63,6 +63,9 @@ class TicketAccessibilityTest(private val fontScale: Float) {
     fun qrCodeNotStored() = check("ticket_no_qr", TicketScreenStates.qrCodeNotStored())
 
     @Test
+    fun withoutSeats() = check("ticket_no_seats", TicketScreenStates.withoutSeats())
+
+    @Test
     fun notFound() = check("ticket_not_found", TicketContent.NotFound)
 
     /** A 16-character booking number stays on one line at every font scale: it shrinks instead of breaking. */

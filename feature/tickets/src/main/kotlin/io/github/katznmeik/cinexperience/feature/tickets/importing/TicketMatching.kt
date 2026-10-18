@@ -42,7 +42,8 @@ data class TicketMatch(val hallId: Long?, val prefill: VisitPrefillArgs)
  *   printed hall to match too; otherwise only the cinema is set and Add visit selects
  *   its only hall, as for a cinema chosen by hand.
  * - **Seats:** every printed seat against the hall's [labels] ([seatOf]); the first
- *   one is the owner's seat. Unmatched seats stay on the ticket and select nothing.
+ *   one is the owner's seat. Unmatched seats stay on the ticket and select nothing;
+ *   the notes list them, also all of them when the hall wasn't matched.
  * - **Format:** a showing of the program at the cinema with the same Berlin start
  *   ([screeningFormat]).
  * - **Notes:** everything that couldn't be read or matched, with what was printed.
@@ -71,9 +72,15 @@ object TicketMatching {
         val seats = content.seats.valueOrNull.orEmpty().mapNotNull { TicketSeat.ofOrNull(it.row, it.seat) }.distinct().take(Ticket.MAX_SEATS)
         val labels = hall?.layout?.labels()
         val seatIds = seats.map { seat -> labels?.seatOf(seat) }
-        if (hall != null) {
-            val unmatched = seats.filterIndexed { index, _ -> seatIds[index] == null }
-            if (unmatched.isNotEmpty()) notes += TicketNotes.seatsNotInLayout(unmatched, hasLayout = hall.layout != null)
+        val unmatched = seats.filterIndexed { index, _ -> seatIds[index] == null }
+        if (unmatched.isNotEmpty()) {
+            val why = when {
+                hall == null -> SeatsNotSelected.NO_HALL
+                hall.layoutUnreadable -> SeatsNotSelected.LAYOUT_UNREADABLE
+                hall.layout == null -> SeatsNotSelected.NO_LAYOUT
+                else -> SeatsNotSelected.NOT_IN_LAYOUT
+            }
+            notes += TicketNotes.seatsNotSelected(unmatched, why)
         }
 
         val date = content.date.valueOrNull
@@ -167,9 +174,24 @@ object TicketNotes {
         return if (cinemaInApp) "$text (not in the app)" else text
     }
 
-    fun seatsNotInLayout(seats: List<TicketSeat>, hasLayout: Boolean): String {
+    /** The printed [seats] that select no seat in the form, and [why]. */
+    fun seatsNotSelected(seats: List<TicketSeat>, why: SeatsNotSelected): String {
         val what = if (seats.size == 1) "Seat on the ticket" else "Seats on the ticket"
-        val why = if (hasLayout) "not in the hall's layout" else "the hall has no seat layout yet"
-        return "$what: ${seats.joinToString(", ") { isolate(it.label.shortText) }} ($why)"
+        return "$what: ${seats.joinToString(", ") { isolate(it.label.shortText) }} (${why.text})"
     }
+}
+
+/** Why printed seats select no seat in the form ([TicketNotes.seatsNotSelected]). */
+enum class SeatsNotSelected(val text: String) {
+    /** The hall wasn't matched (or the cinema wasn't): there is no layout to look in. */
+    NO_HALL("not selected: choose the hall first"),
+
+    /** The hall has no layout. */
+    NO_LAYOUT("the hall has no seat layout yet"),
+
+    /** The hall's stored layout can't be read by this app version. */
+    LAYOUT_UNREADABLE("the hall's seat layout can't be read"),
+
+    /** The layout has no seat with that label (or several have it). */
+    NOT_IN_LAYOUT("not in the hall's layout"),
 }

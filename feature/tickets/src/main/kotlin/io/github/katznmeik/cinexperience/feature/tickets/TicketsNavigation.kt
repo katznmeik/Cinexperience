@@ -17,6 +17,7 @@ import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketFileSou
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketImportEntry
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketImportViewModel
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketReader
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import java.time.Clock
 
@@ -74,10 +75,13 @@ fun NavGraphBuilder.ticketScreen(
  * @param reader reads the PDF ([io.github.katznmeik.cinexperience.feature.tickets.importing.DefaultTicketReader] in the app).
  * @param programRepository only its state is read (the program already on the phone): the import never downloads.
  * @param clock "now" for the QR code's expiry.
+ * @param isBackupImporting a backup import replaces the data: the QR code of a ticket
+ *   imported before isn't stored meanwhile.
  * @param onOpenNewVisit opens Add visit with the matched ticket, for [hallId] if the hall
  *   was matched; it replaces the import screen.
  * @param onOpenImportedVisit opens the visit that has this ticket already, with "This
- *   ticket was imported before"; it replaces the import screen.
+ *   ticket was imported before" (and, with qrCodeNotStored, that its QR code couldn't be
+ *   stored again); it replaces the import screen.
  */
 fun NavGraphBuilder.ticketImportScreen(
     cinemaRepository: CinemaRepository,
@@ -87,9 +91,10 @@ fun NavGraphBuilder.ticketImportScreen(
     fileSource: TicketFileSource,
     reader: TicketReader,
     clock: Clock,
+    isBackupImporting: StateFlow<Boolean>,
     onBack: () -> Unit,
     onOpenNewVisit: (hallId: Long?, prefill: VisitPrefillArgs) -> Unit,
-    onOpenImportedVisit: (visitId: Long) -> Unit,
+    onOpenImportedVisit: (visitId: Long, qrCodeNotStored: Boolean) -> Unit,
 ) {
     composable<ImportTicketRoute> { entry ->
         val uri = entry.toRoute<ImportTicketRoute>().uri
@@ -98,6 +103,7 @@ fun NavGraphBuilder.ticketImportScreen(
                 viewModel = viewModel(
                     factory = TicketImportViewModel.factory(
                         uri, fileSource, reader, cinemaRepository, visitRepository, ticketRepository, programRepository, clock,
+                        isBackupImporting,
                     ),
                 ),
                 // Back always works, also while the file is still being read.

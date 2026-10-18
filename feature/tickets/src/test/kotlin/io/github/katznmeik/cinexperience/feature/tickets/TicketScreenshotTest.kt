@@ -81,6 +81,15 @@ class TicketScreenshotTest {
         composeRule.onNodeWithText(QR_NOT_STORED_NOTE).assertExists()
     }
 
+    /** The seats couldn't be read from the ticket: the visit's own seat shows as "Your seat". */
+    @Test
+    fun withoutSeats() {
+        capture("ticket_no_seats", TicketScreenStates.withoutSeats())
+        composeRule.onNodeWithContentDescription("Row 7, Seat 10, your seat").assertExists()
+        composeRule.onNodeWithText("Seat").assertExists()
+        composeRule.onNodeWithText("Seats").assertDoesNotExist()
+    }
+
     @Test
     fun notFoundWithBack() {
         capture("ticket_not_found", TicketContent.NotFound)

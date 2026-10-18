@@ -10,12 +10,17 @@ import java.util.Locale
  * Which addresses the ticket import reads (spec §6.10, §11.2): only `content:` URIs
  * of other apps' providers, e.g. the email app's attachment. Everything else is
  * refused like an unreadable file: `file:` and `http(s):` addresses, a URI without
- * an authority, and this app's own providers (an authority starting with the
+ * an authority, this app's own providers (an authority starting with the
  * application id, also behind a `user@` prefix), so another app can't make the
- * import read the app's private files.
+ * import read the app's private files, and an address longer than [MAX_LENGTH]
+ * characters (no real attachment has one; it would also bloat the saved state).
  */
 object TicketUris {
+    /** The longest address the import reads. */
+    const val MAX_LENGTH: Int = 4_096
+
     fun isReadable(uri: Uri, ownPackage: String): Boolean {
+        if (uri.toString().length > MAX_LENGTH) return false
         // Exactly "content", as ContentResolver compares it.
         if (uri.scheme != ContentResolver.SCHEME_CONTENT) return false
         val authority = providerAuthority(uri) ?: return false

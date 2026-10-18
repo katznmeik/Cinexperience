@@ -61,9 +61,10 @@ sealed interface TicketImportState {
 
     /**
      * Imported before (spec §6.10): open visit [visitId], replacing the import screen,
-     * with "This ticket was imported before".
+     * with "This ticket was imported before"; [qrCodeNotStored] when its QR code should
+     * have been stored again and couldn't be (the form says so too).
      */
-    data class OpenImportedVisit(val visitId: Long) : TicketImportState
+    data class OpenImportedVisit(val visitId: Long, val qrCodeNotStored: Boolean = false) : TicketImportState
 }
 
 /**
@@ -78,7 +79,10 @@ sealed interface TicketImportState {
  * - Imported before ([TicketRepository.findVisitId], checked first): that visit opens.
  *   If its ticket has no QR code (e.g. restored from a backup), the new one is valid
  *   and the stored visit's showing (its date and start time, not the PDF's) is less than
- *   7 days ago, the QR code is stored again ([TicketRepository.storeQrModules]).
+ *   7 days ago, the QR code is stored again ([TicketRepository.restoreQrModules]: only
+ *   while that ticket still has this booking number and no QR code, and never while a
+ *   backup import, [isBackupImporting], replaces the data). If that fails, the visit
+ *   opens anyway and says so ([TicketImportState.OpenImportedVisit.qrCodeNotStored]).
  * - Otherwise Add visit opens with the [TicketMatching] result. The cached program is
  *   only read (`state`), never downloaded.
  *
@@ -94,6 +98,7 @@ class TicketImportViewModel(
     private val ticketRepository: TicketRepository,
     private val programRepository: ProgramRepository,
     private val clock: Clock,
+    private val isBackupImporting: StateFlow<Boolean>,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val readDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
@@ -120,8 +125,8 @@ class TicketImportViewModel(
         return try {
             val visitId = ticketRepository.findVisitId(bookingNumber)
             if (visitId != null) {
-                ticket.qrModules?.let { restoreQrCode(visitId, it) }
-                TicketImportState.OpenImportedVisit(visitId)
+                val stored = ticket.qrModules?.let { restoreQrCode(visitId, bookingNumber, it) } ?: true
+                TicketImportState.OpenImportedVisit(visitId, qrCodeNotStored = !stored)
             } else {
                 val cinemas = cinemaRepository.observeCinemaDetails().first()
                 TicketImportState.OpenNewVisit(TicketMatching.match(ticket.content, bookingNumber, ticket.qrModules, cinemas, cachedProgram()))
@@ -214,22 +219,29 @@ class TicketImportViewModel(
     }
 
     /**
-     * Stores the new [qrModules] for visit [visitId] if its ticket has none and the stored
-     * visit's QR codes are still kept. A failure leaves it out: the visit opens anyway
-     * and its ticket screen says that no QR code is stored.
+     * Stores the new [qrModules] for visit [visitId] if its ticket ([bookingNumber]) has
+     * none and the stored visit's QR codes are still kept. False only if it should have
+     * been stored and couldn't be: a repository failure, or a backup import replacing the
+     * data. A ticket that changed since it was read (removed, or given a QR code
+     * meanwhile) is left alone by the repository's guarded write, which isn't a failure.
      */
-    private suspend fun restoreQrCode(visitId: Long, qrModules: QrModules) {
-        try {
-            val ticket = ticketRepository.getTicket(visitId) ?: return
-            if (ticket.qrModules != null) return
-            val visit = visitRepository.getVisit(visitId) ?: return
-            if (ShowingTime.qrModulesExpired(visit.date, visit.startTime, clock.instant())) return
-            ticketRepository.storeQrModules(visitId, qrModules)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Left out; see above.
+    private suspend fun restoreQrCode(visitId: Long, bookingNumber: BookingNumber, qrModules: QrModules): Boolean = try {
+        val ticket = ticketRepository.getTicket(visitId)
+        val visit = visitRepository.getVisit(visitId)
+        when {
+            ticket == null || ticket.qrModules != null || visit == null -> true
+            ShowingTime.qrModulesExpired(visit.date, visit.startTime, clock.instant()) -> true
+            // Nothing else may write while a backup import replaces every row.
+            isBackupImporting.value -> false
+            else -> {
+                ticketRepository.restoreQrModules(visitId, bookingNumber, qrModules)
+                true
+            }
         }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
     }
 
     /** The program already on the phone (never downloaded here), once the repository has read it; `null` without one. */
@@ -249,10 +261,12 @@ class TicketImportViewModel(
             ticketRepository: TicketRepository,
             programRepository: ProgramRepository,
             clock: Clock,
+            isBackupImporting: StateFlow<Boolean>,
         ): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 TicketImportViewModel(
                     uri, fileSource, reader, cinemaRepository, visitRepository, ticketRepository, programRepository, clock,
+                    isBackupImporting,
                 )
             }
         }

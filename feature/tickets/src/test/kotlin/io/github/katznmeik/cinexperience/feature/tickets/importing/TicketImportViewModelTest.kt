@@ -22,6 +22,7 @@ import io.github.katznmeik.cinexperience.core.ticket.TicketPdfLimits
 import io.github.katznmeik.cinexperience.feature.tickets.importing.ImportFixtures.content
 import io.github.katznmeik.cinexperience.feature.tickets.importing.ImportFixtures.found
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -51,6 +52,7 @@ class TicketImportViewModelTest {
     private val clock = Clock.fixed(SampleProgram.FETCHED_AT, ZoneOffset.UTC)
     private val newQr = SampleTickets.qrModules(25)
     private val programs = FakeProgramRepository()
+    private val backupImporting = MutableStateFlow(false)
     private var repository = FakeCinexRepository(FakeStore())
 
     /** The bytes the reader was given, per call. */
@@ -69,7 +71,7 @@ class TicketImportViewModelTest {
         tickets: TicketRepository = repository,
         uri: String? = this.uri,
     ) = TicketImportViewModel(
-        uri, source, reader, repository, repository, tickets, programs, clock,
+        uri, source, reader, repository, repository, tickets, programs, clock, backupImporting,
         ioDispatcher = mainDispatcherRule.dispatcher,
         readDispatcher = mainDispatcherRule.dispatcher,
     )
@@ -202,9 +204,14 @@ class TicketImportViewModelTest {
 
     // ---- Imported before ----
 
-    private fun importedBefore(storedQr: QrModules?, daysAhead: Long = 2, newQr: QrModules? = this.newQr): TicketImportViewModel {
+    private fun importedBefore(
+        storedQr: QrModules?,
+        daysAhead: Long = 2,
+        newQr: QrModules? = this.newQr,
+        tickets: ((TicketRepository) -> TicketRepository)? = null,
+    ): TicketImportViewModel {
         repository = FakeCinexRepository(SampleTickets.store(daysAhead = daysAhead, tickets = listOf(SampleTickets.ticket(qr = storedQr))))
-        return viewModel(reader = reader(TicketReadResult.Read(content(), newQr)))
+        return viewModel(reader = reader(TicketReadResult.Read(content(), newQr)), tickets = tickets?.invoke(repository) ?: repository)
     }
 
     private val storedQr: QrModules? get() = repository.store.value.tickets.single().qrModules
@@ -242,6 +249,39 @@ class TicketImportViewModelTest {
         assertNull(storedQr)
     }
 
+    @Test
+    fun aFailedRestoreOpensTheVisitAndSaysSo() {
+        val vm = importedBefore(storedQr = null) { tickets ->
+            object : TicketRepository by tickets {
+                override suspend fun restoreQrModules(visitId: Long, bookingNumber: BookingNumber, qrModules: QrModules): Boolean =
+                    throw IllegalStateException("disk")
+            }
+        }
+        assertEquals(TicketImportState.OpenImportedVisit(SampleTickets.VISIT, qrCodeNotStored = true), vm.state.value)
+        assertNull(storedQr)
+    }
+
+    @Test
+    fun nothingIsStoredWhileABackupImportReplacesTheData() {
+        backupImporting.value = true
+        val vm = importedBefore(storedQr = null)
+        assertEquals(TicketImportState.OpenImportedVisit(SampleTickets.VISIT, qrCodeNotStored = true), vm.state.value)
+        assertNull(storedQr)
+    }
+
+    @Test
+    fun theRestoreAsksForTheSameTicket() {
+        val asked = mutableListOf<BookingNumber>()
+        importedBefore(storedQr = null) { tickets ->
+            object : TicketRepository by tickets {
+                override suspend fun restoreQrModules(visitId: Long, bookingNumber: BookingNumber, qrModules: QrModules): Boolean =
+                    tickets.restoreQrModules(visitId, bookingNumber, qrModules).also { asked += bookingNumber }
+            }
+        }
+        assertEquals(listOf(BookingNumber("TEST123")), asked)
+        assertEquals(newQr, storedQr)
+    }
+
     // ---- Leaving ----
 
     @Test
@@ -262,7 +302,7 @@ class TicketImportViewModelTest {
                 initializer {
                     TicketImportViewModel(
                         uri, slow, TicketReader { calls.incrementAndGet(); TicketReadResult.Refused(TicketPdfError.DAMAGED) },
-                        repository, repository, repository, programs, clock,
+                        repository, repository, repository, programs, clock, backupImporting,
                         ioDispatcher = Dispatchers.IO,
                         readDispatcher = mainDispatcherRule.dispatcher,
                     )

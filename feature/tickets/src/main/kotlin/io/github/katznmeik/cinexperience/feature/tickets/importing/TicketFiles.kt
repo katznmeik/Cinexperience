@@ -34,6 +34,7 @@ class ContentTicketFileSource(context: Context) : TicketFileSource {
     private val appContext = context.applicationContext
 
     override fun open(uri: String): InputStream {
+        if (uri.length > TicketUris.MAX_LENGTH) throw SecurityException("The address is too long")
         val parsed = uri.toUri()
         if (!TicketUris.isReadable(parsed, appContext.packageName) || isOwnProvider(parsed)) {
             throw SecurityException("The import reads only files of other apps")

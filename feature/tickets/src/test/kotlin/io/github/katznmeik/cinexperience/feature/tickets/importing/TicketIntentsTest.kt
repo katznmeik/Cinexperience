@@ -86,6 +86,18 @@ class TicketIntentsTest {
     }
 
     @Test
+    fun anAddressLongerThan4096CharactersIsRefused() {
+        val base = "content://com.example.mail.attachments/ticket/"
+        val longest = Uri.parse(base + "1".repeat(TicketUris.MAX_LENGTH - base.length))
+        val tooLong = Uri.parse(base + "1".repeat(TicketUris.MAX_LENGTH - base.length + 1))
+        assertTrue(TicketUris.isReadable(longest, own))
+        assertFalse(TicketUris.isReadable(tooLong, own))
+        assertEquals(ImportTicketRoute(longest.toString()), route(share(longest)))
+        assertEquals("the import says it can't open the file", ImportTicketRoute(null), route(share(tooLong)))
+        assertEquals(ImportTicketRoute(null), route(view(tooLong)))
+    }
+
+    @Test
     fun theUriRuleItself() {
         assertTrue(TicketUris.isReadable(mail, own))
         assertTrue("another app whose name merely contains ours", TicketUris.isReadable(Uri.parse("content://com.other.$own/x"), own))

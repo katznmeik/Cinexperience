@@ -46,6 +46,13 @@ class TicketFilesTest {
     }
 
     @Test
+    fun anAddressLongerThan4096CharactersIsRefusedWithoutBeingOpened() {
+        val address = attachment.toString() + "1".repeat(TicketUris.MAX_LENGTH)
+        shadowOf(context.contentResolver).registerInputStream(Uri.parse(address), ByteArrayInputStream(ByteArray(1)))
+        assertThrows(SecurityException::class.java) { source.open(address) }
+    }
+
+    @Test
     fun theReadStopsOneByteAfterTheLimit() {
         assertArrayEquals(ByteArray(10) { 7 }, TicketFileBytes.readAtMost(ByteArrayInputStream(ByteArray(10) { 7 }), limit = 10))
         assertArrayEquals(ByteArray(0), TicketFileBytes.readAtMost(ByteArrayInputStream(ByteArray(0)), limit = 10))

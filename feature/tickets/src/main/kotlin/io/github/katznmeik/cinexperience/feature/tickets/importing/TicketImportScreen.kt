@@ -49,7 +49,7 @@ internal fun TicketImportEntry(
     viewModel: TicketImportViewModel,
     onBack: () -> Unit,
     onOpenNewVisit: (hallId: Long?, prefill: VisitPrefillArgs) -> Unit,
-    onOpenImportedVisit: (visitId: Long) -> Unit,
+    onOpenImportedVisit: (visitId: Long, qrCodeNotStored: Boolean) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val openNew by rememberUpdatedState(onOpenNewVisit)
@@ -65,7 +65,7 @@ internal fun TicketImportEntry(
             }
             is TicketImportState.OpenImportedVisit -> {
                 handedOver = true
-                openImported(current.visitId)
+                openImported(current.visitId, current.qrCodeNotStored)
             }
             else -> Unit
         }

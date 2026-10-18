@@ -35,6 +35,9 @@ internal object TicketScreenStates {
     /** Before the showing, without a QR code (e.g. after a backup restore). */
     fun qrCodeNotStored(): TicketContent = of(SampleTickets.store(tickets = listOf(SampleTickets.ticket(qr = null))))
 
+    /** Before the showing, a ticket whose seats couldn't be read: the visit's own seat shows. */
+    fun withoutSeats(): TicketContent = of(SampleTickets.store(tickets = listOf(SampleTickets.ticket().copy(seats = emptyList()))))
+
     /** The longest booking number the app accepts (16 characters, invented). */
     val LONG_BOOKING_NUMBER = BookingNumber("ABCD1234EFGH5678")
 
