@@ -6,7 +6,9 @@ import androidx.compose.ui.graphics.Color
 /**
  * The monochrome palette (spec §7). Black and white only — the seat colours are
  * the only hues in the app, so the seat map stands out (the one exception:
- * [CinexColors.editorSelection], the layout editor's selected screen).
+ * [CinexColors.editorSelection], the layout editor's selected screen). The theme
+ * is dark; the one light surface is the ticket's QR panel
+ * ([CinexColors.ticketQrBackground]).
  *
  * Always use these tokens (via [CinexTheme.colors] or `MaterialTheme.colorScheme`)
  * instead of hard-coded colours in feature modules.
@@ -40,6 +42,17 @@ data class CinexColors(
     /** Symbols drawn on an [editorSelection] fill (the handles' arrows): at least 3:1 against it. */
     val onEditorSelection: Color,
     val seat: SeatColors,
+    /**
+     * The dark modules of a ticket's QR code (spec §6.11), drawn on
+     * [ticketQrBackground]: black on white, because entrance scanners read
+     * dark-on-light codes reliably. Only for the QR code.
+     */
+    val ticketQrModule: Color,
+    /**
+     * The QR code's panel with its quiet zone: the one light surface in the app
+     * (spec §7); the rest of the ticket screen stays dark. Only for the QR code.
+     */
+    val ticketQrBackground: Color,
 )
 
 /** Seat map colours (spec §5 "Seat colour"); drawn by the seat map in core:seatmapui. */
@@ -92,6 +105,10 @@ internal object CinexPalette {
 
     /** Numbers on "no data" seats: a soft light grey (6.7:1 on the fill), quieter than the text colour. */
     val SeatNoDataText = Color(0xFFC8C4BC)
+
+    /** The ticket's QR code (spec §6.11): pure black modules on a pure white panel, 21:1. */
+    val TicketQrModule = Color(0xFF000000)
+    val TicketQrBackground = Color(0xFFFFFFFF)
 }
 
 val DarkCinexColors = CinexColors(
@@ -119,4 +136,6 @@ val DarkCinexColors = CinexColors(
         onAvoid = CinexPalette.OnPrimary,
         onNoData = CinexPalette.SeatNoDataText,
     ),
+    ticketQrModule = CinexPalette.TicketQrModule,
+    ticketQrBackground = CinexPalette.TicketQrBackground,
 )
