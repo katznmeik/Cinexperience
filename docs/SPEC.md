@@ -2,7 +2,7 @@
 
 **Status:** v1.3.0 released (2026-10-17); v1.4 (ticket import, ticket QR code, reminders) specified
 **Owner:** katznmeik
-**Last updated:** 2026-10-18 (rev. 32)
+**Last updated:** 2026-10-18 (rev. 33)
 
 ---
 
@@ -189,7 +189,7 @@ visit.
 |---|---|---|
 | visitId | Long | FK → Visit, unique |
 | bookingNumber | String | Yorck's "Buchungsnummer" (letters and digits); unique across tickets, so a ticket is recognised when imported again. It is also what the QR code contains. |
-| seats | list of (row, seat) labels | every seat of the booking as printed; the visit's own seat is one of them |
+| seats | list of (row, seat) labels | every seat of the booking as printed (empty if they couldn't be read from the ticket); the visit's own seat is normally one of them |
 | qrModules | bit grid? | the QR code's modules as read from the PDF (21 × 21 for Yorck's tickets); removed 7 days after the showing |
 
 Never stored: the PDF itself, the "booked by" name, prices, transaction and
@@ -782,7 +782,7 @@ complexity:
 | `core:program` | v1.1: downloading, checking and caching Yorck's program; the only module with network code (§11.1) | High |
 | `feature:program` | v1.1: Program tab, filters, saved filters, film page (§6.9) | Medium |
 | `core:ticket` | v1.4: the ticket PDF reader, the ticket fields and checks, the QR module grid (§11.2) | High |
-| `feature:tickets` | v1.4: ticket import entry (Share menu, Open with, file picker), the ticket screen with the QR code (§6.10, §6.11) | Medium |
+| `feature:tickets` | v1.4: ticket import (Share menu, Open with, and the file from Settings → Import ticket, whose row in `feature:backup` opens the file picker), the ticket screen with the QR code (§6.10, §6.11) | Medium |
 | Reminders | v1.4: scheduling rules (`core:model`), alarms, notifications and the restart receiver (`app`) (§11.3) | Medium |
 
 Working rules:
