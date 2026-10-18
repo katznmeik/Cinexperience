@@ -21,11 +21,13 @@ import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.model.labels
 import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.time.LocalDate
 import java.time.LocalTime
@@ -440,9 +442,9 @@ class VisitEditViewModel(
         }
     }
 
-    /** Close ("×" or Back): asks first if there are unsaved changes. Ignored while saving. */
+    /** Close ("×" or Back): asks first if there are unsaved changes. Ignored while saving or removing the ticket. */
     fun requestClose() {
-        if (state.isSaving || state.isClosed) return
+        if (state.isSaving || state.isClosed || state.isRemovingTicket) return
         when {
             state.seatPicker != null -> closeSeatPicker()
             state.status == VisitEditStatus.Ready && state.hasUnsavedChanges ->
@@ -453,7 +455,7 @@ class VisitEditViewModel(
 
     /** Leaves without saving; photos added in this session are deleted. */
     fun discard() {
-        if (state.isSaving || state.isClosed) return
+        if (state.isSaving || state.isClosed || state.isRemovingTicket) return
         _uiState.update { it.copy(dialog = null, isClosed = true) }
         persist()
         pendingCapture?.let { capture ->
@@ -464,7 +466,7 @@ class VisitEditViewModel(
     }
 
     fun requestDelete() {
-        if (visitId == 0L || state.isSaving || state.isClosed) return
+        if (visitId == 0L || state.isSaving || state.isClosed || state.isRemovingTicket) return
         _uiState.update { it.copy(dialog = VisitEditDialog.ConfirmDelete) }
     }
 
@@ -490,6 +492,13 @@ class VisitEditViewModel(
 
     // ---- Ticket (spec §6.4) ----
 
+    /**
+     * The visit whose ticket "Show ticket" opens (spec §6.11); `null` without a
+     * ticket and while the visit is being saved or deleted or the ticket removed.
+     */
+    fun ticketToShow(): Long? =
+        state.ticket?.visitId?.takeUnless { state.isSaving || state.isClosed || state.isRemovingTicket }
+
     /** Asks to confirm "Remove ticket". */
     fun requestRemoveTicket() {
         if (state.ticket == null || state.isSaving || state.isClosed || state.isRemovingTicket) return
@@ -498,7 +507,9 @@ class VisitEditViewModel(
 
     /**
      * Removes the visit's ticket with its QR code now (the visit and the form stay as
-     * they are). Not tied to Save: the form never writes tickets.
+     * they are). Not tied to Save: the form never writes tickets. Closing the form
+     * waits for it ([requestClose]), and the write runs to the end even if the form
+     * goes away meanwhile, so a removal the owner confirmed is never half done.
      */
     fun confirmRemoveTicket() {
         val ticket = state.ticket
@@ -510,7 +521,8 @@ class VisitEditViewModel(
         _uiState.update { it.copy(dialog = null, isRemovingTicket = true) }
         viewModelScope.launch {
             val removed = try {
-                repository.removeTicket(ticket.visitId) // false: already gone, which is fine too
+                // false: already gone, which is fine too
+                withContext(NonCancellable) { repository.removeTicket(ticket.visitId) }
                 true
             } catch (e: CancellationException) {
                 throw e

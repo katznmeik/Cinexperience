@@ -177,7 +177,7 @@ internal fun VisitEditEntry(
     val actions = remember(viewModel, gallery) {
         viewModel.actions(
             choosePhoto = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-            showTicket = { viewModel.uiState.value.ticket?.visitId?.let { currentShowTicket(it) } },
+            showTicket = { viewModel.ticketToShow()?.let { currentShowTicket(it) } },
         )
     }
     LaunchedEffect(state.cameraRequest) {
@@ -367,7 +367,9 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
 
         // 3–4: seat (and the ticket, if the visit has one) and seat rating
         SeatCard(state, actions)
-        state.ticket?.let { TicketSection(it, removing = state.isRemovingTicket, enabled = !state.isSaving, actions = actions) }
+        state.ticket?.let {
+            TicketSection(it, removing = state.isRemovingTicket, enabled = !state.isSaving && !state.isClosed, actions = actions)
+        }
 
         // 5: hall ratings
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

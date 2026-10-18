@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.tickets
 
+import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.model.qrModulesExpireAt
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeStore
@@ -33,4 +34,11 @@ internal object TicketScreenStates {
 
     /** Before the showing, without a QR code (e.g. after a backup restore). */
     fun qrCodeNotStored(): TicketContent = of(SampleTickets.store(tickets = listOf(SampleTickets.ticket(qr = null))))
+
+    /** The longest booking number the app accepts (16 characters, invented). */
+    val LONG_BOOKING_NUMBER = BookingNumber("ABCD1234EFGH5678")
+
+    /** With the QR code and [LONG_BOOKING_NUMBER]. */
+    fun withLongBookingNumber(): TicketContent =
+        of(SampleTickets.store(tickets = listOf(SampleTickets.ticket().copy(bookingNumber = LONG_BOOKING_NUMBER))))
 }

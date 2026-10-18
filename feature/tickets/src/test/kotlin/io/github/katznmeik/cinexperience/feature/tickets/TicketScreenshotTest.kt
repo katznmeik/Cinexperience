@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.tickets
 
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -10,6 +11,7 @@ import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.ScreenshotSurface
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,6 +52,18 @@ class TicketScreenshotTest {
         composeRule.onNodeWithContentDescription("Row 7, Seat 11").assertExists()
         composeRule.onNodeWithText("Saturday 17 Oct · 20:15").assertExists()
         composeRule.onNodeWithText("delphi LUX · Saal 4").assertExists()
+    }
+
+    /** In landscape the height limits the QR code: it fits on the screen whole, centred, without scrolling. */
+    @Test
+    @Config(qualifiers = "w915dp-h412dp-land-night-xxhdpi")
+    fun withQrCodeInLandscape() {
+        capture("ticket_qr_landscape", TicketScreenStates.withQrCode())
+        val root = composeRule.onRoot().getBoundsInRoot()
+        val qr = composeRule.onNodeWithContentDescription(QR_CODE_DESCRIPTION).getBoundsInRoot()
+        assertTrue("the QR code ends above the screen's bottom: $qr in $root", qr.bottom <= root.bottom)
+        assertEquals("square", (qr.right - qr.left).value, (qr.bottom - qr.top).value, 1f)
+        assertEquals("centred", ((qr.left + qr.right) / 2).value, ((root.left + root.right) / 2).value, 1f)
     }
 
     @Test

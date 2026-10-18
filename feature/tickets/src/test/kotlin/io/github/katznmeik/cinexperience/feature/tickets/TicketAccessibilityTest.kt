@@ -1,13 +1,22 @@
 package io.github.katznmeik.cinexperience.feature.tickets
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.testing.ACCESSIBILITY_FONT_SCALES
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.ScreenshotSurface
 import io.github.katznmeik.cinexperience.core.testing.assertAccessible
 import io.github.katznmeik.cinexperience.core.testing.fontScaleSuffix
+import io.github.katznmeik.cinexperience.core.ui.text.spelledOut
+import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -55,4 +64,26 @@ class TicketAccessibilityTest(private val fontScale: Float) {
 
     @Test
     fun notFound() = check("ticket_not_found", TicketContent.NotFound)
+
+    /** A 16-character booking number stays on one line at every font scale: it shrinks instead of breaking. */
+    @Test
+    fun longBookingNumberStaysOnOneLine() {
+        var oneLine = 0.dp
+        composeRule.setContent {
+            ScreenshotSurface(fontScale) {
+                with(LocalDensity.current) {
+                    oneLine = MaterialTheme.typography.labelMedium.lineHeight.toDp() + 2.dp + CinexTheme.textStyles.scoreLarge.lineHeight.toDp()
+                }
+                TicketScreen(TicketScreenStates.withLongBookingNumber(), onBack = {})
+            }
+        }
+        composeRule.waitForIdle()
+        if (fontScale != 1f) composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/ticket_long_number_${fontScaleSuffix(fontScale)}.png")
+        composeRule.assertAccessible()
+        val number = composeRule.onNodeWithContentDescription("Booking number, ${spelledOut(TicketScreenStates.LONG_BOOKING_NUMBER.value)}")
+            .performScrollTo()
+            .getBoundsInRoot()
+        val height = number.bottom - number.top
+        assertTrue("the booking number takes one line: $height, one line is $oneLine", height <= oneLine + 1.dp)
+    }
 }

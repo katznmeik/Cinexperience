@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimeInput
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TimePickerDialog
 import androidx.compose.material3.rememberTimePickerState
@@ -32,10 +34,13 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.katznmeik.cinexperience.core.model.Ticket
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
+import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
+import io.github.katznmeik.cinexperience.core.ui.text.spelledOut
 import io.github.katznmeik.cinexperience.core.ui.text.timeText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import java.time.LocalTime
@@ -51,9 +56,6 @@ internal const val REMOVE_TICKET_TEXT =
 /** What screen readers announce for the Start time field. */
 internal fun startTimeDescription(time: LocalTime?): String =
     if (time == null) "Start time, not set" else "Start time, ${timeText(time)}"
-
-/** The booking number spelled out for screen readers ("T E S T 1 2 3"), so it isn't read as a word. */
-internal fun spelledOut(text: String): String = text.toList().joinToString(" ")
 
 /**
  * The optional start time (spec §6.4): "20:15", or a muted "Optional"; a tap opens
@@ -98,25 +100,29 @@ internal fun StartTimeField(time: LocalTime?, onOpen: () -> Unit, onClear: () ->
 
 /**
  * Material time picker in a dialog, 24 h, like the date picker: OK takes the time,
- * "Clear" (with a time set) removes it, Cancel keeps what the form has.
+ * "Clear" (with a time set) removes it, Cancel keeps what the form has. With large
+ * text the dial gives way to the keyboard input (its hour rings would overlap) and
+ * "Clear" is left out (the field's "×" clears); the buttons wrap instead of
+ * breaking their words.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun VisitTimePicker(time: LocalTime?, onTime: (LocalTime) -> Unit, onClear: () -> Unit, onDismiss: () -> Unit) {
     val initial = time ?: DEFAULT_PICKER_TIME
     val pickerState = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = true)
+    val largeText = isLargeText()
     TimePickerDialog(
         onDismissRequest = onDismiss,
         title = { Text("Start time") },
-        confirmButton = { TextButton(onClick = { onTime(LocalTime.of(pickerState.hour, pickerState.minute)) }) { Text("OK") } },
-        dismissButton = {
-            Row {
-                if (time != null) TextButton(onClick = onClear) { Text("Clear") }
+        confirmButton = {
+            FlowRow(horizontalArrangement = Arrangement.End) {
+                if (time != null && !largeText) TextButton(onClick = onClear) { Text("Clear") }
                 TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = { onTime(LocalTime.of(pickerState.hour, pickerState.minute)) }) { Text("OK") }
             }
         },
     ) {
-        TimePicker(state = pickerState)
+        if (largeText) TimeInput(state = pickerState) else TimePicker(state = pickerState)
     }
 }
 
@@ -142,10 +148,14 @@ internal fun TicketSection(ticket: Ticket, removing: Boolean, enabled: Boolean, 
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text("Booking number", style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.textMuted)
+                // One line, never broken inside the number: a long one shrinks to fit.
+                val style = CinexTheme.textStyles.cardTitle.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize)
                 Text(
                     text = number,
-                    style = CinexTheme.textStyles.cardTitle.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize),
+                    style = style,
                     color = CinexTheme.colors.text,
+                    maxLines = 1,
+                    autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = style.fontSize),
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -166,13 +176,14 @@ internal fun TicketSection(ticket: Ticket, removing: Boolean, enabled: Boolean, 
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.Center) {
-                OutlinedPillButton(text = "Show ticket", onClick = actions::onShowTicket, icon = null)
-                val canRemove = enabled && !removing
+                // Neither while the visit is saved or deleted, nor while the ticket is removed.
+                val canAct = enabled && !removing
+                OutlinedPillButton(text = "Show ticket", onClick = actions::onShowTicket, icon = null, enabled = canAct)
                 Box(
                     modifier = Modifier
                         .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable(enabled = canRemove, role = Role.Button, onClick = actions::onRemoveTicket)
+                        .clickable(enabled = canAct, role = Role.Button, onClick = actions::onRemoveTicket)
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {

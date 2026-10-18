@@ -2,6 +2,7 @@ package io.github.katznmeik.cinexperience.feature.tickets
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +32,7 @@ import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.dayHeaderText
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
+import io.github.katznmeik.cinexperience.core.ui.text.spelledOut
 import io.github.katznmeik.cinexperience.core.ui.text.timeText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
@@ -51,16 +54,25 @@ internal const val QR_NOT_STORED_NOTE =
     "This ticket has no QR code in the app, for example after a backup was restored (backups don't include QR codes). " +
         "Import the ticket again to show it."
 
-/** "Thursday 15 Oct · 20:15", "Today · Thursday 15 Oct · 20:15"; without a start time only the day. */
-internal fun TicketDetails.showingText(): String =
-    listOfNotNull(dayHeaderText(date, today), startTime?.let(::timeText)).joinToString(" · ")
+/** Space between the top bar and the QR code. */
+private val BODY_TOP_PADDING = 8.dp
+
+/** Space kept below the QR code when the height limits its size (landscape). */
+private val QR_BOTTOM_ROOM = 8.dp
+
+/**
+ * "Thursday 15 Oct · 20:15", "Today · Thursday 15 Oct · 20:15", with the year when
+ * it isn't [TicketDetails.today]'s ("Friday 1 Jan 2027 · 20:15"); without a start
+ * time only the day.
+ */
+internal fun TicketDetails.showingText(): String {
+    val day = dayHeaderText(date, today).let { if (date.year != today.year) "$it ${date.year}" else it }
+    return listOfNotNull(day, startTime?.let(::timeText)).joinToString(" · ")
+}
 
 /** "delphi LUX · Saal 4"; `null` if the hall can't be read. */
 internal fun TicketDetails.placeText(): String? =
     if (cinemaName == null || hallName == null) null else "$cinemaName · $hallName"
-
-/** The booking number spelled out for screen readers ("T E S T 1 2 3"), so it isn't read as a word. */
-internal fun spelledOut(text: String): String = text.toList().joinToString(" ")
 
 /**
  * The ticket (spec §6.11): the QR code as large as fits, black on white, at full
@@ -104,35 +116,39 @@ private fun TicketTopBar(onBack: () -> Unit) {
 
 @Composable
 private fun TicketBody(ticket: TicketDetails) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        val qr = ticket.qrModules
-        if (qr != null) {
-            KeepScreenBrightAndOn()
-            QrCodePanel(qr)
-            ShowingDetails(ticket)
-            BookingNumber(ticket)
-        } else {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(CinexTheme.colors.surface)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+    // The height below the top bar: the QR code is never taller than that, so it always fits (landscape).
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val qrMaxSide = maxHeight - BODY_TOP_PADDING - QR_BOTTOM_ROOM
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = BODY_TOP_PADDING, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            val qr = ticket.qrModules
+            if (qr != null) {
+                KeepScreenBrightAndOn()
+                QrCodePanel(qr, maxSide = qrMaxSide)
+                ShowingDetails(ticket)
                 BookingNumber(ticket)
-                MutedText(
-                    text = if (ticket.missingQrCode == MissingQrCode.NOT_STORED) QR_NOT_STORED_NOTE else QR_REMOVED_NOTE,
-                    modifier = Modifier.padding(horizontal = 4.dp), // aligned with the booking number
-                )
+            } else {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(CinexTheme.colors.surface)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    BookingNumber(ticket)
+                    MutedText(
+                        text = if (ticket.missingQrCode == MissingQrCode.NOT_STORED) QR_NOT_STORED_NOTE else QR_REMOVED_NOTE,
+                        modifier = Modifier.padding(horizontal = 4.dp), // aligned with the booking number
+                    )
+                }
+                ShowingDetails(ticket)
             }
-            ShowingDetails(ticket)
         }
     }
 }
@@ -171,9 +187,13 @@ private fun ShowingDetails(ticket: TicketDetails) {
     }
 }
 
+/** The smallest size the booking number shrinks to so it stays on one line (a 16-character one at 2× font). */
+internal val BOOKING_NUMBER_MIN_SIZE = 14.sp
+
 @Composable
 private fun BookingNumber(ticket: TicketDetails) {
     val number = ticket.bookingNumber.value
+    val style = CinexTheme.textStyles.scoreLarge.copy(letterSpacing = 2.sp)
     Column(
         Modifier
             .padding(horizontal = 4.dp)
@@ -181,10 +201,13 @@ private fun BookingNumber(ticket: TicketDetails) {
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text("Booking number", style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.textMuted)
+        // One line, never broken inside the number: a long one shrinks to fit.
         Text(
             text = number,
-            style = CinexTheme.textStyles.scoreLarge.copy(letterSpacing = 2.sp),
+            style = style,
             color = CinexTheme.colors.text,
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = BOOKING_NUMBER_MIN_SIZE, maxFontSize = style.fontSize),
         )
     }
 }

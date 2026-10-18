@@ -77,7 +77,8 @@ fun TopBarIconButton(
 
 /**
  * Small outlined pill button from the mockups, e.g. "+ Add hall": 36 dp tall
- * (taller with large text), 48 dp touch target.
+ * (taller with large text), 48 dp touch target. Disabled ([enabled] false), its
+ * label and icon are muted.
  */
 @Composable
 fun OutlinedPillButton(
@@ -85,21 +86,24 @@ fun OutlinedPillButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     icon: ImageVector? = CinexIcons.Add,
+    enabled: Boolean = true,
 ) {
+    val contentColor = if (enabled) CinexTheme.colors.text else CinexTheme.colors.textMuted
     OutlinedButton(
         onClick = onClick,
         modifier = modifier
             .minimumInteractiveComponentSize()
             .heightIn(min = 36.dp),
+        enabled = enabled,
         shape = RoundedCornerShape(18.dp),
         border = BorderStroke(1.dp, CinexTheme.colors.outline),
         contentPadding = PaddingValues(horizontal = 12.dp),
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = CinexTheme.colors.text, modifier = Modifier.size(16.dp))
+            Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
             Spacer(Modifier.size(6.dp))
         }
-        Text(text, style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.text)
+        Text(text, style = MaterialTheme.typography.labelMedium, color = contentColor)
     }
 }
 

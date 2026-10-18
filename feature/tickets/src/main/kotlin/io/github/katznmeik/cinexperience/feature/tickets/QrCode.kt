@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -16,6 +17,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.katznmeik.cinexperience.core.model.QrModules
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
@@ -45,16 +47,18 @@ internal data class QrGeometry(val modulePx: Int, val offsetPx: Int) {
 /**
  * The ticket's QR code (spec §6.11, §7): black modules on a white panel with the
  * quiet zone, drawn from [modules] (the app never decodes or generates QR codes),
- * as large as the width allows. The panel is the one light surface in the app.
+ * as large as the width allows and at most [maxSide] (the visible height, so the
+ * code always fits, also in landscape), centred. The panel is the one light
+ * surface in the app.
  */
 @Composable
-internal fun QrCodePanel(modules: QrModules, modifier: Modifier = Modifier) {
+internal fun QrCodePanel(modules: QrModules, modifier: Modifier = Modifier, maxSide: Dp = Dp.Infinity) {
     val dark = CinexTheme.colors.ticketQrModule
     val light = CinexTheme.colors.ticketQrBackground
-    BoxWithConstraints(modifier.fillMaxWidth()) {
+    BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         Canvas(
             Modifier
-                .size(maxWidth)
+                .size(minOf(maxWidth, maxSide).coerceAtLeast(0.dp))
                 .clip(RoundedCornerShape(8.dp))
                 .semantics {
                     contentDescription = QR_CODE_DESCRIPTION

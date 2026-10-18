@@ -3,6 +3,7 @@ package io.github.katznmeik.cinexperience.feature.visits
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
@@ -76,15 +77,31 @@ class VisitTicketAccessibilityTest(private val fontScale: Float) {
         check("edit_visit_ticket") { VisitEditScreen(state, photo = null, actions = object : VisitEditActions {}) }
     }
 
+    /** A 16-character booking number stays on one line, shrunk if needed. */
+    @Test
+    fun editVisitWithLongBookingNumber() {
+        val state = VisitTicketStates.editWithTicket(VisitTicketStates.LONG_BOOKING_NUMBER)
+        check("edit_visit_ticket_long_number") { VisitEditScreen(state, photo = null, actions = object : VisitEditActions {}) }
+    }
+
     @Test
     fun allVisitsWithUpcoming() {
         val state = VisitTicketStates.allVisitsWithUpcoming()
         check("all_visits_upcoming") { AllVisitsScreen(state, onBack = {}, onOpenVisit = {}) }
     }
 
+    /** With large text the keyboard input replaces the dial and "Clear" is left out (the field's × clears). */
     @Test
-    fun timePicker() = checkWindow("visit_time_picker", VisitTicketStates.editWithTicket()) {
-        composeRule.onNode(hasContentDescription("Start time, ", substring = true)).performClick()
+    fun timePicker() {
+        checkWindow("visit_time_picker", VisitTicketStates.editWithTicket()) {
+            composeRule.onNode(hasContentDescription("Start time, ", substring = true)).performClick()
+        }
+        composeRule.onNodeWithText("OK").assertExists()
+        if (fontScale > 1.3f) {
+            composeRule.onNodeWithText("Clear").assertDoesNotExist()
+        } else {
+            composeRule.onNodeWithText("Clear").assertExists()
+        }
     }
 
     @Test

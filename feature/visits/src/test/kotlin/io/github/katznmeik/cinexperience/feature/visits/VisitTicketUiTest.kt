@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.visits
 
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -12,8 +13,10 @@ import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleTickets
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
+import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditActions
 import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditEntry
 import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditMode
+import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditScreen
 import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditViewModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -56,6 +59,14 @@ class VisitTicketUiTest {
         composeRule.onNodeWithContentDescription("Row 7, Seat 11").assertExists()
         composeRule.onNodeWithText("Show ticket").performScrollTo().performClick()
         assertEquals(listOf(SampleTickets.VISIT), shownTickets)
+    }
+
+    @Test
+    fun theTicketButtonsWaitWhileTheVisitIsSaved() {
+        val saving = VisitTicketStates.editWithTicket().copy(isSaving = true)
+        composeRule.setContent { CinexTheme { VisitEditScreen(saving, photo = null, actions = object : VisitEditActions {}) } }
+        composeRule.onNodeWithText("Show ticket").performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText("Remove ticket").assertIsNotEnabled()
     }
 
     @Test

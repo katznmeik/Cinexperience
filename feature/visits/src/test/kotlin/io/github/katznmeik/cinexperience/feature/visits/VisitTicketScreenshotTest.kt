@@ -9,6 +9,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.lifecycle.SavedStateHandle
 import com.github.takahirom.roborazzi.captureRoboImage
+import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
@@ -75,8 +76,12 @@ class VisitTicketScreenshotTest {
 
 /** The states the v1.4 visit screenshots and accessibility tests show. */
 internal object VisitTicketStates {
-    fun editWithTicket(): VisitEditUiState {
-        val repository = FakeCinexRepository(UpcomingVisitFixtures.store())
+    /** The longest booking number the app accepts (16 characters, invented). */
+    val LONG_BOOKING_NUMBER = BookingNumber("ABCD1234EFGH5678")
+
+    fun editWithTicket(bookingNumber: BookingNumber = SampleTickets.BOOKING_NUMBER): VisitEditUiState {
+        val store = UpcomingVisitFixtures.store().let { s -> s.copy(tickets = s.tickets.map { it.copy(bookingNumber = bookingNumber) }) }
+        val repository = FakeCinexRepository(store)
         val vm = VisitEditViewModel(
             VisitEditMode.Edit(SampleTickets.VISIT), repository, repository, FakeVisitPhotoStore(), SavedStateHandle(),
             today = { LocalDate.of(2026, 10, 15) }, ticketRepository = repository,
