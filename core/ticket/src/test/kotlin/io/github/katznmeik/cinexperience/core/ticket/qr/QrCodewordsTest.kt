@@ -64,10 +64,14 @@ class QrCodewordsTest {
     }
 
     @Test
-    fun anyOneChangedModuleIsRefused() {
-        for (code in encoded) for (index in code.grid.indices) {
-            val changed = code.grid.copyOf().also { it[index] = !it[index] }
-            assertFalse("${code.name}, module ${index / code.size}/${index % code.size}", QrGridReader.isValid(changed, code.size))
+    fun anyOneChangedModuleButARemainderBitIsRefused() {
+        for (code in encoded) {
+            val remainder = TestQrCodes.remainderModules(code.size)
+            for (index in code.grid.indices) {
+                if (index in remainder) continue
+                val changed = code.grid.copyOf().also { it[index] = !it[index] }
+                assertFalse("${code.name}, module ${index / code.size}/${index % code.size}", QrGridReader.isValid(changed, code.size))
+            }
         }
     }
 
@@ -75,7 +79,8 @@ class QrCodewordsTest {
     fun manyChangedDataModulesAreRefused() {
         val random = Random(5)
         for (code in encoded) {
-            val data = (0 until code.size * code.size).filter { !QrCodewords.isFunction(code.size, it / code.size, it % code.size) }
+            val remainder = TestQrCodes.remainderModules(code.size)
+            val data = (0 until code.size * code.size).filter { !QrCodewords.isFunction(code.size, it / code.size, it % code.size) && it !in remainder }
             repeat(200) {
                 val changed = code.grid.copyOf()
                 for (index in data.shuffled(random).take(random.nextInt(2, 17))) changed[index] = !changed[index]
@@ -109,13 +114,16 @@ class QrCodewordsTest {
     }
 
     @Test
-    fun aRemainderBitThatIsntZeroIsRefused() {
-        val code = encoded.first { it.version == 2 }
-        var last: Pair<Int, Int>? = null
-        QrCodewords.forEachDataModule(code.size) { row, column -> last = row to column }
-        val (row, column) = last!!
-        val changed = code.grid.copyOf().also { it[row * code.size + column] = !it[row * code.size + column] }
+    fun theRemainderBitsDontMatter() {
+        // Scanners ignore them; an encoder that doesn't write them as 0 still makes a valid code.
+        assertEquals(emptySet<Int>(), TestQrCodes.remainderModules(21))
+        for (code in encoded.filter { it.version > 1 }) {
+            val remainder = TestQrCodes.remainderModules(code.size)
+            assertEquals(code.name, 7, remainder.size)
+            val changed = code.grid.copyOf().also { grid -> for (index in remainder) grid[index] = !grid[index] }
 
-        assertFalse(QrCodewords.isValid(changed, code.size, formatData(code)))
+            assertTrue(code.name, QrGridReader.isValid(changed, code.size))
+            assertTrue(code.name, TestQrCodes.sameCode(changed, code.grid, code.size))
+        }
     }
 }

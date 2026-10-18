@@ -7,8 +7,10 @@ import kotlin.math.abs
  * versions 1 to 4): the codewords are read from the data modules (unmasked with the
  * format information's mask pattern, in the zig-zag order around the function
  * patterns, 7.7.3 and 8.8), split into their error correction blocks (Table 9), and
- * every block's Reed–Solomon syndromes over GF(256) must be zero (7.5.2); the
- * remainder bits must be 0. A single wrongly sampled module fails this.
+ * every block's Reed–Solomon syndromes over GF(256) must be zero (7.5.2). A single
+ * wrongly sampled codeword module fails this. The up to 7 remainder bits after the
+ * codewords (versions 2 to 4) are not checked: scanners ignore them, and an encoder
+ * that doesn't write them as 0 still makes a valid code.
  *
  * The content is not interpreted: no mode, character count or data is read, and
  * nothing comes out but whether every block is a codeword. Nothing is corrected.
@@ -48,30 +50,24 @@ internal object QrCodewords {
         return true
     }
 
-    /**
-     * The [count] codewords in placement order, unmasked with [mask]; `null` if a
-     * remainder bit after them isn't 0.
-     */
+    /** The [count] codewords in placement order, unmasked with [mask]; the remainder bits after them are skipped. */
     internal fun read(grid: BooleanArray, size: Int, mask: Int, count: Int): IntArray? {
         val codewords = IntArray(count)
         var index = 0
         var bits = 0
         var value = 0
-        var remainderClear = true
         forEachDataModule(size) { row, column ->
-            val bit = grid[row * size + column] != isMasked(mask, row, column)
             if (index < count) {
+                val bit = grid[row * size + column] != isMasked(mask, row, column)
                 value = value shl 1 or (if (bit) 1 else 0)
                 if (++bits == 8) {
                     codewords[index++] = value
                     bits = 0
                     value = 0
                 }
-            } else if (bit) {
-                remainderClear = false
             }
         }
-        return codewords.takeIf { index == count && remainderClear }
+        return codewords.takeIf { index == count }
     }
 
     /**

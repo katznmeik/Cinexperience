@@ -72,6 +72,24 @@ internal object TestQrCodes {
         return grid
     }
 
+    /** The indices of a [size] code's remainder modules: the data modules after its codewords (none at 21 modules). */
+    fun remainderModules(size: Int, formatData: Int = FORMAT_DATA): Set<Int> {
+        val codewordBits = QrCodewords.blocks(size, formatData).total * 8
+        val modules = HashSet<Int>()
+        var bit = 0
+        QrCodewords.forEachDataModule(size) { row, column ->
+            if (bit++ >= codewordBits) modules += row * size + column
+        }
+        return modules
+    }
+
+    /** The same code: [a] and [b] differ at most in their remainder modules, which scanners ignore. */
+    fun sameCode(a: BooleanArray, b: BooleanArray, size: Int): Boolean {
+        if (a.size != b.size) return false
+        val remainder = remainderModules(size)
+        return a.indices.all { a[it] == b[it] || it in remainder }
+    }
+
     /** The data codewords split into their blocks, each with its error correction, interleaved (7.6). */
     private fun interleaved(data: IntArray, blocks: QrCodewords.Blocks): IntArray {
         val split = (0 until blocks.count).map { b -> data.copyOfRange(b * blocks.dataCodewords, (b + 1) * blocks.dataCodewords) }

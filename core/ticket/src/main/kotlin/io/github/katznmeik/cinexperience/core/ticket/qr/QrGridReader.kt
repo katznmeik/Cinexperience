@@ -23,9 +23,10 @@ import kotlin.math.min
  *    timing patterns, the dark module, the alignment pattern (from 25 modules on)
  *    and both copies of the format information check out, both copies are the
  *    same valid word ([QrFormat]), and every error correction block's Reed–Solomon
- *    syndromes are zero ([QrCodewords]): the grid is exactly the code its encoder
- *    wrote, not one with wrongly sampled modules, which the redrawn code would pass
- *    on to the scanner. The check reads no content.
+ *    syndromes are zero ([QrCodewords]): the grid is the code its encoder wrote
+ *    (up to the remainder bits, which scanners ignore), not one with wrongly sampled
+ *    modules, which the redrawn code would pass on to the scanner. The check reads
+ *    no content.
  * 5. The patterns' centres lie on the grid ([isOnTheGrid]), so a slanted code is
  *    refused early.
  *

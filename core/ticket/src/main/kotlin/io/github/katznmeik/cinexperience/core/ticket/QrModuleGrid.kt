@@ -5,8 +5,8 @@ package io.github.katznmeik.cinexperience.core.ticket
  * modules (21, 25, 29 or 33, i.e. versions 1 to 4), upright, without the quiet zone.
  * Only a grid whose finder, separator, timing and alignment patterns, dark module and
  * both copies of the format information check out, and whose error correction blocks
- * are all valid Reed–Solomon codewords, is ever created: exactly the code as encoded.
- * The content is never decoded. Immutable.
+ * are all valid Reed–Solomon codewords, is ever created: the code as encoded (up to
+ * the remainder bits, which scanners ignore). The content is never decoded. Immutable.
  */
 class QrModuleGrid internal constructor(val size: Int, modules: BooleanArray) {
     private val modules: BooleanArray = modules.copyOf()

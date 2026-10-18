@@ -239,8 +239,9 @@ class QrGridReaderTest {
     @Test(timeout = 120_000)
     fun harshRendersAreReadCorrectlyOrRefusedNeverWrongly() {
         // 2 to 5 px per module, blur, noise, JPEG at 0.6 and 0.9, and a faint line of
-        // 18 to 24 % one pixel outside the bottom or right edge: before the Reed–Solomon
-        // check, dozens of such renders were read with wrong modules.
+        // 18 to 24 % one pixel outside the bottom or right edge: without the Reed–Solomon
+        // check, 3 of these were read with wrong modules (a review's larger sweep found
+        // dozens). The remainder bits, which scanners ignore, may differ.
         val wrong = ArrayList<String>()
         var read = 0
         var total = 0
@@ -255,7 +256,7 @@ class QrGridReaderTest {
                 total++
                 if (result == null) continue
                 read++
-                if (!result.toBooleanArray().contentEquals(grid)) wrong += "$size modules at ${tenths / 10.0} px, blur $blur, noise $noise, quality $quality, line $line"
+                if (!TestQrCodes.sameCode(result.toBooleanArray(), grid, size)) wrong += "$size modules at ${tenths / 10.0} px, blur $blur, noise $noise, quality $quality, line $line"
             }
         }
         assertEquals(emptyList<String>(), wrong)
