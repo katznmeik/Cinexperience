@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.core.ticket.pdf
 
+import io.github.katznmeik.cinexperience.core.ticket.TicketPdfError
 import java.io.ByteArrayOutputStream
 
 /** A token of PDF syntax (ISO 32000-1, 7.2 and 7.3). */
@@ -17,7 +18,8 @@ internal sealed interface PdfToken {
 /**
  * Splits `data[start until end]` into tokens. It never reads outside that range and
  * always moves forward, so it ends on any input; malformed syntax is
- * [io.github.katznmeik.cinexperience.core.ticket.TicketPdfError.DAMAGED].
+ * [TicketPdfError.DAMAGED], a string of more than [MAX_STRING_BYTES] is
+ * [TicketPdfError.UNSUPPORTED].
  */
 internal class PdfLexer(private val data: ByteArray, start: Int, val end: Int = data.size) {
     init {
@@ -137,6 +139,7 @@ internal class PdfLexer(private val data: ByteArray, start: Int, val end: Int = 
         val out = ByteArrayOutputStream()
         var depth = 1
         while (position < end) {
+            checkLength(out)
             when (val c = byteAt(position++)) {
                 '\\'.code -> {
                     if (position >= end) break
@@ -182,10 +185,12 @@ internal class PdfLexer(private val data: ByteArray, start: Int, val end: Int = 
         val out = ByteArrayOutputStream()
         var high = -1
         while (position < end) {
+            checkLength(out)
             val c = byteAt(position++)
             when {
                 c == '>'.code -> {
                     if (high >= 0) out.write(high * 16) // odd number of digits: the last one is followed by 0
+                    checkLength(out)
                     return PdfToken.Text(out.toByteArray())
                 }
                 isWhitespace(c) -> Unit
@@ -202,6 +207,10 @@ internal class PdfLexer(private val data: ByteArray, start: Int, val end: Int = 
             }
         }
         damaged("Unterminated hex string")
+    }
+
+    private fun checkLength(out: ByteArrayOutputStream) {
+        if (out.size() > MAX_STRING_BYTES) refuse(TicketPdfError.UNSUPPORTED, "String of more than $MAX_STRING_BYTES bytes")
     }
 
     private fun number(text: String): PdfToken.Number? {
@@ -232,6 +241,9 @@ internal class PdfLexer(private val data: ByteArray, start: Int, val end: Int = 
 
         /** PDF's own limit for names (ISO 32000-1, Annex C). */
         private const val MAX_NAME_LENGTH = 127
+
+        /** Bytes of one literal or hex string, far more than any string of a ticket (a glyph code, a date, a link). */
+        const val MAX_STRING_BYTES = 64 * 1024
 
         fun isWhitespace(c: Int): Boolean = c == 0x00 || c == 0x09 || c == LF || c == 0x0C || c == CR || c == 0x20
 

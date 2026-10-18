@@ -38,7 +38,6 @@ internal class PdfDocument private constructor(
 
     private val cache = HashMap<Int, PdfObject>()
     private val loading = HashSet<Int>()
-    private val decoded = HashMap<Int, ByteArray>()
     private var unpackedBytes = 0L
 
     /** [obj] with references followed. A missing object is [PdfNull] (ISO 32000-1, 7.3.10). */
@@ -80,10 +79,11 @@ internal class PdfDocument private constructor(
      * The stream's data unpacked: unfiltered or FlateDecode only (without predictors);
      * anything else, and data in an external file (`/F`), is [TicketPdfError.UNSUPPORTED].
      * Each stream may unpack to at most [TicketPdfLimits.MAX_STREAM_BYTES], all together
-     * to [TicketPdfLimits.MAX_TOTAL_STREAM_BYTES].
+     * to [TicketPdfLimits.MAX_TOTAL_STREAM_BYTES]. Nothing is kept: each call unpacks
+     * again and counts again (a content stream listed twice, a CMap only once per font
+     * cache), so the unpacked data can be dropped as soon as the caller is done with it.
      */
     fun decodedData(stream: PdfStream): ByteArray {
-        decoded[stream.objectNumber]?.let { return it }
         val streamDictionary = stream.dictionary
         if (EXTERNAL_KEYS.any(streamDictionary::containsKey)) refuse(TicketPdfError.UNSUPPORTED, "Stream data in an external file")
         val filters = filters(stream)
@@ -105,7 +105,6 @@ internal class PdfDocument private constructor(
         if (result.size > TicketPdfLimits.MAX_STREAM_BYTES) refuse(TicketPdfError.STREAM_TOO_LARGE, "Stream too large")
         unpackedBytes += result.size
         if (unpackedBytes > TicketPdfLimits.MAX_TOTAL_STREAM_BYTES) refuse(TicketPdfError.STREAM_TOO_LARGE, "Streams unpack to too much data")
-        decoded[stream.objectNumber] = result
         return result
     }
 

@@ -140,8 +140,9 @@ class ResourceBudgetTest {
         val builder = PdfBuilder()
         val toUnicode = builder.addStream("", "begincmap 1 beginbfchar <0001> <0041> endbfchar endcmap".latin1(), directLength = true)
         val font = "<< /Type /Font /Subtype /Type0 /BaseFont /ArialMT /Encoding /Identity-H /ToUnicode $toUnicode 0 R >>"
-        val unmapped = "FFFF".repeat(TicketPdfLimits.MAX_GLYPHS + 1)
-        val content = builder.addFlateStream("", "BT /F1 10 Tf 0 0 Td <$unmapped> Tj ET".latin1())
+        // In strings of 25,000 codes, below the lexer's limit for one string.
+        val strings = (0..TicketPdfLimits.MAX_GLYPHS / 25_000).joinToString(" ") { "<" + "FFFF".repeat(25_000) + "> Tj" }
+        val content = builder.addFlateStream("", "BT /F1 10 Tf 0 0 Td $strings ET".latin1())
 
         assertEquals(TicketPdfError.TOO_MUCH_TEXT, refusal(page(builder, "$content 0 R", "<< /Font << /F1 $font >> >>")))
     }

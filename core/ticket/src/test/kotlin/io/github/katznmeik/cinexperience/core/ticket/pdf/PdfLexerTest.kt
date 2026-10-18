@@ -140,6 +140,19 @@ class PdfLexerTest {
     }
 
     @Test
+    fun stringsOfMoreThan64KilobytesAreUnsupported() {
+        val limit = PdfLexer.MAX_STRING_BYTES
+        assertEquals(limit, (tokens("(" + "x".repeat(limit) + ")").single() as PdfToken.Text).bytes.size)
+        assertEquals(limit, (tokens("<" + "41".repeat(limit) + ">").single() as PdfToken.Text).bytes.size)
+
+        assertEquals(TicketPdfError.UNSUPPORTED, error { tokens("(" + "x".repeat(limit + 1) + ")") })
+        assertEquals(TicketPdfError.UNSUPPORTED, error { tokens("(" + "\\101".repeat(limit + 1) + ")") })
+        assertEquals(TicketPdfError.UNSUPPORTED, error { tokens("<" + "41".repeat(limit) + "4>") })
+        // Also without its end: the cap comes first.
+        assertEquals(TicketPdfError.UNSUPPORTED, error { tokens("<" + "41 ".repeat(limit + 1)) })
+    }
+
+    @Test
     fun skipsInlineImageData() {
         // The first "EI" follows a data byte, not whitespace: still image data.
         val lexer = PdfLexer("BI /W 2 /H 2 ID \u00ffEI(x\nEI Q".toByteArray(Charsets.ISO_8859_1), 0)

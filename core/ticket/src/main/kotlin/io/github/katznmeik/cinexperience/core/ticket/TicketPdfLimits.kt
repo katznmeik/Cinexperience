@@ -27,9 +27,9 @@ object TicketPdfLimits {
     const val MAX_STREAM_BYTES: Int = 2 * 1024 * 1024
 
     /**
-     * All unpacked streams together, and separately all content interpreted on all
-     * pages together, a stream listed several times counting each time
-     * ([TicketPdfError.STREAM_TOO_LARGE]).
+     * All streams unpacked together (each time one is unpacked: a content stream
+     * listed several times is unpacked and counts each time), and separately all
+     * content interpreted on all pages together ([TicketPdfError.STREAM_TOO_LARGE]).
      */
     const val MAX_TOTAL_STREAM_BYTES: Int = 8 * 1024 * 1024
 
