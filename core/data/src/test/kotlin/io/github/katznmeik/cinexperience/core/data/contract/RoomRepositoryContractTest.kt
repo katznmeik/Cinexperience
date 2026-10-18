@@ -7,6 +7,7 @@ import io.github.katznmeik.cinexperience.core.data.db.toEntity
 import io.github.katznmeik.cinexperience.core.data.repository.RoomCinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomHallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomSeatOverrideRepository
+import io.github.katznmeik.cinexperience.core.data.repository.RoomTicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomVisitRepository
 import io.github.katznmeik.cinexperience.core.model.SeatOverride
 import io.github.katznmeik.cinexperience.core.model.Visit
@@ -30,6 +31,7 @@ internal class RoomRepositoryContractTest : RepositoryContract() {
             halls = RoomHallRepository(db, Dispatchers.Default),
             visits = RoomVisitRepository(db, Dispatchers.Default),
             overrides = RoomSeatOverrideRepository(db),
+            tickets = RoomTicketRepository(db, Dispatchers.Default),
         )
     }
 

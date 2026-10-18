@@ -66,7 +66,8 @@ private fun String?.cleanText(max: Int, what: String): String? = this?.trim()?.t
     require(TextLimits.fits(it, max)) { "$what is too long (at most $max code points)" }
 }
 
-private fun <T> Flow<T>.prepared(awaitReady: AwaitReady, dispatcher: CoroutineDispatcher): Flow<T> {
+/** Waits for seeding before the first emission, emits only changes and runs on [dispatcher]. */
+internal fun <T> Flow<T>.prepared(awaitReady: AwaitReady, dispatcher: CoroutineDispatcher): Flow<T> {
     val source = this
     return flow {
         awaitReady()
@@ -318,6 +319,35 @@ internal class RoomHallRepository(
     }
 }
 
+/**
+ * The rules of [VisitRepository.saveVisit], for a caller that already holds a
+ * transaction (it also saves the ticket, see RoomTicketRepository).
+ */
+internal suspend fun CinexDatabase.saveVisitInTransaction(visit: Visit): SaveVisitResult {
+    val dao = visitDao()
+    val stored = if (visit.id == 0L) null else requireNotNull(dao.get(visit.id)) { "No visit ${visit.id}" }
+    val hall = requireNotNull(hallDao().get(visit.hallId)) { "No hall ${visit.hallId}" }
+    // An unchanged seat in an unchanged hall is kept even if it was since removed
+    // from the layout; any other seat must exist in the hall's current layout.
+    val unchangedSeat = stored != null && stored.hallId == visit.hallId && stored.seatId == visit.seatId?.value
+    val seatValid = visit.seatId == null || unchangedSeat ||
+        hall.layoutJson?.let(LayoutJson::decodeOrNull)?.seatIds?.contains(visit.seatId) == true
+    val entity = visit.copy(
+        filmTitle = visit.filmTitle.cleanText(MAX_LONG_TEXT_LENGTH, "Film title"),
+        note = visit.note.cleanText(MAX_LONG_TEXT_LENGTH, "Note"),
+        photoPath = visit.photoPath.cleanText(MAX_NAME_LENGTH, "Photo path"),
+        seatId = if (seatValid) visit.seatId else null,
+    ).toEntity()
+    val id = if (stored == null) {
+        dao.insert(entity)
+    } else {
+        // An UPDATE, never a replace: a replace would delete the visit's ticket (ON DELETE CASCADE).
+        dao.update(entity)
+        visit.id
+    }
+    return SaveVisitResult(visitId = id, seatCleared = !seatValid)
+}
+
 internal class RoomVisitRepository(
     private val db: CinexDatabase,
     private val dispatcher: CoroutineDispatcher,
@@ -346,6 +376,7 @@ internal class RoomVisitRepository(
                         cinemaName = row.cinemaName,
                         hallName = row.hallName,
                         seatLabel = visit.seatId?.let { labels?.labelOf(it) },
+                        hasTicket = row.hasTicket,
                     )
                 }
             }
@@ -356,28 +387,7 @@ internal class RoomVisitRepository(
 
     override suspend fun getVisit(visitId: Long): Visit? = dao.get(visitId)?.toModel()
 
-    override suspend fun saveVisit(visit: Visit): SaveVisitResult = db.withTransaction {
-        val stored = if (visit.id == 0L) null else requireNotNull(dao.get(visit.id)) { "No visit ${visit.id}" }
-        val hall = requireNotNull(db.hallDao().get(visit.hallId)) { "No hall ${visit.hallId}" }
-        // An unchanged seat in an unchanged hall is kept even if it was since removed
-        // from the layout; any other seat must exist in the hall's current layout.
-        val unchangedSeat = stored != null && stored.hallId == visit.hallId && stored.seatId == visit.seatId?.value
-        val seatValid = visit.seatId == null || unchangedSeat ||
-            hall.layoutJson?.let(LayoutJson::decodeOrNull)?.seatIds?.contains(visit.seatId) == true
-        val entity = visit.copy(
-            filmTitle = visit.filmTitle.cleanText(MAX_LONG_TEXT_LENGTH, "Film title"),
-            note = visit.note.cleanText(MAX_LONG_TEXT_LENGTH, "Note"),
-            photoPath = visit.photoPath.cleanText(MAX_NAME_LENGTH, "Photo path"),
-            seatId = if (seatValid) visit.seatId else null,
-        ).toEntity()
-        val id = if (stored == null) {
-            dao.insert(entity)
-        } else {
-            dao.update(entity)
-            visit.id
-        }
-        SaveVisitResult(visitId = id, seatCleared = !seatValid)
-    }
+    override suspend fun saveVisit(visit: Visit): SaveVisitResult = db.withTransaction { db.saveVisitInTransaction(visit) }
 
     override suspend fun deleteVisit(visitId: Long): Boolean = dao.delete(visitId) > 0
 }

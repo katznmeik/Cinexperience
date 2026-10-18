@@ -5,22 +5,27 @@ import io.github.katznmeik.cinexperience.core.data.db.HallEntity
 import io.github.katznmeik.cinexperience.core.data.db.MetadataEntity
 import io.github.katznmeik.cinexperience.core.data.db.SeatOverrideEntity
 import io.github.katznmeik.cinexperience.core.data.db.SeedSnapshotEntity
+import io.github.katznmeik.cinexperience.core.data.db.StartTimes
+import io.github.katznmeik.cinexperience.core.data.db.TicketEntity
 import io.github.katznmeik.cinexperience.core.data.db.VisitEntity
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
+import io.github.katznmeik.cinexperience.core.data.json.TicketSeatsJson
+import io.github.katznmeik.cinexperience.core.model.TicketSeat
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.time.LocalDate
 
 /*
- * Backup file format (spec §8), version 2. A zip file with:
+ * Backup file format (spec §8), version 3. A zip file with:
  *
  *   manifest.json   what the backup is (BackupManifest), e.g.
- *                   { "format": "cinexperience-backup", "backupVersion": 2,
+ *                   { "format": "cinexperience-backup", "backupVersion": 3,
  *                     "appVersion": "0.1.0", "exportedAt": "2026-10-03T12:05:00Z",
  *                     "counts": { "cinemas": 13, "halls": 36, "visits": 27,
  *                                 "overrides": 4, "photos": 9, "referenceImages": 2 } }
@@ -40,15 +45,17 @@ import java.time.LocalDate
  * - Layouts are stored verbatim as the JSON string the database holds (LayoutJson).
  *
  * Versions: 1 (v1.0); 2 adds `isFavourite` to cinemas and `screenOffset` to
- * halls. New DTO fields have no default values, so the strict parser still
- * requires them; older files get them from their BackupMigrations step.
+ * halls; 3 (v1.4) adds `startTime` to visits and the `tickets` list (booking
+ * number and seats; a ticket's QR modules are never in a backup, spec §8).
+ * New DTO fields have no default values, so the strict parser still requires
+ * them; older files get them from their BackupMigrations step.
  */
 
 internal object BackupFormat {
     const val FORMAT_ID: String = "cinexperience-backup"
 
     /** The backup format this app writes and the newest it reads. */
-    const val BACKUP_VERSION: Int = 2
+    const val BACKUP_VERSION: Int = 3
 
     const val MANIFEST: String = "manifest.json"
     const val DATA: String = "data.json"
@@ -142,6 +149,8 @@ internal data class BackupData(
     val cinemas: List<BackupCinema>,
     val halls: List<BackupHall>,
     val visits: List<BackupVisit>,
+    /** Since version 3: the visits' tickets, without their QR modules (spec §8). */
+    val tickets: List<BackupTicket>,
     val seatOverrides: List<BackupSeatOverride>,
     /** What the seed supplied last time (spec §9), so seeding after an import behaves as before. */
     val seedSnapshots: List<BackupSeedSnapshot>,
@@ -211,6 +220,8 @@ internal data class BackupVisit(
     val hallId: Long,
     /** ISO date, e.g. `2026-10-03`. */
     val date: String,
+    /** Since version 3: the showing's start, Berlin clock time, `"HH:mm"` (e.g. `"20:15"`), or `null`. */
+    val startTime: String?,
     val filmTitle: String?,
     val seatId: Int?,
     /** ScreeningFormat.storageKey */
@@ -244,6 +255,26 @@ internal data class BackupCinemaRatings(
     val all: List<Int?> get() = listOf(atmosphere, barSnacks, popcorn, seatComfort)
 }
 
+/**
+ * Since version 3: a visit's ticket (spec §4.7) without its QR modules, which are
+ * never backed up (spec §8): importing the ticket PDF again brings them back.
+ */
+@Serializable
+internal data class BackupTicket(
+    val visitId: Long,
+    /** BookingNumber.value, e.g. `"TEST123"`. */
+    val bookingNumber: String,
+    /** Every seat of the booking, in its order. */
+    val seats: List<BackupTicketSeat>,
+)
+
+/** One seat of a [BackupTicket], e.g. `{ "row": "7", "seat": "10" }`; `row` is `null` for a row without a name. */
+@Serializable
+internal data class BackupTicketSeat(
+    val row: String?,
+    val seat: String,
+)
+
 @Serializable
 internal data class BackupSeatOverride(
     val hallId: Long,
@@ -274,7 +305,7 @@ internal data class BackupMetadata(
  * rejects anything else that is wrong, exactly as for a current backup.
  */
 internal object BackupMigrations {
-    private val steps: List<(JsonObject) -> JsonObject> = listOf(::version1To2)
+    private val steps: List<(JsonObject) -> JsonObject> = listOf(::version1To2, ::version2To3)
 
     /**
      * 1 → 2: every cinema gets `"isFavourite": false` (not a favourite) and every
@@ -285,6 +316,21 @@ internal object BackupMigrations {
     private fun version1To2(data: JsonObject): JsonObject = data
         .withFieldInEveryRow("cinemas", "isFavourite", JsonPrimitive(false))
         .withFieldInEveryRow("halls", "screenOffset", JsonPrimitive(0f))
+
+    /**
+     * 2 → 3: every visit gets `"startTime": null` (no start time) and the data an
+     * empty `"tickets"` list, like the database migration 2 → 3. A version 2 file
+     * that already has one of them is invalid and is rejected.
+     */
+    private fun version2To3(data: JsonObject): JsonObject = data
+        .withFieldInEveryRow("visits", "startTime", JsonNull)
+        .withField("tickets", JsonArray(emptyList()))
+
+    /** Adds [field] = [value] to the data. @throws IllegalArgumentException if it has [field] already. */
+    private fun JsonObject.withField(field: String, value: JsonElement): JsonObject {
+        require(field !in this) { "Unexpected field '$field' in an older backup" }
+        return JsonObject(this + (field to value))
+    }
 
     /**
      * Adds [field] = [value] to every object in the list [list]. A missing list or a
@@ -360,6 +406,7 @@ internal fun VisitEntity.toBackup() = BackupVisit(
     id = id,
     hallId = hallId,
     date = date.toString(),
+    startTime = startTime?.let(StartTimes::format),
     filmTitle = filmTitle,
     seatId = seatId,
     screeningFormat = screeningFormat,
@@ -382,11 +429,15 @@ internal fun VisitEntity.toBackup() = BackupVisit(
     photoPath = photoPath,
 )
 
-/** @throws java.time.format.DateTimeParseException for a bad date (validated before). */
+/**
+ * @throws java.time.format.DateTimeParseException for a bad date, IllegalArgumentException
+ *   for a bad start time (both validated before).
+ */
 internal fun BackupVisit.toEntity() = VisitEntity(
     id = id,
     hallId = hallId,
     date = LocalDate.parse(date),
+    startTime = startTime?.let { requireNotNull(StartTimes.parseOrNull(it)) { "Invalid start time" } },
     filmTitle = filmTitle,
     seatId = seatId,
     screeningFormat = screeningFormat,
@@ -403,6 +454,27 @@ internal fun BackupVisit.toEntity() = VisitEntity(
     cinemaRatingSeatComfort = cinemaRatings.seatComfort,
     note = note,
     photoPath = photoPath,
+)
+
+/**
+ * The ticket without its QR modules (spec §8).
+ * @throws IllegalArgumentException if the stored seats can't be read (only damaged data).
+ */
+internal fun TicketEntity.toBackup() = BackupTicket(
+    visitId = visitId,
+    bookingNumber = bookingNumber,
+    seats = TicketSeatsJson.decode(seats).map { BackupTicketSeat(it.row, it.seat) },
+)
+
+/**
+ * A restored ticket has no QR modules (they are never backed up, spec §8).
+ * @throws IllegalArgumentException for invalid seats (validated before).
+ */
+internal fun BackupTicket.toEntity() = TicketEntity(
+    visitId = visitId,
+    bookingNumber = bookingNumber,
+    seats = TicketSeatsJson.encode(seats.map { TicketSeat(it.row, it.seat) }),
+    qrModules = null,
 )
 
 internal fun SeatOverrideEntity.toBackup() = BackupSeatOverride(hallId, seatId, colour, isFavourite)

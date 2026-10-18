@@ -6,6 +6,7 @@ import io.github.katznmeik.cinexperience.core.data.db.CinexDatabase
 import io.github.katznmeik.cinexperience.core.data.repository.RoomCinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomHallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomSeatOverrideRepository
+import io.github.katznmeik.cinexperience.core.data.repository.RoomTicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RoomVisitRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
@@ -32,6 +33,7 @@ internal abstract class DatabaseTest {
     protected lateinit var halls: RoomHallRepository
     protected lateinit var visits: RoomVisitRepository
     protected lateinit var overrides: RoomSeatOverrideRepository
+    protected lateinit var tickets: RoomTicketRepository
 
     @Before
     fun openDatabase() {
@@ -41,6 +43,7 @@ internal abstract class DatabaseTest {
         halls = RoomHallRepository(db, Dispatchers.Default)
         visits = RoomVisitRepository(db, Dispatchers.Default)
         overrides = RoomSeatOverrideRepository(db)
+        tickets = RoomTicketRepository(db, Dispatchers.Default)
     }
 
     @After

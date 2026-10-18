@@ -37,6 +37,7 @@ internal class BackupLayoutAndScreenLimitsTest {
         cinemas = listOf(BackupCinema(1, "Kino", null, null, isPreloaded = false, seedKey = null, isFavourite = false)),
         halls = listOf(hall),
         visits = emptyList(),
+        tickets = emptyList(),
         seatOverrides = emptyList(),
         seedSnapshots = emptyList(),
         metadata = emptyList(),

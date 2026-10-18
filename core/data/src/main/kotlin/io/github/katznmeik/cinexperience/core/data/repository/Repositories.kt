@@ -1,15 +1,19 @@
 package io.github.katznmeik.cinexperience.core.data.repository
 
+import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.CinemaSummary
 import io.github.katznmeik.cinexperience.core.model.DataLimits
 import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallDetail
+import io.github.katznmeik.cinexperience.core.model.QrModules
 import io.github.katznmeik.cinexperience.core.model.SeatColour
 import io.github.katznmeik.cinexperience.core.model.SeatId
+import io.github.katznmeik.cinexperience.core.model.Ticket
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
 import kotlinx.coroutines.flow.Flow
+import java.time.Instant
 
 /*
  * Repository API for the feature modules. All flows emit domain models from
@@ -151,11 +155,75 @@ interface VisitRepository {
      * hall's current layout; otherwise (e.g. the visit was moved to another hall,
      * or the hall has no layout) the seat is cleared and [SaveVisitResult.seatCleared]
      * is true so the UI can tell the user. An unchanged seat of an unchanged hall is
-     * kept even if it was removed from the layout since.
+     * kept even if it was removed from the layout since. The visit's ticket (if
+     * any) stays as it is; [TicketRepository.saveVisitWithTicket] saves both.
      */
     suspend fun saveVisit(visit: Visit): SaveVisitResult
 
+    /** Deletes the visit with its ticket; false if it doesn't exist. */
     suspend fun deleteVisit(visitId: Long): Boolean
+}
+
+/** Outcome of [TicketRepository.saveVisitWithTicket]. */
+sealed interface SaveTicketResult {
+    /** The visit and its ticket were saved; [seatCleared] as in [SaveVisitResult]. */
+    data class Saved(val visitId: Long, val seatCleared: Boolean) : SaveTicketResult
+
+    /**
+     * Nothing was saved: the booking number belongs to the ticket of another visit,
+     * [visitId] (spec §6.10 "Imported before": open that visit instead).
+     */
+    data class BookingNumberInUse(val visitId: Long) : SaveTicketResult
+}
+
+/**
+ * Tickets (spec §4.7): at most one per visit, deleted with the visit, booking
+ * numbers unique across tickets. Every value is checked by the model types
+ * ([Ticket], [BookingNumber], [io.github.katznmeik.cinexperience.core.model.TicketSeat],
+ * [QrModules]), so whatever is saved can be exported. Backups carry tickets
+ * without their QR modules (spec §8).
+ */
+interface TicketRepository {
+    /** The visit's ticket; `null` if it has none (or the visit doesn't exist). */
+    fun observeTicket(visitId: Long): Flow<Ticket?>
+
+    suspend fun getTicket(visitId: Long): Ticket?
+
+    /** The visit whose ticket has [bookingNumber], `null` if none has (spec §6.10 "Imported before"). */
+    suspend fun findVisitId(bookingNumber: BookingNumber): Long?
+
+    /**
+     * Saves [visit] with the same rules as [VisitRepository.saveVisit] (insert for
+     * [Visit.id] == 0, otherwise update; the seat check) and, in the same
+     * transaction, [ticket] as its ticket, replacing a ticket it had (also its QR
+     * modules: a ticket without them removes them). [Ticket.visitId] must be
+     * [Visit.id] (`0` for a new visit; IllegalArgumentException otherwise); the
+     * stored ticket gets the visit's id.
+     *
+     * A booking number that already belongs to the ticket of **another** visit is
+     * refused: nothing is saved, and [SaveTicketResult.BookingNumberInUse] names
+     * that visit. Saving a visit again with its own booking number is fine.
+     */
+    suspend fun saveVisitWithTicket(visit: Visit, ticket: Ticket): SaveTicketResult
+
+    /** Removes the visit's ticket (spec §6.4 "Remove ticket"); false if it had none. */
+    suspend fun removeTicket(visitId: Long): Boolean
+
+    /**
+     * Stores [qrModules] for the visit's ticket again, e.g. when the ticket is
+     * imported again after they were removed (spec §6.10); false if the visit has
+     * no ticket. Modules that are already expired are stored too and go with the
+     * next [removeExpiredQrModules].
+     */
+    suspend fun storeQrModules(visitId: Long, qrModules: QrModules): Boolean
+
+    /**
+     * Removes the QR modules of every ticket whose showing ended long enough ago
+     * ([io.github.katznmeik.cinexperience.core.model.ShowingTime.qrModulesExpired]
+     * at [now]: 7 days after the start, or after the end of the visit's date
+     * without a start time) and returns how many were removed. The tickets stay.
+     */
+    suspend fun removeExpiredQrModules(now: Instant): Int
 }
 
 /**

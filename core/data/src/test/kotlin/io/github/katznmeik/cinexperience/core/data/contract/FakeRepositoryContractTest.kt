@@ -12,7 +12,7 @@ internal class FakeRepositoryContractTest : RepositoryContract() {
 
     private var nextVisitId = 900_000L
 
-    override fun createRepositories(): Repositories = Repositories(fake, fake, fake, fake)
+    override fun createRepositories(): Repositories = Repositories(fake, fake, fake, fake, fake)
 
     override suspend fun insertUnchecked(visit: Visit) {
         fake.store.update { it.copy(visits = it.visits + visit.copy(id = nextVisitId++)) }
