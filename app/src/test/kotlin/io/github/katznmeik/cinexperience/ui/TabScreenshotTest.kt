@@ -55,6 +55,7 @@ internal class FakeAppContainer(
     override val hallRepository = repository
     override val visitRepository = repository
     override val seatOverrideRepository = repository
+    override val ticketRepository = repository
     override val rankingsRepository = CinemaRankingsRepository(repository, repository)
     override val referenceImageStore = FakeReferenceImageStore()
     override val visitPhotoStore = FakeVisitPhotoStore()

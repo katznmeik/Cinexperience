@@ -11,6 +11,7 @@ import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.RankingsRepository
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
+import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.program.DefaultProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
@@ -42,6 +43,9 @@ interface AppContainer {
     val visitRepository: VisitRepository
     val seatOverrideRepository: SeatOverrideRepository
 
+    /** The visits' tickets (spec §4.7): the ticket screen, the Next visit card and the visit form's Ticket section. */
+    val ticketRepository: TicketRepository
+
     /** Halls and cinemas with their scores for the Rankings tab, derived from [cinemaRepository]. */
     val rankingsRepository: RankingsRepository
     val referenceImageStore: ReferenceImageStore
@@ -60,8 +64,9 @@ interface AppContainer {
     val programFilterStore: ProgramFilterStore
 
     /**
-     * "Now" for the Program tab, the film page, a cinema's "Now showing" and the
-     * QR codes' expiry at start: the system clock.
+     * "Now" for the Program tab, the film page, a cinema's "Now showing", the Next
+     * visit card, the upcoming visits, the ticket screen and the QR codes' expiry at
+     * start: the system clock.
      */
     val clock: Clock get() = Clock.systemDefaultZone()
 
@@ -90,6 +95,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val hallRepository: HallRepository get() = data.hallRepository
     override val visitRepository: VisitRepository get() = data.visitRepository
     override val seatOverrideRepository: SeatOverrideRepository get() = data.seatOverrideRepository
+    override val ticketRepository: TicketRepository get() = data.ticketRepository
     override val referenceImageStore: ReferenceImageStore get() = data.referenceImageStore
     override val visitPhotoStore: VisitPhotoStore get() = data.visitPhotoStore
     override val backupRepository: BackupRepository get() = data.backupRepository
