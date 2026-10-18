@@ -35,6 +35,10 @@ gradlePlugin {
             id = libs.plugins.cinex.android.room.get().pluginId
             implementationClass = "AndroidRoomConventionPlugin"
         }
+        register("androidRobolectric") {
+            id = libs.plugins.cinex.android.robolectric.get().pluginId
+            implementationClass = "AndroidRobolectricConventionPlugin"
+        }
         register("androidRoborazzi") {
             id = libs.plugins.cinex.android.roborazzi.get().pluginId
             implementationClass = "AndroidRoborazziConventionPlugin"
