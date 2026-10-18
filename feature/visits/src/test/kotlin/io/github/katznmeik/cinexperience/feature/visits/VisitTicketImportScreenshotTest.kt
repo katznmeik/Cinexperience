@@ -20,6 +20,7 @@ import io.github.katznmeik.cinexperience.core.testing.SampleData
 import io.github.katznmeik.cinexperience.core.testing.SampleProgram
 import io.github.katznmeik.cinexperience.core.testing.SampleTickets
 import io.github.katznmeik.cinexperience.core.testing.ScreenshotSurface
+import io.github.katznmeik.cinexperience.feature.visits.edit.DRAFT_NO_SEATS
 import io.github.katznmeik.cinexperience.feature.visits.edit.DRAFT_QR_KEPT
 import io.github.katznmeik.cinexperience.feature.visits.edit.IMPORT_NOTES_TITLE
 import io.github.katznmeik.cinexperience.feature.visits.edit.SeatPickerState
@@ -68,6 +69,16 @@ class VisitTicketImportScreenshotTest {
         composeRule.onNodeWithText("Show ticket").assertDoesNotExist()
         composeRule.onNodeWithText("Remove ticket").assertExists()
         composeRule.onNodeWithText(DRAFT_QR_KEPT).assertExists()
+    }
+
+    /** The seats couldn't be read: the ticket is saved without them (spec §4.7). */
+    @Test
+    fun seatsNotRead() {
+        val state = VisitImportStates.addWithTicket(seats = emptyList())
+        capture("add_visit_ticket_no_seats") { VisitEditScreen(state, photo = null, actions = object : VisitEditActions {}) }
+        composeRule.onNodeWithText(DRAFT_NO_SEATS).assertExists()
+        composeRule.onNodeWithText("Seats of the booking").assertDoesNotExist()
+        composeRule.onNodeWithText("Seat of the booking").assertDoesNotExist()
     }
 
     @Test
@@ -127,6 +138,12 @@ internal object VisitImportStates {
     /** A ticket for a hall the app doesn't have: the cinema is set, the hall and seat stay empty, the notes say why. */
     fun addWithNotes(): VisitEditUiState = viewModel(
         hallId = null,
-        prefill(SampleTickets.seats, notes = listOf("Hall on the ticket: \u2068Saal 9\u2069 (not in the app)"), seatId = false),
+        prefill(SampleTickets.seats, notes = NOTES, seatId = false),
     ).uiState.value
+
+    /** The import's notes for that ticket (as TicketMatching writes them). */
+    val NOTES = listOf(
+        "Hall on the ticket: \u2068Saal 9\u2069 (not in the app)",
+        "Seats on the ticket: \u2068Row 7 · Seat 10\u2069, \u2068Row 7 · Seat 11\u2069 (not selected: choose the hall first)",
+    )
 }

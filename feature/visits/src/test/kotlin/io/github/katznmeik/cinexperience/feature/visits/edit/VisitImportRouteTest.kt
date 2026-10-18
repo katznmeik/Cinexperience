@@ -70,7 +70,18 @@ class VisitImportRouteTest {
     }
 
     @Test
+    fun aDateOutsideTheDatePickersYearsIsIgnored() {
+        val valid = AddVisitRoute.of(504L, prefill)
+        assertNull(valid.copy(date = "2101-01-01").prefill()?.date)
+        assertNull(valid.copy(date = "1899-12-31").prefill()?.date)
+        assertNull(valid.copy(date = "+999999999-12-31").prefill()?.date)
+        assertEquals(LocalDate.of(2100, 12, 31), valid.copy(date = "2100-12-31").prefill()?.date)
+        assertEquals(LocalDate.of(1900, 1, 1), valid.copy(date = "1900-01-01").prefill()?.date)
+    }
+
+    @Test
     fun theVisitRouteSaysImportedBeforeOnlyWhenAsked() {
         assertFalse(EditVisitRoute(5).importedBefore)
+        assertFalse(EditVisitRoute(5, importedBefore = true).qrCodeNotStored)
     }
 }

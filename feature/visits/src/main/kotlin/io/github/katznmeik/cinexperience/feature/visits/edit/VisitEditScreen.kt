@@ -386,7 +386,7 @@ private fun FormContent(state: VisitEditUiState, photo: ImageBitmap?, actions: V
         val draft = state.ticketDraft
         when {
             state.ticket != null ->
-                TicketSection(state.ticket, removing = state.isRemovingTicket, enabled = ticketActionsEnabled, actions = actions)
+                TicketSection(state.ticket, state.seatLabel, removing = state.isRemovingTicket, enabled = ticketActionsEnabled, actions = actions)
             draft != null -> TicketDraftSection(draft, state.draftQrCode, enabled = ticketActionsEnabled, actions = actions)
         }
 
@@ -551,7 +551,7 @@ private fun SeatCard(state: VisitEditUiState, actions: VisitEditActions) {
  */
 @Composable
 private fun VisitDatePicker(date: LocalDate, onDate: (LocalDate) -> Unit, onDismiss: () -> Unit) {
-    val pickerState = rememberDatePickerState(initialSelectedDateMillis = date.toPickerMillis())
+    val pickerState = rememberDatePickerState(initialSelectedDateMillis = date.toPickerMillis(), yearRange = VisitDates.YEARS)
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {

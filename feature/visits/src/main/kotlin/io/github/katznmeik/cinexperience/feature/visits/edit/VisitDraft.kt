@@ -75,10 +75,11 @@ internal data class FormDraft(
     val photoPath: String?,
     val startTime: String? = null,
 ) {
-    fun toForm(): VisitForm = VisitForm(
+    /** [fallbackDate] replaces a [date] that can't be read or that the form's date picker doesn't offer ([VisitDates]). */
+    fun toForm(fallbackDate: LocalDate): VisitForm = VisitForm(
         hallId = hallId,
         cinemaId = cinemaId,
-        date = LocalDate.parse(date),
+        date = dateOrNull(date) ?: fallbackDate,
         filmTitle = filmTitle,
         seatId = seatId?.takeIf { it > 0 }?.let(::SeatId),
         format = format?.let { key -> ScreeningFormat.entries.firstOrNull { it.storageKey == key } },
@@ -107,6 +108,12 @@ internal data class FormDraft(
             photoPath = form.photoPath,
             startTime = form.startTime?.toString(), // "HH:mm": a visit's start time is to the minute
         )
+
+        private fun dateOrNull(text: String): LocalDate? = try {
+            LocalDate.parse(text).takeIf(VisitDates::isAllowed)
+        } catch (e: DateTimeParseException) {
+            null
+        }
 
         /** [text] as a start time, `null` if it isn't a valid one (the draft is restored without it). */
         private fun startTimeOrNull(text: String): LocalTime? = try {

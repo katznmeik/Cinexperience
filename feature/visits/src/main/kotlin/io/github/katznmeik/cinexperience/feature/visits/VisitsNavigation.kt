@@ -24,6 +24,7 @@ import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
 import io.github.katznmeik.cinexperience.core.ui.navigation.dropUnlessResumedWith
 import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
+import io.github.katznmeik.cinexperience.feature.visits.edit.VisitDates
 import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditEntry
 import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditMode
 import io.github.katznmeik.cinexperience.feature.visits.edit.VisitEditViewModel
@@ -46,8 +47,9 @@ import java.util.Locale
  * "HH:mm", [seatId] the owner's seat in [hallId]'s layout. An imported ticket is
  * [bookingNumber] with its seats ([ticketRows] and [ticketSeats], one entry each per
  * seat, a row without a name as [LayoutRow.NO_NAME]) and [qrModules]
- * ([QrModules.encode]); [ticketNotes] are the import's notes. Unreadable values are
- * ignored (a ticket without a valid booking number is left out).
+ * ([QrModules.encode]); [ticketNotes] are the import's notes. Unreadable values, and a
+ * date outside the years the form's date picker offers, are ignored (a ticket without a
+ * valid booking number is left out).
  */
 @Serializable
 data class AddVisitRoute(
@@ -69,7 +71,8 @@ data class AddVisitRoute(
         if (listOf(cinemaId, date, filmTitle, format, startTime, seatId).all { it == null } && ticketArgs.all { it == null }) return null
         return VisitPrefillArgs(
             cinemaId = cinemaId,
-            date = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+            // Only a date the form's date picker offers (VisitDates).
+            date = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.takeIf(VisitDates::isAllowed),
             filmTitle = filmTitle,
             format = format?.let { key -> ScreeningFormat.entries.firstOrNull { it.storageKey == key } },
             startTime = startTime?.let(::startTimeOrNull),
@@ -125,10 +128,11 @@ private fun startTimeOrNull(text: String): LocalTime? = try {
 
 /**
  * Edit (or delete) an existing visit (spec §6.4). [importedBefore]: opened by the
- * ticket import for a ticket this visit has already (spec §6.10); the form says so once.
+ * ticket import for a ticket this visit has already (spec §6.10); the form says so once,
+ * and with [qrCodeNotStored] that the ticket's QR code couldn't be stored again.
  */
 @Serializable
-data class EditVisitRoute(val visitId: Long, val importedBefore: Boolean = false)
+data class EditVisitRoute(val visitId: Long, val importedBefore: Boolean = false, val qrCodeNotStored: Boolean = false)
 
 /** Chronological list of all visits (spec §6.8), reached from Settings. */
 @Serializable
@@ -150,10 +154,11 @@ fun NavController.navigateToEditVisit(visitId: Long) = navigate(EditVisitRoute(v
 
 /**
  * The visit that has the imported ticket already, saying "This ticket was imported
- * before" (spec §6.10); [navOptions] e.g. replace the import screen or Add visit.
+ * before" (spec §6.10), and with [qrCodeNotStored] that its QR code couldn't be stored
+ * again; [navOptions] e.g. replace the import screen or Add visit.
  */
-fun NavController.navigateToImportedVisit(visitId: Long, navOptions: NavOptionsBuilder.() -> Unit) =
-    navigate(EditVisitRoute(visitId, importedBefore = true), navOptions)
+fun NavController.navigateToImportedVisit(visitId: Long, qrCodeNotStored: Boolean = false, navOptions: NavOptionsBuilder.() -> Unit) =
+    navigate(EditVisitRoute(visitId, importedBefore = true, qrCodeNotStored = qrCodeNotStored), navOptions)
 
 fun NavController.navigateToAllVisits() = navigate(AllVisitsRoute)
 
@@ -204,7 +209,7 @@ fun NavGraphBuilder.visitEditScreens(
             VisitEditEntry(
                 viewModel = viewModel(
                     factory = VisitEditViewModel.factory(
-                        VisitEditMode.Edit(route.visitId, importedBefore = route.importedBefore),
+                        VisitEditMode.Edit(route.visitId, importedBefore = route.importedBefore, qrCodeNotStored = route.qrCodeNotStored),
                         cinemaRepository, visitRepository, ticketRepository, visitPhotoStore, clock,
                     ),
                 ),

@@ -26,7 +26,6 @@ import io.github.katznmeik.cinexperience.core.model.TicketSeat
 import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.model.labels
 import io.github.katznmeik.cinexperience.core.model.seatOf
-import io.github.katznmeik.cinexperience.core.model.toTicketSeatOrNull
 import io.github.katznmeik.cinexperience.core.ui.text.takeCodePoints
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -53,8 +52,12 @@ sealed interface VisitEditMode {
      */
     data class Add(val hallId: Long?, val prefill: VisitPrefillArgs? = null) : VisitEditMode
 
-    /** [importedBefore]: opened by the ticket import for this visit's ticket (spec §6.10); the form says so once. */
-    data class Edit(val visitId: Long, val importedBefore: Boolean = false) : VisitEditMode
+    /**
+     * [importedBefore]: opened by the ticket import for this visit's ticket (spec §6.10);
+     * the form says so once, and with [qrCodeNotStored] that the ticket's QR code couldn't
+     * be stored again.
+     */
+    data class Edit(val visitId: Long, val importedBefore: Boolean = false, val qrCodeNotStored: Boolean = false) : VisitEditMode
 }
 
 /**
@@ -99,7 +102,7 @@ class VisitEditViewModel(
     private val savedState: SavedStateHandle,
     private val ticketRepository: TicketRepository? = null,
     private val clock: Clock = Clock.systemDefaultZone(),
-    today: () -> LocalDate = LocalDate::now,
+    private val today: () -> LocalDate = LocalDate::now,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -109,7 +112,8 @@ class VisitEditViewModel(
                 val prefill = add?.prefill
                 VisitForm(
                     hallId = add?.hallId,
-                    date = prefill?.date ?: today(),
+                    // Only a date the form's date picker offers.
+                    date = prefill?.date?.takeIf(VisitDates::isAllowed) ?: today(),
                     filmTitle = prefill?.filmTitle?.trim()?.takeCodePoints(MAX_FILM_LENGTH).orEmpty(),
                     format = prefill?.format,
                     startTime = prefill?.startTime?.takeIf { ShowingTime.isWholeMinute(it) },
@@ -166,7 +170,7 @@ class VisitEditViewModel(
         if (mode is VisitEditMode.Edit && mode.importedBefore && savedState.get<Boolean>(IMPORTED_BEFORE_SHOWN_KEY) != true) {
             // Once: not again after rotation or process death.
             savedState[IMPORTED_BEFORE_SHOWN_KEY] = true
-            _uiState.update { it.copy(message = IMPORTED_BEFORE) }
+            _uiState.update { it.copy(message = if (mode.qrCodeNotStored) "$IMPORTED_BEFORE $QR_CODE_NOT_STORED" else IMPORTED_BEFORE) }
         }
     }
 
@@ -192,14 +196,14 @@ class VisitEditViewModel(
 
     private fun restore(draft: VisitDraft) {
         prefillCinemaId = null // the draft already holds it
-        baseline = draft.baseline.toForm()
+        baseline = draft.baseline.toForm(fallbackDate = today())
         baselineTicket = draft.baselineTicket?.toDraft()
         visitId = draft.visitId
         sessionPhotos += draft.sessionPhotos
         pendingCapture = draft.pendingCapture
         _uiState.update {
             it.copy(
-                form = draft.form.toForm(),
+                form = draft.form.toForm(fallbackDate = today()),
                 isEdit = draft.isEdit,
                 isPhotoBusy = draft.pendingCapture != null,
                 ticketDraft = draft.ticket?.toDraft(),
@@ -465,11 +469,8 @@ class VisitEditViewModel(
 
     /** The outcome of [save]'s write. */
     private sealed interface SaveOutcome {
-        /**
-         * The visit was saved: [ticketStored] with the imported ticket; [ticketNeedsSeat]
-         * without it, because neither the ticket nor the form names a seat for it.
-         */
-        data class Saved(val result: SaveVisitResult, val ticketStored: Boolean = false, val ticketNeedsSeat: Boolean = false) : SaveOutcome
+        /** The visit was saved, with the imported ticket if [ticketStored]. */
+        data class Saved(val result: SaveVisitResult, val ticketStored: Boolean = false) : SaveOutcome
 
         /** Nothing was saved: visit [visitId] has the imported ticket already. */
         data class BookingNumberInUse(val visitId: Long) : SaveOutcome
@@ -478,14 +479,13 @@ class VisitEditViewModel(
     fun save() {
         if (!state.canSave) return
         val form = state.form
-        val labels = state.labels
         val draft = state.ticketDraft
         _uiState.update { it.copy(isSaving = true) }
         viewModelScope.launch {
             val outcome = try {
                 val repository = ticketRepository
                 if (draft != null && repository != null) {
-                    saveWithTicket(form, draft, labels, repository)
+                    saveWithTicket(form, draft, repository)
                 } else {
                     SaveOutcome.Saved(visitRepository.saveVisit(form.toVisit(visitId)))
                 }
@@ -507,16 +507,13 @@ class VisitEditViewModel(
 
     /**
      * Saves the visit with the imported ticket in one transaction (the only
-     * [TicketRepository.saveVisitWithTicket] call): the draft's seats, or the seat
-     * picked in the form if the ticket's couldn't be read, and its QR code unless it
-     * has expired for the form's date and start time. Without any seat there is no
-     * ticket to store: the visit is saved alone and the draft stays for the next Save.
+     * [TicketRepository.saveVisitWithTicket] call): the draft's seats as printed (none
+     * if they couldn't be read; the picked seat is the visit's, not the ticket's), and
+     * its QR code unless it has expired for the form's date and start time.
      */
-    private suspend fun saveWithTicket(form: VisitForm, draft: TicketDraft, labels: LayoutLabels?, repository: TicketRepository): SaveOutcome {
-        val ownSeat = form.seatId?.let { labels?.labelOf(it) }?.toTicketSeatOrNull()
+    private suspend fun saveWithTicket(form: VisitForm, draft: TicketDraft, repository: TicketRepository): SaveOutcome {
         val expired = ShowingTime.qrModulesExpired(form.date, form.startTime, clock.instant())
-        val ticket = draft.toTicket(ownSeat, qrModules = draft.qrModules.takeUnless { expired })
-            ?: return SaveOutcome.Saved(visitRepository.saveVisit(form.toVisit(visitId)), ticketNeedsSeat = true)
+        val ticket = draft.toTicket(qrModules = draft.qrModules.takeUnless { expired })
         return when (val result = repository.saveVisitWithTicket(form.toVisit(visitId), ticket.copy(visitId = visitId))) {
             is SaveTicketResult.Saved -> SaveOutcome.Saved(SaveVisitResult(result.visitId, result.seatCleared), ticketStored = true)
             is SaveTicketResult.BookingNumberInUse -> SaveOutcome.BookingNumberInUse(result.visitId)
@@ -544,8 +541,7 @@ class VisitEditViewModel(
         replaced?.let { deleteQuietly(it) }
         visitId = result.visitId
         if (outcome.ticketStored) {
-            // Stored now: the Ticket section shows the ticket from the database from here on
-            // (also when the visit itself was stored by an earlier Save, see ticketNeedsSeat).
+            // Stored now: the Ticket section shows the ticket from the database from here on.
             baselineTicket = null
             _uiState.update { it.copy(ticketDraft = null) }
             observeStoredTicket()
@@ -558,12 +554,6 @@ class VisitEditViewModel(
                 _uiState.update {
                     it.copy(isSaving = false, isEdit = true, form = saved, message = SEAT_CLEARED_ON_SAVE).derived()
                 }
-            }
-            outcome.ticketNeedsSeat -> {
-                // Saved without the ticket, which stays as a draft until a seat is picked and saved.
-                baseline = form
-                baselineTicket = null
-                _uiState.update { it.copy(isSaving = false, isEdit = true, message = TICKET_NEEDS_SEAT).derived() }
             }
             else -> {
                 baseline = form
@@ -815,7 +805,7 @@ class VisitEditViewModel(
         const val TICKET_REMOVED = "Ticket removed."
         const val REMOVE_TICKET_FAILED = "Couldn't remove the ticket. Please try again."
         const val IMPORTED_BEFORE = "This ticket was imported before."
-        const val TICKET_NEEDS_SEAT = "Visit saved without the ticket: it needs your seat. Pick your seat and save again to keep it."
+        const val QR_CODE_NOT_STORED = "Couldn't store the ticket's QR code again."
 
         fun factory(
             mode: VisitEditMode,

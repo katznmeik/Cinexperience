@@ -204,40 +204,28 @@ class VisitTicketImportTest {
     }
 
     @Test
-    fun withoutPrintedSeatsThePickedSeatBecomesTheTicketsSeat() {
+    fun aTicketWhoseSeatsCouldntBeReadIsSavedWithoutSeats() {
         val vm = viewModel(VisitEditMode.Add(SampleTickets.HALL, prefill(draft.copy(seats = emptyList()), seatId = false)))
         assertTrue(vm.state.bookingSeatIds.isEmpty())
         vm.openSeatPicker()
         vm.tapPickerSeat(row7Seat11)
         vm.confirmSeat()
         vm.save()
-        assertEquals(listOf(TicketSeat("7", "11")), tickets.saved.single().second.seats)
+        val (visit, ticket) = tickets.saved.single()
+        assertEquals("the picked seat is the visit's", row7Seat11, visit.seatId)
+        assertEquals("not the ticket's: its seats stay as printed", Ticket(0, BookingNumber("TEST123"), emptyList(), qr), ticket)
         assertTrue(vm.state.isClosed)
+        assertEquals(emptyList<TicketSeat>(), stored.tickets.single().seats)
     }
 
     @Test
-    fun withoutAnySeatTheVisitIsSavedAndTheTicketWaitsForOne() {
+    fun withoutAnySeatTheVisitAndItsTicketAreSavedToo() {
         val vm = viewModel(VisitEditMode.Add(SampleTickets.HALL, prefill(draft.copy(seats = emptyList()), seatId = false)))
         vm.save()
-        with(vm.state) {
-            assertEquals(VisitEditViewModel.TICKET_NEEDS_SEAT, message)
-            assertFalse(isClosed)
-            assertTrue(isEdit)
-            assertEquals(draft.copy(seats = emptyList()), ticketDraft)
-            assertTrue("the ticket isn't saved yet", hasUnsavedChanges)
-        }
-        val visitId = stored.visits.single().id
-        assertTrue(tickets.saved.isEmpty())
-
-        vm.openSeatPicker()
-        vm.tapPickerSeat(SampleTickets.row7Seat10)
-        vm.confirmSeat()
-        vm.save()
-        val (visit, ticket) = tickets.saved.single()
-        assertEquals("the visit saved before", visitId, visit.id)
-        assertEquals(Ticket(visitId, BookingNumber("TEST123"), listOf(TicketSeat("7", "10")), qr), ticket)
-        assertEquals(1, stored.visits.size)
         assertTrue(vm.state.isClosed)
+        val storedVisit = stored.visits.single()
+        assertNull(storedVisit.seatId)
+        assertEquals(listOf(Ticket(storedVisit.id, BookingNumber("TEST123"), emptyList(), qr)), stored.tickets)
     }
 
     @Test
@@ -294,33 +282,35 @@ class VisitTicketImportTest {
     }
 
     @Test
-    fun aTicketStoredWithAVisitSavedBeforeShowsOnTheForm() {
-        val vm = viewModel(VisitEditMode.Add(SampleTickets.HALL, prefill(draft.copy(seats = emptyList()), seatId = false)))
-        vm.save()
-        assertEquals(VisitEditViewModel.TICKET_NEEDS_SEAT, vm.state.message)
-        vm.openSeatPicker()
-        vm.tapPickerSeat(SampleTickets.row7Seat10)
-        vm.confirmSeat()
-        // The seat went meanwhile: the form stays open after the second Save.
-        tickets.reportSeatCleared = true
-        vm.save()
-        with(vm.state) {
-            assertEquals(VisitEditViewModel.SEAT_CLEARED_ON_SAVE, message)
-            assertFalse(isClosed)
-            assertNull(ticketDraft)
-            assertEquals("the stored ticket, not the draft", stored.tickets.single(), ticket)
-        }
+    fun importedBeforeSaysWhenTheQrCodeCouldntBeStoredAgain() {
+        repository = FakeCinexRepository(SampleTickets.store())
+        val vm = viewModel(VisitEditMode.Edit(SampleTickets.VISIT, importedBefore = true, qrCodeNotStored = true))
+        assertEquals("This ticket was imported before. Couldn't store the ticket's QR code again.", vm.state.message)
     }
 
-    /** Counts the one write the form may do with a ticket; [reportSeatCleared] reports the seat as cleared. */
+    @Test
+    fun aDateOutsideTheDatePickersYearsIsIgnored() {
+        fun dateOf(date: LocalDate) = viewModel(VisitEditMode.Add(SampleTickets.HALL, prefill().copy(date = date)), SavedStateHandle()).state.form.date
+        assertEquals("today instead", LocalDate.of(2026, 10, 15), dateOf(LocalDate.of(2101, 1, 1)))
+        assertEquals(LocalDate.of(2026, 10, 15), dateOf(LocalDate.of(1899, 12, 31)))
+        assertEquals(LocalDate.of(2100, 12, 31), dateOf(LocalDate.of(2100, 12, 31)))
+
+        // A restored form with such a date (only crafted or damaged saved state) gets today's.
+        viewModel().setNote("Kept") // 17 Oct, now in the saved state
+        val saved = handle.get<String>(VisitEditViewModel.DRAFT_KEY)!!
+        assertTrue(saved.contains("\"date\":\"2026-10-17\""))
+        val crafted = SavedStateHandle(mapOf(VisitEditViewModel.DRAFT_KEY to saved.replace("\"date\":\"2026-10-17\"", "\"date\":\"+999999999-12-31\"")))
+        val restored = viewModel(savedState = crafted)
+        assertEquals(LocalDate.of(2026, 10, 15), restored.state.form.date)
+        assertEquals("the rest is restored", "Kept", restored.state.form.note)
+    }
+
+    /** Counts the one write the form may do with a ticket. */
     private class CountingTickets(private val repository: () -> FakeCinexRepository) : TicketRepository by DelegatingTickets(repository) {
         val saved = mutableListOf<Pair<Visit, Ticket>>()
-        var reportSeatCleared = false
 
-        override suspend fun saveVisitWithTicket(visit: Visit, ticket: Ticket): SaveTicketResult {
-            val result = repository().saveVisitWithTicket(visit, ticket).also { saved += visit to ticket }
-            return if (reportSeatCleared && result is SaveTicketResult.Saved) result.copy(seatCleared = true) else result
-        }
+        override suspend fun saveVisitWithTicket(visit: Visit, ticket: Ticket): SaveTicketResult =
+            repository().saveVisitWithTicket(visit, ticket).also { saved += visit to ticket }
     }
 }
 
@@ -331,7 +321,7 @@ private class DelegatingTickets(private val repository: () -> FakeCinexRepositor
     override suspend fun findVisitId(bookingNumber: BookingNumber) = repository().findVisitId(bookingNumber)
     override suspend fun saveVisitWithTicket(visit: Visit, ticket: Ticket) = repository().saveVisitWithTicket(visit, ticket)
     override suspend fun removeTicket(visitId: Long) = repository().removeTicket(visitId)
-    override suspend fun storeQrModules(visitId: Long, qrModules: io.github.katznmeik.cinexperience.core.model.QrModules) =
-        repository().storeQrModules(visitId, qrModules)
+    override suspend fun restoreQrModules(visitId: Long, bookingNumber: BookingNumber, qrModules: io.github.katznmeik.cinexperience.core.model.QrModules) =
+        repository().restoreQrModules(visitId, bookingNumber, qrModules)
     override suspend fun removeExpiredQrModules(now: java.time.Instant) = repository().removeExpiredQrModules(now)
 }

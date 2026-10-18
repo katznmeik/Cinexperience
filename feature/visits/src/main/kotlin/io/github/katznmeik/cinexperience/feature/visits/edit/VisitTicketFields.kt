@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.katznmeik.cinexperience.core.model.BookingNumber
+import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.Ticket
 import io.github.katznmeik.cinexperience.core.model.TicketDraft
 import io.github.katznmeik.cinexperience.core.model.TicketSeat
@@ -135,7 +136,7 @@ internal const val DRAFT_SAVED_WITH_VISIT = "From the imported ticket: saved wit
 internal const val DRAFT_QR_KEPT = "QR code read from the ticket."
 internal const val DRAFT_QR_NONE = "No QR code could be read from the ticket. The booking number is kept."
 internal const val DRAFT_QR_EXPIRED = "The QR code isn't kept: the app removes it 7 days after the showing."
-internal const val DRAFT_NO_SEATS = "The seats couldn't be read from the ticket: the seat you pick is saved as the ticket's seat."
+internal const val DRAFT_NO_SEATS = "The seats couldn't be read from the ticket."
 
 /** The heading of the import's notes (spec §6.10). */
 internal const val IMPORT_NOTES_TITLE = "Fill in by hand"
@@ -169,10 +170,14 @@ internal fun ImportNotes(notes: List<String>) {
 /**
  * The Ticket section (spec §6.4) of a visit with a stored [ticket]: booking number,
  * every seat of the booking, "Show ticket" (§6.11) and "Remove ticket" (asks first).
+ * A ticket whose seats couldn't be read shows the visit's own seat ([ownSeat]) as
+ * "Your seat", or no seat at all.
  */
 @Composable
-internal fun TicketSection(ticket: Ticket, removing: Boolean, enabled: Boolean, actions: VisitEditActions) {
-    TicketSectionContent(ticket.bookingNumber, ticket.seats, draftQrCode = null, removing = removing, enabled = enabled, actions = actions)
+internal fun TicketSection(ticket: Ticket, ownSeat: SeatLabel?, removing: Boolean, enabled: Boolean, actions: VisitEditActions) {
+    TicketSectionContent(
+        ticket.bookingNumber, ticket.seats, ownSeat = ownSeat, draftQrCode = null, removing = removing, enabled = enabled, actions = actions,
+    )
 }
 
 /**
@@ -182,14 +187,35 @@ internal fun TicketSection(ticket: Ticket, removing: Boolean, enabled: Boolean, 
  */
 @Composable
 internal fun TicketDraftSection(draft: TicketDraft, qrCode: DraftQrCode?, enabled: Boolean, actions: VisitEditActions) {
-    TicketSectionContent(draft.bookingNumber, draft.seats, draftQrCode = qrCode ?: DraftQrCode.NONE, removing = false, enabled = enabled, actions = actions)
+    TicketSectionContent(
+        draft.bookingNumber, draft.seats, ownSeat = null, draftQrCode = qrCode ?: DraftQrCode.NONE, removing = false, enabled = enabled,
+        actions = actions,
+    )
 }
 
-/** [draftQrCode] `null`: a stored ticket. */
+/** A small heading over seat texts, e.g. "Seats of the booking", "Row 7 · Seat 10". */
+@Composable
+private fun SeatLines(title: String, labels: List<SeatLabel>) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MaterialTheme.typography.labelMedium, color = CinexTheme.colors.textMuted)
+        labels.forEach { label ->
+            Text(
+                text = label.shortText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = CinexTheme.colors.text,
+                // "Row 7, Seat 10" instead of "Row 7 · Seat 10".
+                modifier = Modifier.semantics { contentDescription = label.displayText },
+            )
+        }
+    }
+}
+
+/** [draftQrCode] `null`: a stored ticket; [ownSeat] is shown only for a stored ticket without seats. */
 @Composable
 private fun TicketSectionContent(
     bookingNumber: BookingNumber,
     seats: List<TicketSeat>,
+    ownSeat: SeatLabel?,
     draftQrCode: DraftQrCode?,
     removing: Boolean,
     enabled: Boolean,
@@ -222,25 +248,12 @@ private fun TicketSectionContent(
                     autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = style.fontSize),
                 )
             }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = if (seats.size == 1) "Seat of the booking" else "Seats of the booking",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CinexTheme.colors.textMuted,
-                )
-                if (seats.isEmpty()) {
-                    Text(DRAFT_NO_SEATS, style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
-                }
-                seats.forEach { seat ->
-                    val label = seat.label
-                    Text(
-                        text = label.shortText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = CinexTheme.colors.text,
-                        // "Row 7, Seat 10" instead of "Row 7 · Seat 10".
-                        modifier = Modifier.semantics { contentDescription = label.displayText },
-                    )
-                }
+            when {
+                seats.isNotEmpty() -> SeatLines(if (seats.size == 1) "Seat of the booking" else "Seats of the booking", seats.map { it.label })
+                // The ticket's seats couldn't be read: it is saved without them.
+                isDraft -> Text(DRAFT_NO_SEATS, style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
+                ownSeat != null -> SeatLines("Your seat", listOf(ownSeat))
+                else -> Unit // no seat lines, and no empty heading
             }
             if (draftQrCode != null) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
