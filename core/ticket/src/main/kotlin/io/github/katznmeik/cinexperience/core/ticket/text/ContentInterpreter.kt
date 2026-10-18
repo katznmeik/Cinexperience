@@ -23,17 +23,15 @@ import kotlin.math.abs
  */
 internal class Glyph(val text: String, val x: Double, val y: Double, val size: Double, val advance: Double, val isBold: Boolean)
 
-/** An image XObject drawn with `Do`, and the transformation it was drawn with. */
-internal class DrawnImage(val stream: PdfStream, val placement: Matrix)
+/** The text and the image XObjects (each once) a page draws. */
+internal class PageContent(val glyphs: List<Glyph>, val images: List<PdfStream>)
 
-internal class PageContent(val glyphs: List<Glyph>, val images: List<DrawnImage>)
-
-/** Counts glyphs across all pages ([TicketPdfLimits.MAX_GLYPHS]). */
+/** Counts the character codes shown on all pages, mapped to text or not ([TicketPdfLimits.MAX_GLYPHS]). */
 internal class GlyphBudget {
     private var count = 0
 
     fun take() {
-        if (++count > TicketPdfLimits.MAX_GLYPHS) refuse(TicketPdfError.TOO_MUCH_TEXT, "More than ${TicketPdfLimits.MAX_GLYPHS} glyphs")
+        if (++count > TicketPdfLimits.MAX_GLYPHS) refuse(TicketPdfError.TOO_MUCH_TEXT, "More than ${TicketPdfLimits.MAX_GLYPHS} codes shown")
     }
 }
 
@@ -41,9 +39,11 @@ internal class GlyphBudget {
  * Runs a page's content stream far enough to place its text and images
  * (ISO 32000-1, 8.4, 9.3, 9.4): `q`/`Q`/`cm`, `BT`/`ET`, `Tf`, `TL`, `Tm`, `Td`, `TD`,
  * `T*`, `Tj`, `TJ`, `'`, `"` and `Do`. Every other operator is skipped with its
- * operands; inline images are skipped. Text is read only in fonts [FontCache] can
- * map; glyphs that aren't upright and horizontal are dropped. `Do` on a form
- * XObject is not followed.
+ * operands, also the text state operators `Tc`, `Tw`, `Tz`, `Ts` and `Tr` (Qt places
+ * every glyph with its own `Td`, so spacing, scaling and rise don't move the text the
+ * reader needs), and the spacing operands of `"`; inline images are skipped. Text is
+ * read only in fonts [FontCache] can map; glyphs that aren't upright and horizontal
+ * are dropped. `Do` on a form XObject is not followed.
  */
 internal class ContentInterpreter(
     private val document: PdfDocument,
@@ -61,7 +61,7 @@ internal class ContentInterpreter(
     private var textMatrix = Matrix.IDENTITY
     private var lineMatrix = Matrix.IDENTITY
     private val glyphs = ArrayList<Glyph>()
-    private val images = ArrayList<DrawnImage>()
+    private val images = ArrayList<PdfStream>()
     private val drawn = HashSet<Int>()
 
     fun run(content: ByteArray): PageContent {
@@ -141,7 +141,7 @@ internal class ContentInterpreter(
         textMatrix = lineMatrix
     }
 
-    /** Two-byte codes (Identity-H); an odd last byte is ignored. */
+    /** Two-byte codes (Identity-H); an odd last byte is ignored. Every code counts against the [budget]. */
     private fun show(bytes: ByteArray) {
         val font = state.font ?: return
         val size = state.fontSize
@@ -149,6 +149,7 @@ internal class ContentInterpreter(
         while (i + 1 < bytes.size) {
             val code = ((bytes[i].toInt() and 0xFF) shl 8) or (bytes[i + 1].toInt() and 0xFF)
             i += 2
+            budget.take()
             val advance = font.widths.width(code) / 1000.0 * size
             val text = font.toUnicode[code]
             if (text != null) place(text, advance, font.isBold)
@@ -164,15 +165,14 @@ internal class ContentInterpreter(
         val width = rendering.a
         // Only upright, horizontal text: Yorck's tickets have nothing else.
         if (height <= 0.0 || width <= 0.0 || abs(rendering.b) > UPRIGHT * width || abs(rendering.c) > UPRIGHT * height) return
-        budget.take()
         glyphs += Glyph(text, rendering.e, rendering.f, height, advance / size * width, bold)
     }
 
-    /** Records each image once (where it is first drawn), however often it is drawn. */
+    /** Records each image once, however often it is drawn. */
     private fun drawXObject(name: String) {
         val xObject = document.dictionary(resources?.get("XObject"))?.get(name) ?: return
         val stream = document.resolve(xObject) as? PdfStream ?: return
-        if (document.name(stream.dictionary["Subtype"]) == "Image" && drawn.add(stream.objectNumber)) images += DrawnImage(stream, state.ctm)
+        if (document.name(stream.dictionary["Subtype"]) == "Image" && drawn.add(stream.objectNumber)) images += stream
     }
 
     private fun numbers(operands: List<PdfObject>, count: Int): DoubleArray? {

@@ -231,6 +231,7 @@ class PdfDocumentTest {
             "object number 0 in use" to withTable(good) { it[2] = "0000000009 65535 n " },
             "fewer entries than the subsection says" to withTable(good) { it[1] = "0 5" },
             "object listed twice" to withTable(good) { it[1] = "0 4"; it += "1 1"; it += it[3] },
+            "two objects at one offset" to withTable(good) { it[it.lastIndex] = it[it.lastIndex - 1] },
             "no startxref" to good.replace("startxref", "startxrex"),
             "no %%EOF" to good.removeSuffix("%%EOF\n"),
             "startxref beyond the file" to good.replace(Regex("startxref\n\\d+"), "startxref\n99999999"),

@@ -8,7 +8,6 @@ import io.github.katznmeik.cinexperience.core.ticket.qr.BitmapLuminanceDecoder
 import io.github.katznmeik.cinexperience.core.ticket.qr.LuminanceDecoder
 import io.github.katznmeik.cinexperience.core.ticket.qr.QrGridReader
 import io.github.katznmeik.cinexperience.core.ticket.text.ContentInterpreter
-import io.github.katznmeik.cinexperience.core.ticket.text.DrawnImage
 import io.github.katznmeik.cinexperience.core.ticket.text.FontCache
 import io.github.katznmeik.cinexperience.core.ticket.text.GlyphBudget
 import io.github.katznmeik.cinexperience.core.ticket.text.TextLayout
@@ -65,10 +64,16 @@ class TicketPdfReader internal constructor(private val decoder: LuminanceDecoder
         val fonts = FontCache(document)
         val budget = GlyphBudget()
         val lines = ArrayList<List<TextLine>>()
-        val images = ArrayList<DrawnImage>()
+        val images = ArrayList<PdfStream>()
+        var interpreted = 0L
         for (page in document.pages()) {
-            val content = joined(document.contentStreams(page).map(document::decodedData))
-            val drawn = ContentInterpreter(document, page.resources, fonts, budget).run(content)
+            val streams = document.contentStreams(page).map(document::decodedData)
+            // A stream listed again (on this page or another) is interpreted again: it counts each time.
+            interpreted += streams.sumOf { it.size.toLong() + 1 }
+            if (interpreted > TicketPdfLimits.MAX_TOTAL_STREAM_BYTES) {
+                refuse(TicketPdfError.STREAM_TOO_LARGE, "Pages interpret more than ${TicketPdfLimits.MAX_TOTAL_STREAM_BYTES} bytes of content")
+            }
+            val drawn = ContentInterpreter(document, page.resources, fonts, budget).run(joined(streams))
             lines += TextLayout.lines(drawn.glyphs)
             images += drawn.images
         }
@@ -86,8 +91,8 @@ class TicketPdfReader internal constructor(private val decoder: LuminanceDecoder
     }
 
     /** The one QR code grid among the drawn images, if exactly one distinct grid checks out. */
-    private fun qrCode(document: PdfDocument, images: List<DrawnImage>): TicketPdfField<QrModuleGrid> {
-        val candidates = images.map { it.stream }.distinctBy { it.objectNumber }
+    private fun qrCode(document: PdfDocument, images: List<PdfStream>): TicketPdfField<QrModuleGrid> {
+        val candidates = images.distinctBy { it.objectNumber }
             .filter { isCandidate(document, it) }
             .take(TicketPdfLimits.MAX_QR_CANDIDATES)
         if (candidates.isEmpty()) return TicketPdfField.NotFound(NotFoundReason.MISSING)
@@ -99,8 +104,12 @@ class TicketPdfReader internal constructor(private val decoder: LuminanceDecoder
         }
     }
 
-    /** A JPEG (DCTDecode only) of 8-bit RGB or grey, from 21 to [TicketPdfLimits.MAX_IMAGE_SIDE] px each way. */
+    /**
+     * A JPEG (DCTDecode only) of 8-bit RGB or grey, from 21 to [TicketPdfLimits.MAX_IMAGE_SIDE]
+     * px each way and at most [TicketPdfLimits.MAX_QR_IMAGE_BYTES] as stored.
+     */
     private fun isCandidate(document: PdfDocument, stream: PdfStream): Boolean {
+        if (stream.dataLength > TicketPdfLimits.MAX_QR_IMAGE_BYTES) return false
         val dictionary = stream.dictionary
         val width = document.int(dictionary["Width"]) ?: return false
         val height = document.int(dictionary["Height"]) ?: return false

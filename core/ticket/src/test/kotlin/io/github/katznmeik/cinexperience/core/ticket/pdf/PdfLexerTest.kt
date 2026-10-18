@@ -50,6 +50,13 @@ class PdfLexerTest {
     }
 
     @Test
+    fun anUnescapedEndOfLineInAStringIsOneLineFeed() {
+        val text = tokens("(a\rb\r\nc\nd\\\r\ne)").single() as PdfToken.Text
+
+        assertArrayEquals("a\nb\nc\nde".toByteArray(Charsets.ISO_8859_1), text.bytes)
+    }
+
+    @Test
     fun readsHexStringsAndPadsAnOddDigit() {
         assertArrayEquals(byteArrayOf(0x00, 0x2A, 0x7F, 0x50), (tokens("<00 2a7F 5>").single() as PdfToken.Text).bytes)
     }

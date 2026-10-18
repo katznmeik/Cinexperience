@@ -3,6 +3,7 @@ package io.github.katznmeik.cinexperience.core.ticket.text
 import io.github.katznmeik.cinexperience.core.ticket.TicketPdfError
 import io.github.katznmeik.cinexperience.core.ticket.TicketPdfLimits
 import io.github.katznmeik.cinexperience.core.ticket.pdf.PdfDocument
+import io.github.katznmeik.cinexperience.core.ticket.pdf.PdfName
 import io.github.katznmeik.cinexperience.core.ticket.pdf.TicketPdfException
 import io.github.katznmeik.cinexperience.core.ticket.testing.PdfBuilder
 import io.github.katznmeik.cinexperience.core.ticket.testing.PdfBuilder.Companion.latin1
@@ -139,8 +140,7 @@ class ContentInterpreterTest {
 
         assertEquals("", texts(content))
         assertEquals(1, content.images.size)
-        assertEquals(150.0, content.images.single().placement.a, 1e-9)
-        assertEquals(845.0, content.images.single().placement.f, 1e-9)
+        assertEquals(PdfName("Image"), content.images.single().dictionary["Subtype"])
     }
 
     @Test

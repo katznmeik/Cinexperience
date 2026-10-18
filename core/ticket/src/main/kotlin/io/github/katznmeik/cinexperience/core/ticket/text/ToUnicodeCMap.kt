@@ -21,22 +21,29 @@ import io.github.katznmeik.cinexperience.core.ticket.pdf.PdfString
 internal object ToUnicodeCMap {
     /** Far more than a subset font has (Yorck's have about 70 glyphs each). */
     const val MAX_ENTRIES: Int = 4_096
+
+    /** Codes processed (each `bfchar` pair, each code of a range, repeated or not) before the CMap is given up. */
+    const val MAX_PROCESSED: Int = 4 * MAX_ENTRIES
     const val MAX_RANGE: Int = 256
     const val MAX_TARGET_UNITS: Int = 8
 
     /**
      * The code → text table, or `null` if the CMap holds more than [MAX_ENTRIES]
-     * mappings (then the font's text is dropped). Syntax errors are thrown as DAMAGED.
+     * mappings or makes the reader process more than [MAX_PROCESSED] codes (ranges
+     * repeated over the same codes); then the font's text is dropped. Syntax errors
+     * are thrown as DAMAGED.
      */
     fun parse(data: ByteArray): Map<Int, String>? {
         val parser = PdfObjectParser(PdfLexer(data, 0), allowReferences = false)
         val map = HashMap<Int, String>()
+        var processed = 0
         while (true) {
             when ((parser.next() ?: break) as? PdfKeyword) {
                 BEGIN_BFCHAR -> while (true) {
                     val source = parser.next() ?: return map
                     if (source == END_BFCHAR) break
                     val target = parser.next() ?: return map
+                    if (++processed > MAX_PROCESSED) return null
                     val code = code(source) ?: continue
                     val text = text(target) ?: continue
                     map[code] = text
@@ -47,6 +54,8 @@ internal object ToUnicodeCMap {
                     if (low == END_BFRANGE) break
                     val high = parser.next() ?: return map
                     val target = parser.next() ?: return map
+                    processed += rangeSize(code(low), code(high))
+                    if (processed > MAX_PROCESSED) return null
                     if (!addRange(map, code(low), code(high), target)) continue
                     if (map.size > MAX_ENTRIES) return null
                 }
@@ -55,6 +64,10 @@ internal object ToUnicodeCMap {
         }
         return map
     }
+
+    /** The codes a range makes the reader process: its size if it is used, else 1. */
+    private fun rangeSize(low: Int?, high: Int?): Int =
+        if (low == null || high == null || high < low || high - low >= MAX_RANGE) 1 else high - low + 1
 
     private fun addRange(map: MutableMap<Int, String>, low: Int?, high: Int?, target: PdfObject): Boolean {
         if (low == null || high == null || high < low || high - low >= MAX_RANGE) return false

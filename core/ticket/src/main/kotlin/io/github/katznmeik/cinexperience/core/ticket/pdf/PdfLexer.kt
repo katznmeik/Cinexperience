@@ -19,7 +19,7 @@ internal sealed interface PdfToken {
  * always moves forward, so it ends on any input; malformed syntax is
  * [io.github.katznmeik.cinexperience.core.ticket.TicketPdfError.DAMAGED].
  */
-internal class PdfLexer(private val data: ByteArray, start: Int, private val end: Int = data.size) {
+internal class PdfLexer(private val data: ByteArray, start: Int, val end: Int = data.size) {
     init {
         require(start in 0..end && end <= data.size) { "Range outside the data" }
     }
@@ -165,6 +165,11 @@ internal class PdfLexer(private val data: ByteArray, start: Int, private val end
                     depth--
                     if (depth == 0) return PdfToken.Text(out.toByteArray())
                     out.write(c)
+                }
+                CR -> {
+                    // An unescaped end of line (CR, LF or CR LF) is one LF (ISO 32000-1, 7.3.4.2).
+                    if (position < end && byteAt(position) == LF) position++
+                    out.write(LF)
                 }
                 else -> out.write(c)
             }

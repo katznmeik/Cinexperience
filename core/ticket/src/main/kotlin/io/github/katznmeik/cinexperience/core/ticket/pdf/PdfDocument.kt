@@ -30,7 +30,8 @@ internal class PdfDocument private constructor(
     private val entries: Map<Int, XrefEntry>,
     private val trailer: PdfDictionary,
 ) {
-    private class XrefEntry(val offset: Int, val generation: Int)
+    /** An object at [offset]; it must end by [end], where the next object (or the table) starts. */
+    private class XrefEntry(val offset: Int, val generation: Int, val end: Int)
 
     private val cache = HashMap<Int, PdfObject>()
     private val loading = HashSet<Int>()
@@ -118,13 +119,24 @@ internal class PdfDocument private constructor(
         if (count != null && count > TicketPdfLimits.MAX_PAGES) refuse(TicketPdfError.TOO_MANY_PAGES, "Page count $count")
         val pages = ArrayList<PdfPage>()
         val visited = HashSet<Int>()
-        visitPageNode(root, inheritedResources = null, depth = 0, visited, pages)
+        visitPageNode(root, inheritedResources = null, depth = 0, visited, pages, nodes = IntArray(1))
         if (pages.isEmpty()) damaged("No pages")
         return pages
     }
 
-    private fun visitPageNode(node: PdfObject, inheritedResources: PdfObject?, depth: Int, visited: MutableSet<Int>, pages: MutableList<PdfPage>) {
+    private fun visitPageNode(
+        node: PdfObject,
+        inheritedResources: PdfObject?,
+        depth: Int,
+        visited: MutableSet<Int>,
+        pages: MutableList<PdfPage>,
+        nodes: IntArray,
+    ) {
         if (depth > TicketPdfLimits.MAX_PAGE_TREE_DEPTH) refuse(TicketPdfError.NESTING_TOO_DEEP, "Page tree too deep")
+        // Every node counts, direct ones and those reached again through a shared /Kids array.
+        if (++nodes[0] > TicketPdfLimits.MAX_PAGE_TREE_NODES) {
+            refuse(TicketPdfError.TOO_MANY_PAGES, "Page tree of more than ${TicketPdfLimits.MAX_PAGE_TREE_NODES} nodes")
+        }
         if (node is PdfReference && !visited.add(node.number)) refuse(TicketPdfError.REFERENCE_CYCLE, "Page tree node met twice")
         val dictionary = resolve(node) as? PdfDictionary ?: damaged("Page tree node is not a dictionary")
         val resources = dictionary["Resources"] ?: inheritedResources
@@ -132,7 +144,7 @@ internal class PdfDocument private constructor(
         when (name(dictionary["Type"]) ?: if (kids != null) "Pages" else "Page") {
             "Pages" -> {
                 val array = resolve(kids) as? PdfArray ?: damaged("Page tree node without kids")
-                for (kid in array.items) visitPageNode(kid, resources, depth + 1, visited, pages)
+                for (kid in array.items) visitPageNode(kid, resources, depth + 1, visited, pages, nodes)
             }
             "Page" -> {
                 if (pages.size >= TicketPdfLimits.MAX_PAGES) refuse(TicketPdfError.TOO_MANY_PAGES, "More than ${TicketPdfLimits.MAX_PAGES} pages")
@@ -171,7 +183,7 @@ internal class PdfDocument private constructor(
     }
 
     private fun parseObjectAt(number: Int, entry: XrefEntry): PdfObject {
-        val parser = PdfObjectParser(PdfLexer(data, entry.offset), allowReferences = true)
+        val parser = PdfObjectParser(PdfLexer(data, entry.offset, entry.end), allowReferences = true)
         val head = listOf(parser.next(), parser.next(), parser.next())
         val expected = listOf(PdfNumber(number.toDouble(), true), PdfNumber(entry.generation.toDouble(), true), PdfKeyword("obj"))
         if (head != expected) damaged("Object not at its cross-reference offset")
@@ -190,7 +202,7 @@ internal class PdfDocument private constructor(
     private fun stream(number: Int, dictionary: PdfDictionary, lexer: PdfLexer): PdfStream {
         val start = lexer.streamDataStart()
         val length = (resolve(dictionary["Length"]) as? PdfNumber)?.intOrNull() ?: damaged("Stream without a length")
-        if (length < 0 || length > data.size - start) damaged("Stream length beyond the end of the file")
+        if (length < 0 || length > lexer.end - start) damaged("Stream length beyond the end of its object")
         lexer.seek(start + length)
         if (lexer.next() != PdfToken.Keyword("endstream")) damaged("Stream length doesn't end at endstream")
         if (lexer.next() != PdfToken.Keyword("endobj")) damaged("Stream object without endobj")
@@ -232,7 +244,7 @@ internal class PdfDocument private constructor(
                 if (first is PdfToken.Number) refuseCrossReferenceStream(data, xrefOffset)
                 damaged("No cross-reference table at startxref")
             }
-            val entries = readEntries(lexer, data.size)
+            val entries = readEntries(lexer, data.size, xrefOffset)
             val trailer = PdfObjectParser(lexer, allowReferences = true).next() as? PdfDictionary ?: damaged("No trailer dictionary")
             if (trailer.containsKey("Encrypt")) refuse(TicketPdfError.ENCRYPTED, "Encrypted")
             if (trailer.containsKey("Prev") || trailer.containsKey("XRefStm")) refuse(TicketPdfError.UNSUPPORTED, "Incremental update or hybrid file")
@@ -242,10 +254,14 @@ internal class PdfDocument private constructor(
             return PdfDocument(data, entries, trailer)
         }
 
-        /** The subsections up to `trailer` (which is read too). */
-        private fun readEntries(lexer: PdfLexer, fileSize: Int): Map<Int, XrefEntry> {
-            val entries = HashMap<Int, XrefEntry>()
-            var total = 0
+        /**
+         * The subsections up to `trailer` (which is read too). Each object ends where the
+         * next one in the file (or the table at [xrefOffset]) starts, so objects can't
+         * overlap and reading all of them lexes each byte of the file at most once.
+         */
+        private fun readEntries(lexer: PdfLexer, fileSize: Int, xrefOffset: Int): Map<Int, XrefEntry> {
+            val found = HashMap<Int, Pair<Int, Int>>()
+            var total = 0L
             while (true) {
                 val token = lexer.next() ?: damaged("Cross-reference table cut off")
                 if (token == PdfToken.Keyword("trailer")) break
@@ -262,14 +278,20 @@ internal class PdfDocument private constructor(
                     when (type) {
                         "n" -> {
                             if (number == 0L || offset >= fileSize) damaged("Cross-reference offset outside the file")
-                            if (entries.put(number.toInt(), XrefEntry(offset, generation)) != null) damaged("Object listed twice")
+                            if (found.put(number.toInt(), offset to generation) != null) damaged("Object listed twice")
                         }
                         "f" -> Unit
                         else -> damaged("Bad cross-reference entry type")
                     }
                 }
             }
-            return entries
+            val starts = (found.values.map { it.first } + xrefOffset).sorted()
+            if (starts.zipWithNext().any { (a, b) -> a == b }) damaged("Two objects at one offset")
+            return found.mapValues { (_, entry) ->
+                val (offset, generation) = entry
+                val next = starts.binarySearch(offset) + 1
+                XrefEntry(offset, generation, end = if (next < starts.size) starts[next] else fileSize)
+            }
         }
 
         /** A PDF 1.5 cross-reference stream: encrypted or not, outside the reader's scope. */
