@@ -2,7 +2,7 @@
 
 **Status:** v1.3.0 released (2026-10-17); v1.4 (ticket import, ticket QR code, reminders) specified
 **Owner:** katznmeik
-**Last updated:** 2026-10-17 (rev. 30)
+**Last updated:** 2026-10-18 (rev. 31)
 
 ---
 
@@ -650,12 +650,12 @@ email (screens: §6.10, §6.11). The email itself is not read; the app never
 accesses the mailbox, the Yorck account or the network for this. It also fills
 in the hall that the program (§11.1) cannot provide.
 
-**The ticket** (checked on a real ticket, 2026-10-17): one A3 page created by
+**The ticket** (checked on a real ticket, October 2026): one A3 page created by
 Yorck's ticket system (PDF 1.4, producer "Qt 5.5.1"); German labels; the text
 is embedded (Arial with a Unicode table), and the QR code is a small embedded
 JPEG image.
-- Read: **Buchungsnummer** (booking number), film title (the line after
-  "Ticket"), **Kino** (cinema), **Datum** (dd.MM.yyyy), **Zeit** (HH:mm, Berlin
+- Read: **Buchungsnummer** (booking number), film title (the bold line or lines
+  between "Ticket" and the first label; "Gebucht von" is bold too), **Kino** (cinema), **Datum** (dd.MM.yyyy), **Zeit** (HH:mm, Berlin
   clock time), **Saal** (hall), **Reihe** (row), **Platz** (seat).
 - Ignored and never stored: "Gebucht von" (the booker's name), prices,
   categories, transaction and ticket numbers, the address block and the
@@ -667,12 +667,14 @@ JPEG image.
   format information). Only a grid that passes is kept, and the ticket screen
   redraws it sharply from these modules. Versions 1–4 (up to 33 × 33 modules)
   are accepted, in case longer booking numbers appear.
-- **Still open:** a booking with several seats (one page per ticket? "Platz 8,
-  9"?). Until a sample exists, the reader accepts several seats where the
+- **Still open:** a booking with several seats (one page per ticket? two
+  numbers after "Platz"?). Until a sample exists, the reader accepts several seats where the
   layout is unambiguous and otherwise leaves the seat for manual entry.
 
-**Matching:** the cinema through the Yorck-name table of §11.1 ("Kino
-Rollberg" → Rollberg); the hall by name within that cinema; row and seat
+**Matching:** the cinema through the Yorck-name table of §11.1, with the name
+printed after "Kino" looked up as printed and with "Kino " in front (the table
+knows e.g. "Kino International"); the hall by name within that cinema ("Saal"
+and its number, other hall names as printed); row and seat
 through the hall layout's labels (§4.3, which match Yorck's booking); the
 showing in the downloaded program by cinema and start time, for the screening
 format (§11.1 mapping) and the runtime (§11.3).
@@ -682,7 +684,8 @@ format (§11.1 mapping) and the runtime (§11.3).
    above (classic cross-reference table, compressed content streams, Type 0
    fonts with a Unicode table, JPEG images) and refuses anything else: files
    over 2 MB, more than 4 pages, encrypted files, compressed streams over 2 MB
-   unpacked, more than 2,000 objects. Only images of at most 512 × 512 pixels
+   unpacked, more than 2,000 objects; further limits cap the unpacked total,
+   nesting depth, glyphs and images per page. Only images of at most 512 × 512 pixels
    are decoded, as QR code candidates (Yorck's is 116 × 116; the large logo is
    skipped). It never runs scripts, opens links or loads anything referenced
    by the file.
@@ -886,7 +889,7 @@ but cannot run an emulator there — hands-on verification is done by the owner.
 ## 15. Open items
 
 - Verify the current list of Yorck cinemas and hall names (M1).
-- A ticket PDF for a booking with several seats (§11.2); the one-seat ticket
-  was checked on 2026-10-17.
+- A ticket PDF for a booking with several seats (§11.2); a one-seat ticket
+  was checked in October 2026.
 - v1.1 Program: the meaning of the `SV` label (§11.1).
 - Yorck-app screenshots of hall seat plans (for preloaded layouts).
