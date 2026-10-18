@@ -131,8 +131,14 @@ fun CinexApp(
             // Cinemas tab
             cinemasScreen(
                 cinemaRepository = container.cinemaRepository,
+                visitRepository = container.visitRepository,
+                ticketRepository = container.ticketRepository,
+                clock = container.clock,
                 onOpenCinema = navController::navigateToCinemaDetail,
                 onAddVisit = { navController.navigateToAddVisit() },
+                // The Next visit card (spec §6.1): the card opens the visit, "Show ticket" its ticket.
+                onOpenVisit = navController::navigateToEditVisit,
+                onShowTicket = navController::navigateToTicket,
             )
             cinemaDetailScreen(
                 cinemaRepository = container.cinemaRepository,

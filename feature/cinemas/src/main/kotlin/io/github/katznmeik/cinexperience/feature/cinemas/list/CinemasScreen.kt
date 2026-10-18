@@ -50,12 +50,16 @@ import io.github.katznmeik.cinexperience.feature.cinemas.visitsText
 @Composable
 internal fun CinemasEntry(
     viewModel: CinemasViewModel,
+    nextVisitViewModel: NextVisitViewModel,
     onOpenCinema: (Long) -> Unit,
     onAddVisit: () -> Unit,
+    onOpenVisit: (Long) -> Unit,
+    onShowTicket: (Long) -> Unit,
     message: String?,
     onMessageShown: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val nextVisit by nextVisitViewModel.uiState.collectAsStateWithLifecycle()
     CinemasScreen(
         state,
         onSortChange = viewModel::setSort,
@@ -64,10 +68,16 @@ internal fun CinemasEntry(
         onAddVisit = onAddVisit,
         message = message,
         onMessageShown = onMessageShown,
+        nextVisit = nextVisit,
+        onOpenVisit = onOpenVisit,
+        onShowTicket = onShowTicket,
     )
 }
 
-/** Cinema list (spec §6.1): sort and Favourites chips, one card per cinema, "Add visit" button. */
+/**
+ * Cinema list (spec §6.1): the Next visit card while an upcoming visit exists, sort
+ * and Favourites chips, one card per cinema, "Add visit" button.
+ */
 @Composable
 internal fun CinemasScreen(
     state: CinemasUiState,
@@ -78,6 +88,9 @@ internal fun CinemasScreen(
     onShowFavourites: () -> Unit = {},
     message: String? = null,
     onMessageShown: () -> Unit = {},
+    nextVisit: NextVisit? = null,
+    onOpenVisit: (Long) -> Unit = {},
+    onShowTicket: (Long) -> Unit = {},
 ) {
     val snackbarHostState = rememberMessageSnackbarState(message, onMessageShown)
     Box(modifier.fillMaxSize()) {
@@ -87,7 +100,18 @@ internal fun CinemasScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item(key = "header") { Header(state, onSortChange, onShowFavourites) }
+            item(key = "header") {
+                Header(state, onSortChange, onShowFavourites) {
+                    if (nextVisit != null) {
+                        NextVisitCard(
+                            next = nextVisit,
+                            onOpenVisit = { onOpenVisit(nextVisit.visitId) },
+                            onShowTicket = { onShowTicket(nextVisit.visitId) },
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    }
+                }
+            }
             when {
                 state.errorMessage != null -> item(key = "error") { InfoText(state.errorMessage) }
                 state.showsNoFavourites -> item(key = "no-favourites") { InfoText(NO_FAVOURITES_TEXT) }
@@ -113,15 +137,21 @@ internal fun CinemasScreen(
 /** Empty state of the Favourites chip. */
 internal const val NO_FAVOURITES_TEXT = "No favourite cinemas yet. Mark one with ☆ on its page."
 
+/** Title and counts, then [nextVisit] (the Next visit card, as wide as the cinema cards), then the chips. */
 @Composable
-private fun Header(state: CinemasUiState, onSortChange: (CinemaSort) -> Unit, onShowFavourites: () -> Unit) {
+private fun Header(
+    state: CinemasUiState,
+    onSortChange: (CinemaSort) -> Unit,
+    onShowFavourites: () -> Unit,
+    nextVisit: @Composable () -> Unit,
+) {
     Column(
         // The chips' 48 dp touch targets add 6 dp above and below their 36 dp pills.
-        modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 28.dp),
+        modifier = Modifier.padding(top = 28.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // Title left, counts right; with large text the counts wrap below the title.
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        FlowRow(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             ScreenTitle("Cinemas", Modifier.alignByBaseline().padding(end = 12.dp))
             if (!state.isLoading && state.errorMessage == null) {
                 Text(
@@ -132,8 +162,9 @@ private fun Header(state: CinemasUiState, onSortChange: (CinemaSort) -> Unit, on
                 )
             }
         }
+        nextVisit()
         // Three sorts and the Favourites filter: exactly one chip is selected.
-        ChoiceChipRow {
+        ChoiceChipRow(Modifier.padding(horizontal = 4.dp)) {
             val all = state.filter == CinemaFilter.ALL
             CinemaSort.entries.forEach { sort ->
                 ChoiceChip(text = sort.label, selected = all && sort == state.sort, onClick = { onSortChange(sort) })

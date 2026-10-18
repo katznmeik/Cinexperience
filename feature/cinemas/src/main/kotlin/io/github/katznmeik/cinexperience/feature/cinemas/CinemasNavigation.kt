@@ -8,6 +8,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
+import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
+import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.program.FilmKind
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
@@ -18,6 +20,7 @@ import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailEntr
 import io.github.katznmeik.cinexperience.feature.cinemas.detail.CinemaDetailViewModel
 import io.github.katznmeik.cinexperience.feature.cinemas.list.CinemasEntry
 import io.github.katznmeik.cinexperience.feature.cinemas.list.CinemasViewModel
+import io.github.katznmeik.cinexperience.feature.cinemas.list.NextVisitViewModel
 import io.github.katznmeik.cinexperience.feature.cinemas.manage.ManageCinemasEntry
 import io.github.katznmeik.cinexperience.feature.cinemas.manage.ManageCinemasViewModel
 import kotlinx.serialization.Serializable
@@ -45,18 +48,32 @@ fun NavController.navigateToManageCinemas() = navigate(ManageCinemasRoute)
  */
 fun NavController.closeDeletedCinema(message: String) = navigateUpWithResultMessage(message)
 
+/**
+ * @param visitRepository and [ticketRepository]: the Next visit card (spec §6.1).
+ * @param clock "now" for the Next visit card (which visits are upcoming).
+ * @param onOpenVisit opens a visit's form (the Next visit card).
+ * @param onShowTicket opens a visit's ticket (the card's "Show ticket", spec §6.11).
+ */
 fun NavGraphBuilder.cinemasScreen(
     cinemaRepository: CinemaRepository,
+    visitRepository: VisitRepository,
+    ticketRepository: TicketRepository,
+    clock: Clock = Clock.systemDefaultZone(),
     onOpenCinema: (Long) -> Unit,
     onAddVisit: () -> Unit,
+    onOpenVisit: (visitId: Long) -> Unit,
+    onShowTicket: (visitId: Long) -> Unit,
 ) {
     composable<CinemasRoute> { entry ->
         val (message, onMessageShown) = entry.resultMessage()
         ScreenBackground {
             CinemasEntry(
                 viewModel = viewModel(factory = CinemasViewModel.factory(cinemaRepository)),
+                nextVisitViewModel = viewModel(factory = NextVisitViewModel.factory(visitRepository, ticketRepository, clock)),
                 onOpenCinema = dropUnlessResumedWith(onOpenCinema),
                 onAddVisit = dropUnlessResumed(block = onAddVisit),
+                onOpenVisit = dropUnlessResumedWith(onOpenVisit),
+                onShowTicket = dropUnlessResumedWith(onShowTicket),
                 message = message,
                 onMessageShown = onMessageShown,
             )
