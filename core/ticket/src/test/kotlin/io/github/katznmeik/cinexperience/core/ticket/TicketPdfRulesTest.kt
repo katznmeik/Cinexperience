@@ -12,9 +12,10 @@ import java.time.LocalTime
 class TicketPdfRulesTest {
 
     @Test
-    fun bookingNumbersAreUpperCaseLettersAndDigits() {
-        listOf("TEST123", "AB12", "ABCDEFGHIJ0123456789", "1234567", "ABCDEFG").forEach { assertTrue(it, TicketPdfRules.isValidBookingNumber(it)) }
-        listOf("", "AB1", "ABCDEFGHIJ01234567890", "test123", "TEST 123", "TEST-123", "TEST123\u200b", "T\u00c4ST123", "\uff34EST123")
+    fun bookingNumbersAreUpperCaseLettersAndDigitsAsTheAppStoresThem() {
+        // The one rule: core:model's BookingNumber (4 to 16 characters).
+        listOf("TEST123", "AB12", "ABCDEFGHIJ012345", "1234567", "ABCDEFG").forEach { assertTrue(it, TicketPdfRules.isValidBookingNumber(it)) }
+        listOf("", "AB1", "ABCDEFGHIJ0123456", "test123", "TEST 123", "TEST-123", "TEST123\u200b", "T\u00c4ST123", "\uff34EST123")
             .forEach { assertFalse(it, TicketPdfRules.isValidBookingNumber(it)) }
     }
 
@@ -60,7 +61,9 @@ class TicketPdfRulesTest {
     fun oneSeatOrAListOrARangeInOneRow() {
         assertEquals(TicketPdfField.Found(listOf(PrintedSeat("7", "10"))), TicketPdfRules.seats("7", "10"))
         assertEquals(TicketPdfField.Found(listOf(PrintedSeat("R1", "R"))), TicketPdfRules.seats("R1", "R"))
-        assertEquals(TicketPdfField.Found(listOf(PrintedSeat("-", "12"))), TicketPdfRules.seats("-", "12"))
+        // A row printed as "-" has no name: null, as core:model's TicketSeat stores it.
+        assertEquals(TicketPdfField.Found(listOf(PrintedSeat(null, "12"))), TicketPdfRules.seats("-", "12"))
+        assertEquals(TicketPdfField.Found(listOf(PrintedSeat("7", "0"), PrintedSeat("7", "1A"))), TicketPdfRules.seats("7", "0, 1A"))
         assertEquals(TicketPdfField.Found(listOf(PrintedSeat("C", "10"), PrintedSeat("C", "11"))), TicketPdfRules.seats("C", "10, 11"))
         assertEquals(TicketPdfField.Found(listOf(PrintedSeat("7", "10"), PrintedSeat("7", "11"))), TicketPdfRules.seats("7", "10,11,10"))
         assertEquals(TicketPdfField.Found((10..12).map { PrintedSeat("7", "$it") }), TicketPdfRules.seats("7", "10\u201312"))
@@ -87,6 +90,18 @@ class TicketPdfRulesTest {
         assertEquals(invalid, TicketPdfRules.seats("7", "10,"))
         assertEquals(invalid, TicketPdfRules.seats("7", (1..21).joinToString(",")))
         assertEquals(TicketPdfField.Found((1..20).map { PrintedSeat("7", "$it") }), TicketPdfRules.seats("7", (1..20).joinToString(", ")))
+    }
+
+    @Test
+    fun seatsAreAsciiNumbersWithoutLeadingZerosOrShortFixedLabels() {
+        val invalid = TicketPdfField.NotFound(NotFoundReason.INVALID)
+
+        for (seat in listOf("08", "010", "\u0662", "\uff11", "\u00c4", "R-1", "R 1", "ABCDE", "08-10", "0-2")) {
+            assertEquals(seat, invalid, TicketPdfRules.seats("7", seat))
+        }
+        for (row in listOf("\u0662", "R 1", "R-1", "ABCDEFGHI", "--")) {
+            assertEquals(row, invalid, TicketPdfRules.seats(row, "10"))
+        }
     }
 
     @Test

@@ -1,5 +1,7 @@
 package io.github.katznmeik.cinexperience.core.ticket
 
+import io.github.katznmeik.cinexperience.core.model.BookingNumber
+import io.github.katznmeik.cinexperience.core.model.TicketSeat
 import java.time.DateTimeException
 import java.time.LocalDate
 import java.time.LocalTime
@@ -10,31 +12,36 @@ import java.time.LocalTime
  * a value that fails is not used, never repaired.
  */
 object TicketPdfRules {
-    const val MIN_BOOKING_NUMBER_LENGTH: Int = 4
-    const val MAX_BOOKING_NUMBER_LENGTH: Int = 20
     const val MAX_TITLE_LENGTH: Int = 200
     const val MAX_CINEMA_LENGTH: Int = 80
     const val MAX_HALL_LENGTH: Int = 40
     const val MAX_ROW_LENGTH: Int = 8
-    const val MAX_SEAT_LENGTH: Int = 4
 
     /** At most this many seats per booking; a longer list is left for manual entry. */
     const val MAX_SEATS: Int = 20
 
-    /** Upper-case ASCII letters and digits, as QR codes encode them (Yorck's have 7). */
-    private val BOOKING_NUMBER = Regex("[A-Z0-9]{$MIN_BOOKING_NUMBER_LENGTH,$MAX_BOOKING_NUMBER_LENGTH}")
-
     /** A cinema or hall name: letters and digits, with spaces and a little punctuation between them. */
     private val NAME = Regex("[\\p{L}\\p{Nd}](?:[\\p{L}\\p{Nd} .,'&/()\u2019-]*[\\p{L}\\p{Nd}.)])?")
-    private val ROW = Regex("[\\p{L}\\p{Nd}]{1,$MAX_ROW_LENGTH}|-")
-    private val SEAT = Regex("[\\p{L}\\p{Nd}]{1,$MAX_SEAT_LENGTH}")
-    private val SEAT_RANGE = Regex("([0-9]{1,3}) ?[-\u2013] ?([0-9]{1,3})")
+
+    /** A row label: ASCII letters and digits ("7", "C", "R1"); "-" is a row without a name. */
+    private val ROW = Regex("[A-Za-z0-9]{1,$MAX_ROW_LENGTH}")
+    private const val UNNAMED_ROW = "-"
+
+    /** A seat number as the app's layouts write it: ASCII digits without leading zeros. */
+    private val SEAT_NUMBER = Regex("0|[1-9][0-9]{0,3}")
+
+    /** A fixed seat label ("R"): 1 to 4 ASCII letters and digits with at least one letter. */
+    private val FIXED_SEAT_LABEL = Regex("(?=[0-9]*[A-Za-z])[A-Za-z0-9]{1,4}")
+    private val SEAT_RANGE = Regex("([1-9][0-9]{0,2}) ?[-\u2013] ?([1-9][0-9]{0,2})")
     private val DATE = Regex("([0-9]{2})\\.([0-9]{2})\\.([0-9]{4})")
     private val TIME = Regex("([0-9]{2}):([0-9]{2})(?: Uhr)?")
     private val YEARS = 2000..2099
 
-    /** True for a booking number such as `TEST123`: [MIN_BOOKING_NUMBER_LENGTH] to [MAX_BOOKING_NUMBER_LENGTH] upper-case ASCII letters and digits. */
-    fun isValidBookingNumber(text: String): Boolean = BOOKING_NUMBER.matches(text)
+    /**
+     * True for a booking number such as `TEST123`, by the one rule the app stores them
+     * with (core:model's `BookingNumber`: upper-case ASCII letters and digits, 4 to 16).
+     */
+    fun isValidBookingNumber(text: String): Boolean = BookingNumber.isValid(text)
 
     internal fun bookingNumber(raw: String): String? = raw.takeIf(::isValidBookingNumber)
 
@@ -70,31 +77,39 @@ object TicketPdfRules {
 
     /**
      * The seats of one ticket block: one row ("Reihe") and one seat, a comma-separated
-     * list ("8, 9") or a range of numbers ("8–9", "8-10") as "Platz". Several rows, or
-     * anything else, can't be paired up without guessing: [NotFoundReason.AMBIGUOUS]
-     * or [NotFoundReason.INVALID].
+     * list ("10, 11") or a range of numbers ("10–11", "10-12") as "Platz", at most
+     * [MAX_SEATS]. Several rows, or anything else, can't be paired up without
+     * guessing: [NotFoundReason.AMBIGUOUS] or [NotFoundReason.INVALID]. A row printed
+     * as "-" (no name) becomes `null`.
      */
     internal fun seats(row: String?, seat: String?): TicketPdfField<List<PrintedSeat>> {
         if (row == null && seat == null) return TicketPdfField.NotFound(NotFoundReason.MISSING)
         if (row == null || seat == null) return TicketPdfField.NotFound(NotFoundReason.INVALID)
         if (',' in row || ';' in row) return TicketPdfField.NotFound(NotFoundReason.AMBIGUOUS)
-        if (!ROW.matches(row)) return TicketPdfField.NotFound(NotFoundReason.INVALID)
+        val printedRow = when {
+            row == UNNAMED_ROW -> null
+            ROW.matches(row) && TicketSeat.isValidRow(row) -> row
+            else -> return TicketPdfField.NotFound(NotFoundReason.INVALID)
+        }
         val seats = seatList(seat) ?: return TicketPdfField.NotFound(NotFoundReason.INVALID)
-        if (seats.size > MAX_SEATS) return TicketPdfField.NotFound(NotFoundReason.AMBIGUOUS)
-        return TicketPdfField.Found(seats.distinct().map { PrintedSeat(row, it) })
+        return TicketPdfField.Found(seats.distinct().map { PrintedSeat(printedRow, it) })
     }
 
+    /** At most [MAX_SEATS] seats that core:model's `TicketSeat` accepts, or `null`. */
     private fun seatList(raw: String): List<String>? {
         SEAT_RANGE.matchEntire(raw)?.let { match ->
             val first = match.groupValues[1].toInt()
             val last = match.groupValues[2].toInt()
-            if (first < 1 || last <= first || last - first >= MAX_SEATS) return null
+            if (last <= first || last - first >= MAX_SEATS) return null
             return (first..last).map(Int::toString)
         }
         val parts = raw.split(',').map(String::trim)
-        if (parts.size > MAX_SEATS || parts.any { !SEAT.matches(it) }) return null
+        if (parts.size > MAX_SEATS || parts.any { !isValidSeat(it) }) return null
         return parts
     }
+
+    private fun isValidSeat(seat: String): Boolean =
+        (SEAT_NUMBER.matches(seat) || FIXED_SEAT_LABEL.matches(seat)) && TicketSeat.isValidSeat(seat)
 
     private fun name(raw: String, maxLength: Int): String? =
         raw.takeIf { TicketText.length(it) in 1..maxLength && NAME.matches(it) }

@@ -63,10 +63,12 @@ class TicketPdfReaderTest {
 
     @Test(timeout = 10_000)
     fun neverReturnsTheBookerNorAnyOtherPrintedText() {
-        val content = read(InventedTicketPdf.build()).toString()
+        val content = read(InventedTicketPdf.build())
+        val values = listOf(content.bookingNumber, content.filmTitle, content.cinema, content.date, content.startTime, content.hall, content.seats)
+            .map { it.valueOrNull.toString() }
 
-        listOf("Erika", "Mustermann", "Gebucht", "1234567", "98765432101", "9,50", "Normal", "Teststra", "12345", "17.10.2026", "example.invalid", "Kat.")
-            .forEach { assertFalse("'$it' must not be read", content.contains(it)) }
+        listOf("Erika", "Mustermann", "Gebucht", "1234567", "98765432101", "9,50", "Normal", "Teststra", "12345", "2026-10-17", "example.invalid", "Kat.")
+            .forEach { text -> assertFalse("'$text' must not be read", values.any { it.contains(text) }) }
     }
 
     @Test(timeout = 10_000)

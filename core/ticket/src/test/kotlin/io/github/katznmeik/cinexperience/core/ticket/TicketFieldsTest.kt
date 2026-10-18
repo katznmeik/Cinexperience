@@ -137,7 +137,7 @@ class TicketFieldsTest {
 
     @Test
     fun anInvalidBookingNumberIsNeverUsed() {
-        for (number in listOf("test-123", "TEST 123", "AB1", "T\u00c4ST123", "TEST1234567890ABCDEFG")) {
+        for (number in listOf("test-123", "TEST 123", "AB1", "T\u00c4ST123", "TEST1234567890ABC")) {
             assertEquals(number, invalid, read(PageSpec(bookingNumber = number)).bookingNumber)
         }
     }

@@ -8,3 +8,7 @@ plugins {
 // data. No PDF, OCR, image or QR-code library and no network code; Android is used
 // only to decode the QR code's small JPEG (BitmapFactory), everything else is plain
 // Kotlin.
+dependencies {
+    // The rules for booking numbers and seats (BookingNumber, TicketSeat).
+    implementation(projects.core.model)
+}
