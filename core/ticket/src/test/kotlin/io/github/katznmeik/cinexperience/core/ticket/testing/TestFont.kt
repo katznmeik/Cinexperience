@@ -35,6 +35,7 @@ internal class TestFont(
 
     /** The glyph's advance in 1/1000 of the font size. */
     fun width(char: Char): Int = when {
+        char == ZERO_WIDTH_SPACE -> 0
         char == ' ' -> 278
         char in ".,:;'!|" -> 278
         char.isUpperCase() -> if (bold) 722 else 667
@@ -106,8 +107,11 @@ internal class TestFont(
 
         /** Every character the invented tickets use, in code point order (one CMap range). */
         val ALPHABET: String = (
-            (' '..'~').joinToString("") + "\u00c4\u00d6\u00dc\u00df\u00e1\u00e4\u00e9\u00f6\u00fc\u2013\u2019\u20ac"
+            (' '..'~').joinToString("") + "\u00c4\u00d6\u00dc\u00df\u00e1\u00e4\u00e9\u00f6\u00fc\u2013\u2019\u20ac" + ZERO_WIDTH_SPACE
             ).toSortedSet().joinToString("")
+
+        /** A format character the text cleaning removes; it has no width. */
+        const val ZERO_WIDTH_SPACE = '\u200b'
     }
 }
 

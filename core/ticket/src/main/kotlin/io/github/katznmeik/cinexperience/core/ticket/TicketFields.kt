@@ -4,6 +4,8 @@ import io.github.katznmeik.cinexperience.core.ticket.text.TextLine
 import io.github.katznmeik.cinexperience.core.ticket.text.TextSegment
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.Locale
+import java.util.TreeMap
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -23,20 +25,30 @@ internal class TicketTextFields(
 
 /**
  * Finds the fields in the pages' lines (spec §11.2). Yorck's ticket has:
- * - the "Buchungsnummer" label with its value on the next line in the same column;
+ * - the "Buchungsnummer" label left of the ticket block, with its value on the next
+ *   line in the same column;
  * - a ticket block: "Ticket", the film title in bold on the line(s) below, then label
- *   and value on one line each: "Kino …", "Datum dd.MM.yyyy", "Zeit HH:mm Uhr",
- *   "Saal …", "Reihe …", "Platz …" (the last three side by side), then
- *   "Kat. …" and "Gebucht von …", which close the block and are never read.
+ *   and value on one line each, all regular: "Kino …", "Datum dd.MM.yyyy",
+ *   "Zeit HH:mm Uhr", "Saal …", "Reihe …", "Platz …" (the last three side by side),
+ *   then "Kat. …" and the bold "Gebucht von …", which close the block and are never read.
  *
- * A block covers the segments below "Ticket" from its column rightwards, up to the
- * next "Ticket" below it or the first line starting with "Gebucht von"; nothing from
- * that line on (the booker's name) is ever looked at. The title comes first: the
- * bold lines right below "Ticket" (labels are regular, so a title may start with
- * "Zeit" or end in "Kino"). The labels are looked for only below the title, each with
- * its value on the same line or on the next line in its column within the block (a
- * value line that is itself a label, "Kat." or "Gebucht von" is no value), with or
- * without a colon; the first occurrence of each label counts.
+ * The booker's name must never become a field. A booker line is any line with
+ * "gebucht" in its letters, whatever the case, spaces or format characters
+ * ("GEBUCHT VON", "Gebucht von:", "gebuchtvon"). A block covers the segments below
+ * "Ticket" from its column rightwards, up to the next "Ticket" below it or the first
+ * booker line, wherever on the page that line starts; nothing from that line on is
+ * ever looked at. The title comes first: the bold lines right below "Ticket" (labels
+ * are regular, so a title may start with "Zeit" or end in "Kino"). The labels are
+ * looked for only below the title and above the next bold line (the booker's name is
+ * bold, no label or value is), each with its value on the same line or on the next
+ * line in its column within the block, with or without a colon; the first occurrence
+ * of each label counts. No value may be a label line, mention "gebucht" or start
+ * like a category ("Kat", "Kat.1", "Kategorie"), and no value is taken from right
+ * above a booker line.
+ *
+ * The booking number is looked for only outside the ticket blocks (each block's
+ * area reaching down to the next "Ticket" or the page's end): in Yorck's left
+ * column, label and value in one column.
  *
  * Several blocks (e.g. one page per ticket) must agree on all fields but the seats;
  * their seats are joined only if every block has the same title, cinema, date, time
@@ -52,11 +64,12 @@ internal object TicketFields {
     private const val HALL = "Saal"
     private const val ROW = "Reihe"
     private const val SEAT = "Platz"
-    private const val CATEGORY = "Kat."
-    private const val BOOKED_BY = "Gebucht von"
+
+    /** In the letters of a booker line ("Gebucht von …"), in lower case. */
+    private const val BOOKED = "gebucht"
 
     /** Texts that start a label line: such a line is never another label's value. */
-    private val LABELS = listOf(BOOKING_NUMBER, TICKET, CINEMA, DATE, TIME, HALL, ROW, SEAT, CATEGORY)
+    private val LABELS = listOf(BOOKING_NUMBER, TICKET, CINEMA, DATE, TIME, HALL, ROW, SEAT)
 
     /** Film title lines at most. */
     private const val MAX_TITLE_LINES = 3
@@ -87,6 +100,34 @@ internal object TicketFields {
         val text: String get() = segment.text
     }
 
+    /** A page's segments in reading order, and those on booker lines. */
+    private class Page(val segments: List<Placed>) {
+        val bookers: List<Placed> = segments.filter { isBookerLine(it.text) }
+    }
+
+    /** A ticket block's area: from its anchor's line down to the next anchor's, from its column rightwards. */
+    private class Area(val firstLine: Int, val endLine: Int, val left: Double) {
+        operator fun contains(placed: Placed): Boolean = placed.line in firstLine until endLine && placed.segment.x >= left
+    }
+
+    /**
+     * All block areas of a page, however many anchors it has: they don't overlap, so a
+     * segment can only be in the area of the last anchor line at or above it (from the
+     * leftmost anchor's column, if a line has several).
+     */
+    private class Areas(anchors: List<Placed>) {
+        private val leftByLine = TreeMap<Int, Double>()
+
+        init {
+            for (anchor in anchors) leftByLine.merge(anchor.line, anchor.segment.x - tolerance(anchor.segment)) { a, b -> minOf(a, b) }
+        }
+
+        operator fun contains(placed: Placed): Boolean {
+            val left = leftByLine.floorEntry(placed.line)?.value ?: return false
+            return placed.segment.x >= left
+        }
+    }
+
     private class Block(
         val title: TicketPdfField<String>,
         val cinema: TicketPdfField<String>,
@@ -103,10 +144,13 @@ internal object TicketFields {
     /** The fields, or `null` if the pages aren't recognisably a Yorck ticket. */
     fun read(pages: List<List<TextLine>>): TicketTextFields? {
         val placedPages = pages.map { lines ->
-            lines.flatMapIndexed { line, textLine -> textLine.segments.map { Placed(line, it) } }
+            Page(lines.flatMapIndexed { line, textLine -> textLine.segments.map { Placed(line, it) } })
         }
         val bookingValues = placedPages.asSequence()
-            .flatMap { page -> page.asSequence().mapNotNull { labelValue(BOOKING_NUMBER, it, page) } }
+            .flatMap { page ->
+                val outside = outsideBlocks(page)
+                outside.asSequence().mapNotNull { labelValue(BOOKING_NUMBER, it, outside, page) }
+            }
             .take(MAX_BOOKING_LABELS)
             .toList()
         val blocks = placedPages.flatMap(::blocks).filterNot { it.hasNoLabels }
@@ -132,27 +176,40 @@ internal object TicketFields {
         return fields.takeIf { it.anyFound }
     }
 
-    private fun blocks(page: List<Placed>): List<Block> {
-        val anchors = page.filter { it.text == TICKET }
+    private fun anchors(page: Page): List<Placed> = page.segments.filter { it.text == TICKET }
+
+    private fun area(anchor: Placed, anchors: List<Placed>): Area {
+        val nextAnchorLine = anchors.filter { it.line > anchor.line }.minOfOrNull { it.line } ?: Int.MAX_VALUE
+        return Area(anchor.line, nextAnchorLine, anchor.segment.x - tolerance(anchor.segment))
+    }
+
+    /** The page's segments outside every ticket block's area. */
+    private fun outsideBlocks(page: Page): List<Placed> {
+        val areas = Areas(anchors(page))
+        return page.segments.filterNot { it in areas }
+    }
+
+    private fun blocks(page: Page): List<Block> {
+        val anchors = anchors(page)
         if (anchors.size > MAX_BLOCKS_PER_PAGE) return listOf(ambiguousBlock())
         return anchors.map { anchor ->
             if (anchors.any { it !== anchor && it.line == anchor.line }) return@map ambiguousBlock()
-            val left = anchor.segment.x - tolerance(anchor.segment)
-            val nextAnchorLine = anchors.filter { it.line > anchor.line }.minOfOrNull { it.line } ?: Int.MAX_VALUE
-            val below = page.filter { it.line > anchor.line && it.line < nextAnchorLine && it.segment.x >= left }
-            // The booker's line closes the block: nothing from it on is ever looked at.
-            val end = below.firstOrNull { it.text.startsWith(BOOKED_BY) }?.line ?: Int.MAX_VALUE
-            block(anchor, below.filter { it.line < end })
+            val area = area(anchor, anchors)
+            // The first booker line below the anchor closes the block, wherever it starts: nothing from it on is ever looked at.
+            val end = page.bookers.firstOrNull { it.line > anchor.line && it.line < area.endLine }?.line ?: area.endLine
+            block(anchor, page.segments.filter { it in area && it.line > anchor.line && it.line < end }, page)
         }
     }
 
     /** The fields of one block; [segments] are the block's, values are looked for only there. */
-    private fun block(anchor: Placed, segments: List<Placed>): Block {
+    private fun block(anchor: Placed, segments: List<Placed>, page: Page): Block {
         val (title, titleEnd) = title(anchor, segments)
-        val labelled = segments.filter { it.line > titleEnd }
-        fun match(label: String): LabelValue? = labelled.firstNotNullOfOrNull { labelValue(label, it, labelled) }
-        // A label without a value is "" (invalid), a missing label null.
-        fun field(label: String): String? = match(label)?.let { it.value ?: "" }
+        // The booker's name is bold, no label or value is: the first bold line after the title ends the labels.
+        val boldLine = segments.firstOrNull { it.line > titleEnd && it.segment.isBold }?.line ?: Int.MAX_VALUE
+        val labelled = segments.filter { it.line > titleEnd && it.line < boldLine }
+        fun match(label: String): LabelValue? = labelled.firstNotNullOfOrNull { labelValue(label, it, labelled, page) }
+        // A label without a (usable) value is "" (invalid), a missing label null.
+        fun field(label: String): String? = match(label)?.let { found -> found.value?.takeIf(::isUsable) ?: "" }
         fun <T> checkedField(label: String, check: (String) -> T?): TicketPdfField<T> =
             match(label)?.let { checked(it, check) } ?: TicketPdfField.NotFound(NotFoundReason.MISSING)
         return Block(
@@ -186,7 +243,7 @@ internal object TicketFields {
         val title = when {
             parts.isEmpty() -> TicketPdfField.NotFound(NotFoundReason.MISSING)
             parts.size > MAX_TITLE_LINES -> TicketPdfField.NotFound(NotFoundReason.INVALID)
-            else -> checked(LabelValue(parts.joinToString(" ")), TicketPdfRules::title)
+            else -> checked(LabelValue(parts.joinToString(" ")), TicketPdfRules::title, isTitle = true)
         }
         return title to last
     }
@@ -195,33 +252,61 @@ internal object TicketFields {
     private class LabelValue(val value: String?)
 
     /** The value of [label] if [placed] starts with it, else `null`; a value on the next line is looked for in [scope]. */
-    private fun labelValue(label: String, placed: Placed, scope: List<Placed>): LabelValue? {
+    private fun labelValue(label: String, placed: Placed, scope: List<Placed>, page: Page): LabelValue? {
         val text = placed.text
         return when {
-            text == label || text == "$label:" -> LabelValue(valueBelow(placed, scope))
+            text == label || text == "$label:" -> LabelValue(valueBelow(placed, scope, page))
             text.startsWith("$label: ") -> LabelValue(text.substring(label.length + 2))
             text.startsWith("$label ") -> LabelValue(text.substring(label.length + 1))
             else -> null
         }
     }
 
-    /** The first segment of [scope] below [label] in its column, close enough to belong to it and not a label itself. */
-    private fun valueBelow(label: Placed, scope: List<Placed>): String? {
+    /**
+     * The first segment of [scope] below [label] in its column, close enough to belong
+     * to it, not a label itself and not right above a booker line anywhere on the
+     * [page] (a name on its own line before "Gebucht von").
+     */
+    private fun valueBelow(label: Placed, scope: List<Placed>, page: Page): String? {
         val below = scope.firstOrNull { it.line > label.line && sameColumn(it.segment, label.segment) } ?: return null
-        val distance = label.segment.y - below.segment.y
-        if (distance <= 0 || distance > NEXT_LINE_DISTANCE * max(label.segment.size, below.segment.size)) return null
-        return below.text.takeUnless(::isLabelLine)
+        if (!isNextLine(label, below) || isLabelLine(below.text)) return null
+        if (page.bookers.any { it.line > below.line && isNextLine(below, it) }) return null
+        return below.text
+    }
+
+    /** [below] is on a line under [above], at most [NEXT_LINE_DISTANCE] font sizes away. */
+    private fun isNextLine(above: Placed, below: Placed): Boolean {
+        val distance = above.segment.y - below.segment.y
+        return distance > 0 && distance <= NEXT_LINE_DISTANCE * max(above.segment.size, below.segment.size)
     }
 
     private fun isLabelLine(text: String): Boolean =
-        text.startsWith(BOOKED_BY) || LABELS.any { text == it || text.startsWith("$it ") || text.startsWith("$it:") }
+        isBookerLine(text) || isCategory(text) || LABELS.any { text == it || text.startsWith("$it ") || text.startsWith("$it:") }
+
+    /** "Gebucht von …" in any case, with or without spaces (the cleaning has removed format characters). */
+    private fun isBookerLine(text: String): Boolean = BOOKED in letters(text)
+
+    /** "Kat. …", "Kat.1 …", "KAT …" or "Kategorie …": the category, never a value. */
+    private fun isCategory(text: String): Boolean {
+        val lower = text.lowercase(Locale.ROOT)
+        return lower.startsWith("kategorie") || lower.startsWith("kat") && (lower.length == 3 || !lower[3].isLetter())
+    }
+
+    private fun letters(text: String): String = buildString(text.length) {
+        for (char in text) if (char.isLetter()) append(char.lowercaseChar())
+    }
 
     private fun sameColumn(a: TextSegment, b: TextSegment): Boolean = abs(a.x - b.x) <= tolerance(b)
 
     private fun tolerance(segment: TextSegment): Double = max(MIN_COLUMN_TOLERANCE, COLUMN_TOLERANCE * segment.size)
 
-    private fun <T> checked(value: LabelValue, check: (String) -> T?): TicketPdfField<T> {
+    /** No value mentions "gebucht" or starts like a category. */
+    private fun isUsable(value: String): Boolean = !isBookerLine(value) && !isCategory(value)
+
+    /** [value] checked; one that mentions "gebucht" (or, but in a title, starts like a category) is never used. */
+    private fun <T> checked(value: LabelValue, check: (String) -> T?, isTitle: Boolean = false): TicketPdfField<T> {
         val raw = value.value ?: return TicketPdfField.NotFound(NotFoundReason.INVALID)
+        if (if (isTitle) isBookerLine(raw) else !isUsable(raw)) return TicketPdfField.NotFound(NotFoundReason.INVALID)
         return check(raw)?.let { TicketPdfField.Found(it) } ?: TicketPdfField.NotFound(NotFoundReason.INVALID)
     }
 

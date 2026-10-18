@@ -3,6 +3,7 @@ package io.github.katznmeik.cinexperience.core.ticket
 import io.github.katznmeik.cinexperience.core.ticket.testing.ImageIoLuminanceDecoder
 import io.github.katznmeik.cinexperience.core.ticket.testing.InventedTicketPdf
 import io.github.katznmeik.cinexperience.core.ticket.testing.PageSpec
+import io.github.katznmeik.cinexperience.core.ticket.testing.TestFont
 import io.github.katznmeik.cinexperience.core.ticket.testing.TicketSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,11 +45,98 @@ class TicketFieldsScopeTest {
 
     @Test(timeout = 10_000)
     fun aLabelWithoutValueDoesntTakeTheCategoryBelow() {
-        // "Saal" without a value; the next line in its column is "Kat. 1 x Normal".
-        val content = read(page(TicketSpec(hall = "")))
+        // "Saal" without a value; the next line in its column is the category.
+        for ((label, value) in listOf("Kat." to "1 x Normal", "Kat.1 x Normal" to "", "KAT" to "Normal", "Kategorie" to "Parkett")) {
+            val content = read(page(TicketSpec(hall = "", categoryLabel = label, category = value, categoryTop = 279.0)))
+
+            assertEquals(label, invalid, content.hall)
+            assertNeverShown(content, "Kat", "KAT", "Normal", "Parkett", "Erika", "Mustermann")
+        }
+    }
+
+    @Test(timeout = 10_000)
+    fun aValueThatStartsLikeACategoryIsNone() {
+        for (hall in listOf("Kat.1 x Normal", "Kategorie Parkett", "Kat 2")) {
+            assertEquals(hall, invalid, read(page(TicketSpec(hall = hall))).hall)
+        }
+        assertEquals(invalid, read(page(TicketSpec(row = "Kat"))).seats)
+        // Words that only begin with the same letters are fine.
+        assertEquals(TicketPdfField.Found("Katakombe"), read(page(TicketSpec(hall = "Katakombe"))).hall)
+    }
+
+    @Test(timeout = 10_000)
+    fun aValueThatMentionsTheBookerIsNone() {
+        // In a block, such a line is a booker line and closes the block.
+        val content = read(page(TicketSpec(hall = "gebucht von Erika Mustermann")))
+        assertEquals(TicketPdfField.NotFound(NotFoundReason.MISSING), content.hall)
+        assertNeverShown(content, "Erika", "Mustermann", "gebucht")
+
+        // A booking number that would pass its rule, beside or below its label.
+        for (beside in listOf(true, false)) {
+            val booking = read(PageSpec(bookingNumber = "GEBUCHT", bookingNumberBeside = beside))
+            assertEquals("beside $beside", invalid, booking.bookingNumber)
+            assertNeverShown(booking, "GEBUCHT")
+        }
+    }
+
+    @Test(timeout = 10_000)
+    fun aBookerLineInAnyCaseOrSpellingClosesTheBlock() {
+        // A regular booker line right below "Saal" without a value: only its label tells it apart.
+        val labels = listOf("gebucht von", "GEBUCHT VON", "Gebucht${TestFont.ZERO_WIDTH_SPACE}von", "Gebucht  von:", "gebucht:")
+        for (label in labels) {
+            val content = read(page(TicketSpec(hall = "", category = null, bookedByIndent = 0.0, bookedByTop = 290.0, bookedByLabel = label, bookedByBold = false)))
+
+            assertEquals(label, invalid, content.hall)
+            assertNeverShown(content, "Erika", "Mustermann", "ebucht", "EBUCHT")
+        }
+    }
+
+    @Test(timeout = 10_000)
+    fun aNameOnItsOwnLineAboveTheBookerLabelIsNeverAValue() {
+        // Bold, as on Yorck's ticket, the first bold line ends the labels; regular, it stands right above a booker line.
+        for (bold in listOf(true, false)) {
+            val content = read(page(TicketSpec(hall = "", category = null, bookedByIndent = 0.0, bookedByTop = 290.0, bookedByNameFirst = true, bookedByBold = bold)))
+
+            assertEquals("bold $bold", invalid, content.hall)
+            assertNeverShown(content, "Erika", "Mustermann", "Gebucht")
+        }
+    }
+
+    @Test(timeout = 10_000)
+    fun aBookerLabelLeftOfTheBlockStillClosesIt() {
+        // The label starts in the left column, the (regular) name in the block's column.
+        val content = read(page(TicketSpec(hall = "", category = null, bookedByIndent = 0.0, bookedByLabelIndent = -190.0, bookedByTop = 290.0, bookedByBold = false)))
 
         assertEquals(invalid, content.hall)
-        assertNeverShown(content, "Kat.", "Normal", "Erika", "Mustermann")
+        assertNeverShown(content, "Erika", "Mustermann", "Gebucht")
+    }
+
+    @Test(timeout = 10_000)
+    fun aBookerLineWhereTheTitleWouldBeIsNoTitle() {
+        val content = read(page(TicketSpec(title = emptyList(), bookedByLabel = "gebucht von", bookedByIndent = 0.0, bookedByTop = 117.0)))
+
+        assertEquals(TicketPdfField.NotFound(NotFoundReason.MISSING), content.filmTitle)
+        assertNeverShown(content, "Erika", "Mustermann", "gebucht")
+    }
+
+    @Test(timeout = 10_000)
+    fun theBookingNumberIsNeverTakenFromATicketBlock() {
+        // An empty "Buchungsnummer" in the block, right above the booker's name on its own line.
+        val content = read(page(TicketSpec(labelAboveBooker = "Buchungsnummer", bookedBy = "MUSTERMANN", bookedByNameFirst = true, bookedByIndent = 0.0)))
+
+        assertEquals(TicketPdfField.Found("TEST123"), content.bookingNumber)
+        assertNeverShown(content, "MUSTERMANN")
+    }
+
+    @Test(timeout = 10_000)
+    fun theBookingNumberIsNeverTheNameAboveABookerLine() {
+        // In the left column: an empty "Buchungsnummer", the name in bold below it, then "Gebucht von".
+        val ticket = TicketSpec(labelAboveBooker = "Buchungsnummer", bookedBy = "MUSTERMANN", bookedByNameFirst = true, bookedByIndent = -219.0, bookedByTop = 398.0)
+        val content = read(PageSpec(tickets = listOf(ticket), bookingNumber = null))
+
+        assertEquals(invalid, content.bookingNumber)
+        assertEquals(TicketPdfField.Found("4"), content.hall)
+        assertNeverShown(content, "MUSTERMANN")
     }
 
     @Test(timeout = 10_000)

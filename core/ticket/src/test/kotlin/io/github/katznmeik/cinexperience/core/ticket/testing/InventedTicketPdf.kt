@@ -14,12 +14,23 @@ internal data class TicketSpec(
     val row: String? = "7",
     val seat: String? = "10",
     val category: String? = "1 x Normal",
+    val categoryLabel: String = "Kat.",
+    /** Where the category line's baseline is, from the top of the block's page area. */
+    val categoryTop: Double = 311.0,
     val bookedBy: String? = "Erika Mustermann",
     val bookedByLabel: String = "Gebucht von",
     /** How far the "Gebucht von" line is indented from the block's column (8 pt on Yorck's ticket). */
     val bookedByIndent: Double = 8.0,
     /** Where the "Gebucht von" line's baseline is, from the top of the block's page area. */
     val bookedByTop: Double = 353.0,
+    /** The booker's line in bold, as on Yorck's ticket. */
+    val bookedByBold: Boolean = true,
+    /** The name on its own line, with the label on the line below it. */
+    val bookedByNameFirst: Boolean = false,
+    /** The label at its own indent, apart from the name (two segments on one line); `null`: label and name as one text. */
+    val bookedByLabelIndent: Double? = null,
+    /** A label without a value on its own line right above the booker's line(s). */
+    val labelAboveBooker: String? = null,
     /** Values on the line below their labels instead of next to them. */
     val valuesBelow: Boolean = false,
     /** Labels with a colon ("Kino: delphi LUX"). */
@@ -146,8 +157,24 @@ internal object InventedTicketPdf {
         cell("Saal", x, 257.0, ticket.hall)
         cell("Reihe", x + 226.0, 257.0, ticket.row)
         cell("Platz", x + 460.0, 257.0, ticket.seat)
-        cell("Kat.", x, 311.0, ticket.category, gap = 22.0)
-        ticket.bookedBy?.let { out.text(bold, 15.0, x + ticket.bookedByIndent, ticket.bookedByTop + shift, "${ticket.bookedByLabel} $it") }
+        cell(ticket.categoryLabel, x, ticket.categoryTop, ticket.category, gap = 22.0)
+        ticket.bookedBy?.let { name -> booker(out, ticket, name, if (ticket.bookedByBold) bold else regular, regular, x, ticket.bookedByTop + shift) }
+    }
+
+    private fun booker(out: QtContent, ticket: TicketSpec, name: String, font: TestFont, regular: TestFont, blockX: Double, top: Double) {
+        val x = blockX + ticket.bookedByIndent
+        ticket.labelAboveBooker?.let { out.text(regular, 12.0, x, top - 19.0, it) }
+        when {
+            ticket.bookedByNameFirst -> {
+                out.text(font, 15.0, x, top, name)
+                out.text(font, 15.0, x, top + 19.0, ticket.bookedByLabel)
+            }
+            ticket.bookedByLabelIndent != null -> {
+                out.text(font, 15.0, blockX + ticket.bookedByLabelIndent, top, ticket.bookedByLabel)
+                out.text(font, 15.0, x, top, name)
+            }
+            else -> out.text(font, 15.0, x, top, "${ticket.bookedByLabel} $name")
+        }
     }
 
     private fun leftColumn(out: QtContent, page: PageSpec, regular: TestFont, bold: TestFont) {

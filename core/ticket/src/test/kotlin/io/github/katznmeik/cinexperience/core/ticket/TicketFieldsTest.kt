@@ -130,8 +130,8 @@ class TicketFieldsTest {
         assertEquals(seats("7" to "10"), content.seats)
         assertEquals(TicketPdfField.Found("TEST123"), content.bookingNumber)
         assertEquals(missing, read(PageSpec(bookingNumber = null, conditions = false)).bookingNumber)
-        // The conditions text has a line starting with "Buchungsnummer": a label without a valid value.
-        assertEquals(invalid, read(PageSpec(bookingNumber = null)).bookingNumber)
+        // The conditions text has a line starting with "Buchungsnummer", in the ticket block's area: never looked at.
+        assertEquals(missing, read(PageSpec(bookingNumber = null)).bookingNumber)
         assertEquals(missing, read(page(TicketSpec(row = null, seat = null))).seats)
     }
 
