@@ -12,6 +12,7 @@ import io.github.katznmeik.cinexperience.core.model.ShowingTime
 import io.github.katznmeik.cinexperience.core.model.Ticket
 import io.github.katznmeik.cinexperience.core.model.UpcomingVisits
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
+import io.github.katznmeik.cinexperience.core.model.hasStarted
 import io.github.katznmeik.cinexperience.core.model.qrModulesExpireAt
 import io.github.katznmeik.cinexperience.core.ui.flow.asResult
 import io.github.katznmeik.cinexperience.core.ui.flow.minuteTicks
@@ -30,9 +31,12 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 /**
- * The Next visit card above the cinema list (spec §6.1): the soonest upcoming visit.
+ * The Next visit card above the cinema list (spec §6.1): the soonest visit whose
+ * showing is ahead or started less than 30 minutes ago, or that is today without a
+ * start time ([UpcomingVisits.forNextVisitCard]).
  *
  * @property today today in Berlin, for "Today" / "Tomorrow".
+ * @property hasStarted the showing has started ("Started 20:15").
  * @property seatLabel the visit's seat in the hall's current layout; `null` without one.
  * @property canShowTicket the visit has a ticket with a QR code that is still kept ("Show ticket").
  */
@@ -46,14 +50,15 @@ data class NextVisit(
     val hallName: String,
     val seatLabel: SeatLabel?,
     val canShowTicket: Boolean,
+    val hasStarted: Boolean = false,
 )
 
 /**
- * Picks the Next visit (spec §6.1): the first of [UpcomingVisits] at [clock]'s now,
- * `null` while there is none. Whether a visit is upcoming changes with time, so it
- * is picked again on every tick (default: every minute). A failure to load leaves
- * the card out (the list shows its own message); a failure to read the ticket
- * leaves out only "Show ticket".
+ * Picks the Next visit (spec §6.1): the first of [UpcomingVisits.forNextVisitCard]
+ * at [clock]'s now, `null` while there is none. Which visit that is, and whether it
+ * has started, changes with time, so it is picked again on every tick (default:
+ * every minute). A failure to load leaves the card out (the list shows its own
+ * message); a failure to read the ticket leaves out only "Show ticket".
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NextVisitViewModel(
@@ -63,13 +68,14 @@ class NextVisitViewModel(
     ticks: Flow<Unit> = minuteTicks(),
 ) : ViewModel() {
 
-    /** The picked visit and Berlin's today when it was picked. */
-    private data class Pick(val item: VisitListItem, val today: LocalDate)
+    /** The picked visit, Berlin's today when it was picked and whether its showing had started. */
+    private data class Pick(val item: VisitListItem, val today: LocalDate, val hasStarted: Boolean)
 
     val uiState: StateFlow<NextVisit?> =
         combine(visitRepository.observeAllVisits().asResult(), ticks) { visits, _ ->
             val now = clock.instant()
-            UpcomingVisits.of(visits.getOrDefault(emptyList()), now).firstOrNull()?.let { Pick(it, ShowingTime.today(now)) }
+            UpcomingVisits.forNextVisitCard(visits.getOrDefault(emptyList()), now).firstOrNull()
+                ?.let { Pick(it, ShowingTime.today(now), it.visit.hasStarted(now)) }
         }
             .distinctUntilChanged()
             .flatMapLatest { pick ->
@@ -94,6 +100,7 @@ class NextVisitViewModel(
             hallName = pick.item.hallName,
             seatLabel = pick.item.seatLabel,
             canShowTicket = ticket?.qrModules != null && clock.instant().isBefore(visit.qrModulesExpireAt),
+            hasStarted = pick.hasStarted,
         )
     }
 

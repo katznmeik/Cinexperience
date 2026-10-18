@@ -86,9 +86,33 @@ class NextVisitViewModelTest {
     }
 
     @Test
-    fun pastAndStartedVisitsShowNoCard() = runTest {
+    fun pastVisitsAndShowingsStartedHalfAnHourAgoShowNoCard() = runTest {
         assertNull(viewModel(store()).card)
-        assertNull(viewModel(store(visit(1, -1, LocalTime.of(20, 15)), visit(2, 0, LocalTime.of(9, 30)), visit(3, 0, null))).card)
+        // Yesterday; today at 9:30 (started 30 minutes ago at 10:00); yesterday without a start time.
+        assertNull(viewModel(store(visit(1, -1, LocalTime.of(20, 15)), visit(2, 0, LocalTime.of(9, 30)), visit(3, -1, null))).card)
+    }
+
+    @Test
+    fun aShowingThatStartedLessThanHalfAnHourAgoStaysAsStarted() = runTest {
+        // 10:00 in Berlin: the 9:45 showing started 15 minutes ago and comes before the 11:00 one.
+        val card = viewModel(store(visit(1, 0, LocalTime.of(9, 45)), visit(2, 0, LocalTime.of(11, 0)))).card!!
+        assertEquals(1L, card.visitId)
+        assertTrue(card.hasStarted)
+        assertEquals("Started 09:45", card.whenText())
+    }
+
+    @Test
+    fun todaysVisitWithoutAStartTimeStaysAfterTheTimedOnesUntilMidnight() = runTest {
+        val vm = viewModel(store(visit(1, 0, null), visit(2, 0, LocalTime.of(20, 15))))
+        assertEquals(2L, vm.card?.visitId)
+        clock.now = Instant.parse("2026-10-15T18:45:00Z") // 20:45: the 20:15 showing leaves
+        ticks.value++
+        assertEquals(1L, vm.card?.visitId)
+        assertEquals("Today", vm.card?.whenText())
+        assertFalse(vm.card!!.hasStarted)
+        clock.now = Instant.parse("2026-10-15T22:00:00Z") // midnight in Berlin
+        ticks.value++
+        assertNull(vm.card)
     }
 
     @Test
@@ -96,15 +120,34 @@ class NextVisitViewModelTest {
         // Today at 10:30 and 20:15, then nothing.
         val vm = viewModel(store(visit(1, 0, LocalTime.of(10, 30)), visit(2, 0, LocalTime.of(20, 15))))
         assertEquals(1L, vm.card?.visitId)
+        assertEquals("Today · 10:30", vm.card?.whenText())
 
         clock.now = Instant.parse("2026-10-15T08:30:00Z") // 10:30 in Berlin: the first one starts
-        assertEquals(1L, vm.card?.visitId) // until the next tick
+        assertFalse(vm.card!!.hasStarted) // until the next tick
+        ticks.value++
+        assertEquals(1L, vm.card?.visitId)
+        assertEquals("Started 10:30", vm.card?.whenText())
+
+        clock.now = Instant.parse("2026-10-15T08:59:00Z") // 10:59: still on the card
+        ticks.value++
+        assertEquals(1L, vm.card?.visitId)
+        clock.now = Instant.parse("2026-10-15T09:00:00Z") // 11:00: half an hour after the start
         ticks.value++
         assertEquals(2L, vm.card?.visitId)
 
-        clock.now = Instant.parse("2026-10-15T18:15:00Z") // 20:15: the second one starts
+        clock.now = Instant.parse("2026-10-15T18:45:00Z") // 20:45: the second one leaves too
         ticks.value++
         assertNull(vm.card)
+    }
+
+    @Test
+    fun showTicketStaysWhileTheStartedShowingIsOnTheCard() = runTest {
+        val showing = SampleTickets.visit(today) // today at 20:15, with its ticket and QR code
+        val vm = viewModel(SampleTickets.store(visits = listOf(showing)))
+        clock.now = Instant.parse("2026-10-15T18:40:00Z") // 20:40 in Berlin
+        ticks.value++
+        assertEquals("Started 20:15", vm.card?.whenText())
+        assertTrue(vm.card!!.canShowTicket)
     }
 
     @Test

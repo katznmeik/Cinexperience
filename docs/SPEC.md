@@ -2,7 +2,7 @@
 
 **Status:** v1.3.0 released (2026-10-17); v1.4 (ticket import, ticket QR code, reminders) specified
 **Owner:** katznmeik
-**Last updated:** 2026-10-18 (rev. 31)
+**Last updated:** 2026-10-18 (rev. 32)
 
 ---
 
@@ -228,10 +228,12 @@ From v1.1 there are four: **Cinemas**, **Program** (§6.9), **Rankings**,
   **Favourites**, shows only the favourite cinemas (in score order); favourite
   cinemas carry a ★ marker in the list.
 - FAB "Add visit" (quick entry: pick cinema → hall).
-- **Next visit** (v1.4): while an upcoming visit (§4.4) exists, a card above
-  the list shows the soonest one: film, day and start time, cinema · hall,
-  seat, and "Show ticket" (§6.11) when it has a QR code. Tapping the card opens
-  the visit.
+- **Next visit** (v1.4): while a visit's showing is ahead or started less
+  than 30 minutes ago, or the visit is today without a start time (until
+  midnight), a card above the list shows the soonest such visit: film, day and
+  start time (after the start it says "Started 20:15"), cinema · hall, seat,
+  and "Show ticket" (§6.11) when it has a QR code. Tapping the card opens the
+  visit.
 
 ### 6.2 Cinema detail
 - Header: name, address, overall score, cinema category scores, and a ☆/★

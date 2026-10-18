@@ -21,13 +21,17 @@ import androidx.compose.ui.unit.dp
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
 import io.github.katznmeik.cinexperience.core.ui.text.showingDayText
+import io.github.katznmeik.cinexperience.core.ui.text.timeText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 /** "delphi LUX · Saal 4" */
 internal fun NextVisit.placeText(): String = "$cinemaName · $hallName"
 
-/** "Tomorrow · 20:15", "Sat 17 Oct · 20:15" (Berlin time). */
-internal fun NextVisit.whenText(): String = showingDayText(date, startTime, today)
+/** "Tomorrow · 20:15", "Sat 17 Oct · 20:15", "Today" (Berlin time); once the showing has started "Started 20:15". */
+internal fun NextVisit.whenText(): String {
+    val start = startTime
+    return if (hasStarted && start != null) "Started ${timeText(start)}" else showingDayText(date, start, today)
+}
 
 /** What screen readers announce for the card (it opens the visit). */
 internal fun NextVisit.description(): String = listOfNotNull(
@@ -38,9 +42,10 @@ internal fun NextVisit.description(): String = listOfNotNull(
 ).joinToString(", ")
 
 /**
- * The Next visit card (spec §6.1): film, day and start time, cinema · hall and seat
- * of the soonest upcoming visit; tapping it opens the visit. "Show ticket" opens the
- * ticket screen (§6.11) when the visit has a QR code.
+ * The Next visit card (spec §6.1): film, day and start time ("Started 20:15" for up
+ * to 30 minutes after the start), cinema · hall and seat of the soonest such visit;
+ * tapping it opens the visit. "Show ticket" opens the ticket screen (§6.11) when
+ * the visit has a QR code.
  */
 @Composable
 internal fun NextVisitCard(next: NextVisit, onOpenVisit: () -> Unit, onShowTicket: () -> Unit, modifier: Modifier = Modifier) {

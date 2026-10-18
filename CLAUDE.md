@@ -72,7 +72,7 @@ Look at the screenshot PNGs after every UI change.
 | `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos), backup export/import engine |
 | `core:program` | Android lib + kotlinx.serialization | Yorck's program (v1.1, spec §11.1): model (`Program`, `Film`, `Showing`), page parser, Yorck-name → seed-key table, `ProgramLinks`, visit pre-fill, the HTTPS download (the app's **only network code**), cache `files/program/program.json`, `ProgramRepository` |
 | `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories (incl. `FakeProgramRepository`) and file stores, illustrative screenshot fixtures (incl. `buildProgram`, `SampleProgram`, `SampleTickets`), `MutableClock`, `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
-| `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips, messages, the message snackbar, `rememberLoadedImage`, `rememberTextWidth`, picker date conversions), date and time texts (`text/Dates.kt`), `flow/Flows.kt` (`minuteTicks`, `asResult`), `navigation/` (result message for the screen below, `CloseOnce`) |
+| `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips, messages, the message snackbar, `rememberLoadedImage`, `rememberTextWidth`, picker date conversions), date and time texts (`text/Dates.kt`), `spelledOut` (codes read letter by letter), `flow/Flows.kt` (`minuteTicks`, `asResult`), `navigation/` (result message for the screen below, `CloseOnce`) |
 | `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
 | `feature:cinemas` | feature | cinema list (start tab; Next visit card, sort chips and the Favourites filter), cinema detail (☆/★ favourite toggle, "Now showing"), manage cinemas & halls |
 | `feature:seatmap` | feature | hall detail with seat map, layout editor |
@@ -169,11 +169,14 @@ Don't duplicate config in module build files.
   computes the start, upcoming visits and the QR modules' expiry (7 days), which
   `DataContainer.removeExpiredQrModules` applies at app start; screens check
   `Visit.qrModulesExpireAt` against `AppContainer.clock` too (the removal runs
-  once per process). `UpcomingVisits` (core:model) orders upcoming visits
-  soonest first (date, start time, untimed last, id): the Next visit card above
-  the cinema list (its own `NextVisitViewModel`, re-picked on `minuteTicks`;
-  "Show ticket" only with a QR code still kept; the card opens the visit) and
-  All visits' Upcoming section. Form saves never wipe tickets: the visit form's
+  once per process). `UpcomingVisits` (core:model) orders visits soonest first
+  (date, start time, untimed last, id): `of` gives the upcoming visits (§4.4,
+  All visits' Upcoming section); `forNextVisitCard` is the Next visit card's
+  own, wider rule (showings until 30 min after the start, then reading
+  "Started 20:15"; today's visits without a start time until midnight). The
+  card above the cinema list has its own `NextVisitViewModel`, re-picked on
+  `minuteTicks`; "Show ticket" only with a QR code still kept; the card opens
+  the visit. Form saves never wipe tickets: the visit form's
   Save calls `saveVisit` only, never `saveVisitWithTicket` (which replaces the
   ticket, its QR code included), so a ticket survives every edit; "Remove
   ticket" calls `removeTicket` at once after a confirmation (like "Delete visit"). The ticket screen draws the QR code with

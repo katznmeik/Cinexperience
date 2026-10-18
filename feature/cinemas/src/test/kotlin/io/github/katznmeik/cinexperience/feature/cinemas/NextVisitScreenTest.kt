@@ -30,6 +30,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.Clock
+import java.time.Instant
 import java.time.ZoneOffset
 
 /** The Next visit card above the cinema list (spec §6.1): screenshots, and its two actions. */
@@ -46,9 +47,9 @@ class NextVisitScreenTest {
 
     private val opened = mutableListOf<String>()
 
-    private fun show(store: FakeStore) {
+    private fun show(store: FakeStore, now: Instant = SampleProgram.FETCHED_AT) {
         val state = NextVisitScreenStates.list(store)
-        val next = NextVisitScreenStates.nextVisit(store)
+        val next = NextVisitScreenStates.nextVisit(store, now)
         composeRule.setContent {
             ScreenshotSurface {
                 CinemasScreen(
@@ -82,18 +83,28 @@ class NextVisitScreenTest {
         // The card is read as one: without a start time only the day, without a seat no seat.
         composeRule.onNodeWithContentDescription("Next visit: \u2068${SampleTickets.FILM}\u2069, Sat 17 Oct, delphi LUX · Saal 4").assertExists()
     }
+
+    /** Ten minutes after the start (spec §6.1): "Started 20:15", "Show ticket" still there. */
+    @Test
+    fun cardOfAStartedShowing() {
+        val saturdayEvening = Instant.parse("2026-10-17T18:25:00Z") // 20:25 in Berlin
+        show(SampleTickets.store(), now = saturdayEvening)
+        capture("cinemas_next_visit_started")
+        composeRule.onNodeWithText("Show ticket").assertExists()
+        composeRule.onNodeWithContentDescription("Started 20:15", substring = true).assertExists()
+    }
 }
 
-/** The cinema list with the Next visit card, as the app shows it at [SampleProgram.FETCHED_AT]. */
+/** The cinema list with the Next visit card, as the app shows it at [SampleProgram.FETCHED_AT] (or the given time). */
 internal object NextVisitScreenStates {
     fun list(store: FakeStore): CinemasUiState {
         val cinemas = runBlocking { FakeCinexRepository(store).observeCinemas().first() }
         return CinemasUiState(isLoading = false, sort = CinemaSort.SCORE, cinemas = cinemas.sortedFor(CinemaSort.SCORE))
     }
 
-    fun nextVisit(store: FakeStore): NextVisit? {
+    fun nextVisit(store: FakeStore, now: Instant = SampleProgram.FETCHED_AT): NextVisit? {
         val repository = FakeCinexRepository(store)
-        val vm = NextVisitViewModel(repository, repository, Clock.fixed(SampleProgram.FETCHED_AT, ZoneOffset.UTC), flowOf(Unit))
+        val vm = NextVisitViewModel(repository, repository, Clock.fixed(now, ZoneOffset.UTC), flowOf(Unit))
         return runBlocking { vm.uiState.first { it != null } }
     }
 }
