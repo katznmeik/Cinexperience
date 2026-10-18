@@ -74,13 +74,13 @@ Look at the screenshot PNGs after every UI change.
 | `core:ticket` | Android lib (+ Robolectric tests), uses core:model | Yorck's ticket PDF (v1.4, spec §11.2): the own small PDF reader (`pdf/`), text in reading order (`text/`), the ticket fields (`TicketPdfReader` → `TicketPdfContent`, `TicketPdfRules`), the QR code's module grid (`qr/`, `QrModuleGrid`); pure Kotlin except the JPEG decoding (`BitmapLuminanceDecoder`) |
 | `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories (incl. `FakeProgramRepository`) and file stores, illustrative screenshot fixtures (incl. `buildProgram`, `SampleProgram`, `SampleTickets`), `MutableClock`, `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips, messages, the message snackbar, `rememberLoadedImage`, `rememberTextWidth`, picker date conversions), date and time texts (`text/Dates.kt`), `spelledOut` (codes read letter by letter), `flow/Flows.kt` (`minuteTicks`, `asResult`), `navigation/` (result message for the screen below, `CloseOnce`) |
-| `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
+| `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker`, the booking's seats (`bookingSeatIds`: dashed rim, ticket mark on the chip, "…, in this booking", `BookingLegend`) |
 | `feature:cinemas` | feature | cinema list (start tab; Next visit card, sort chips and the Favourites filter), cinema detail (☆/★ favourite toggle, "Now showing"), manage cinemas & halls |
 | `feature:seatmap` | feature | hall detail with seat map, layout editor |
 | `feature:visits` | feature | add/edit visit (seat picker, photos, start time, Ticket section), all visits (Upcoming section) |
-| `feature:tickets` | feature | ticket screen (v1.4, spec §6.11): `TicketRoute(visitId)`, QR code drawn from `QrModules`, `KeepScreenBrightAndOn` |
+| `feature:tickets` | feature | ticket screen (v1.4, spec §6.11): `TicketRoute(visitId)`, QR code drawn from `QrModules`, `KeepScreenBrightAndOn`; the ticket import (§6.10, `importing/`): `ImportTicketRoute(uri)`, `TicketIntents`/`TicketUris`, `ContentTicketFileSource`, `TicketImportViewModel`, `TicketMatching` |
 | `feature:rankings` | feature | rankings tab |
-| `feature:backup` | feature | settings tab, export/import UI (file pickers, preview, progress), restore safety copy, Settings → Program |
+| `feature:backup` | feature | settings tab, export/import UI (file pickers, preview, progress), restore safety copy, Settings → Program, Data → Import ticket (the PDF picker; the URI goes to the app's callback) |
 | `feature:program` | feature | Program tab (v1.1, spec §6.9: consent, filters, saved filters, results), film page, `ProgramFilterStore` (filters in shared preferences) |
 
 Build configuration lives in the convention plugins in `build-logic/convention`
@@ -137,6 +137,9 @@ Don't duplicate config in module build files.
   switches to `ProgramRoute(cinemaSeedKey)` with the tab options; "Log visit"
   opens `AddVisitRoute` with pre-fill arguments (`VisitPrefillArgs`, core:model);
   "Show ticket" (Next visit card, visit form) opens `TicketRoute(visitId)`.
+  The ticket import (`ImportTicketRoute`) replaces itself (`popUpTo … inclusive`) with
+  `AddVisitRoute` (optional ticket arguments, `AddVisitRoute.of`) or
+  `EditVisitRoute(visitId, importedBefore = true)`.
 - **Transitions** (spec §7) live only in `app/.../ui/CinexTransitions.kt`, passed
   to the NavHost in `CinexApp` (features never set their own): opening a screen
   slides it in from the right while the old one slides out left by the full
@@ -177,10 +180,24 @@ Don't duplicate config in module build files.
   "Started 20:15"; today's visits without a start time until midnight). The
   card above the cinema list has its own `NextVisitViewModel`, re-picked on
   `minuteTicks`; "Show ticket" only with a QR code still kept; the card opens
-  the visit. Form saves never wipe tickets: the visit form's
-  Save calls `saveVisit` only, never `saveVisitWithTicket` (which replaces the
-  ticket, its QR code included), so a ticket survives every edit; "Remove
-  ticket" calls `removeTicket` at once after a confirmation (like "Delete visit"). The ticket screen draws the QR code with
+  the visit. Form saves never wipe tickets: Save calls `saveVisit`, and
+  `saveVisitWithTicket` (which replaces the ticket, its QR code included) only
+  for a visit with an imported `TicketDraft` not stored yet, so a stored ticket
+  survives every edit; "Remove ticket" calls `removeTicket` at once after a
+  confirmation (like "Delete visit"), and drops a draft without one.
+  **Ticket import** (spec §6.10, §11.2; feature:tickets `importing/`): Share and
+  Open with reach `MainActivity` (standard launch mode), which offers each intent
+  once (`IncomingTicketViewModel`: not with `savedInstanceState` or
+  `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`; also `onNewIntent`); `CinexApp` opens
+  `ImportTicketRoute` only while no backup import runs. Only `content:` URIs of
+  other apps are read (`TicketUris`), at most `TicketPdfLimits.MAX_FILE_BYTES`, in
+  memory only, never logged; failures are `TicketImportError` messages; no valid
+  booking number, no import. `findVisitId` first (imported before: open that visit,
+  store a new QR code if it has none still kept). Else `TicketMatching` (pure; the
+  cached program only) fills Add visit with a `TicketDraft` and notes, kept in the
+  form's saved state; Save drops an expired QR code and takes the picked seat when
+  the ticket's seats weren't read. New files under `feature/tickets/` need
+  `git add -f` (`.gitignore`'s `tickets/`). The ticket screen draws the QR code with
   whole-pixel modules and a 4-module quiet zone; while it shows the code,
   `KeepScreenBrightAndOn` holds the window at full brightness with
   `FLAG_KEEP_SCREEN_ON` and restores both when it leaves the composition
