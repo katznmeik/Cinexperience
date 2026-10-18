@@ -1,13 +1,18 @@
 package io.github.katznmeik.cinexperience.feature.visits.edit
 
+import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.model.CinemaCategory
 import io.github.katznmeik.cinexperience.core.model.CinemaRatings
 import io.github.katznmeik.cinexperience.core.model.HallCategory
 import io.github.katznmeik.cinexperience.core.model.HallRatings
+import io.github.katznmeik.cinexperience.core.model.QrModules
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.ShowingTime
+import io.github.katznmeik.cinexperience.core.model.Ticket
+import io.github.katznmeik.cinexperience.core.model.TicketDraft
+import io.github.katznmeik.cinexperience.core.model.TicketSeat
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.time.LocalDate
@@ -18,6 +23,10 @@ import java.time.format.DateTimeParseException
  * The visit form's in-progress state, kept in the ViewModel's `SavedStateHandle`
  * so that an edit survives process death, in particular while the camera app is
  * in front (spec §6.4 photo).
+ *
+ * @property ticket an imported ticket not saved yet (spec §6.10), [baselineTicket]
+ *   the one the form was opened with; [importNotes] the import's notes. A draft
+ *   saved before they existed has none.
  */
 @Serializable
 internal data class VisitDraft(
@@ -27,6 +36,9 @@ internal data class VisitDraft(
     val isEdit: Boolean,
     val sessionPhotos: List<String>,
     val pendingCapture: String?,
+    val ticket: TicketDraftData? = null,
+    val baselineTicket: TicketDraftData? = null,
+    val importNotes: List<String> = emptyList(),
 ) {
     fun encode(): String = JSON.encodeToString(serializer(), this)
 
@@ -103,4 +115,36 @@ internal data class FormDraft(
             null
         }
     }
+}
+
+/**
+ * A [TicketDraft] with plain values: the booking number, the seats and the QR code
+ * as [QrModules.encode] text. [toDraft] checks them again, like the route arguments.
+ */
+@Serializable
+internal data class TicketDraftData(
+    val bookingNumber: String,
+    val seats: List<TicketSeatData>,
+    val qrModules: String? = null,
+) {
+    /** `null` without a valid booking number; seats and a QR code that can't be read are left out. */
+    fun toDraft(): TicketDraft? {
+        val number = BookingNumber.ofOrNull(bookingNumber) ?: return null
+        val ticketSeats = seats.mapNotNull { it.toSeatOrNull() }.distinct().take(Ticket.MAX_SEATS)
+        return TicketDraft(number, ticketSeats, qrModules?.let(QrModules::decodeOrNull))
+    }
+
+    companion object {
+        fun of(draft: TicketDraft): TicketDraftData = TicketDraftData(
+            bookingNumber = draft.bookingNumber.value,
+            seats = draft.seats.map { TicketSeatData(it.row, it.seat) },
+            qrModules = draft.qrModules?.encode(),
+        )
+    }
+}
+
+/** A [TicketSeat] with plain values. */
+@Serializable
+internal data class TicketSeatData(val row: String?, val seat: String) {
+    fun toSeatOrNull(): TicketSeat? = TicketSeat.ofOrNull(row, seat)
 }

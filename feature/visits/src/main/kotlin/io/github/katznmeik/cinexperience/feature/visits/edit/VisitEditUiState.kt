@@ -10,6 +10,7 @@ import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.Ticket
+import io.github.katznmeik.cinexperience.core.model.TicketDraft
 import io.github.katznmeik.cinexperience.core.model.Visit
 import java.time.LocalDate
 import java.time.LocalTime
@@ -104,6 +105,14 @@ data class SeatPickerState(val seatId: SeatId?)
  *   section; `null` without one. The form never saves it: Save writes only the
  *   visit, so the ticket and its QR code stay as they are.
  * @property isRemovingTicket "Remove ticket" is being written.
+ * @property ticketDraft an imported ticket not stored yet (spec §6.10), shown in the
+ *   Ticket section; Save stores it with the visit, "Remove ticket" drops it.
+ * @property draftQrCode whether [ticketDraft] has a QR code that Save keeps.
+ * @property importNotes what the import couldn't read or match, for manual entry.
+ * @property bookingSeatIds the seats of the booking ([ticketDraft] or [ticket]) in the
+ *   current hall's layout, marked in the seat picker.
+ * @property openImportedVisit the visit that has the imported ticket already (it was
+ *   imported meanwhile): the form leaves for it, nothing else was saved.
  */
 data class VisitEditUiState(
     val status: VisitEditStatus = VisitEditStatus.Loading,
@@ -133,7 +142,27 @@ data class VisitEditUiState(
     val isClosed: Boolean = false,
     val ticket: Ticket? = null,
     val isRemovingTicket: Boolean = false,
+    val ticketDraft: TicketDraft? = null,
+    val draftQrCode: DraftQrCode? = null,
+    val importNotes: List<String> = emptyList(),
+    val bookingSeatIds: Set<SeatId> = emptySet(),
+    val openImportedVisit: Long? = null,
 ) {
     /** Save is always allowed once a hall is chosen (spec §6.4). */
-    val canSave: Boolean get() = status == VisitEditStatus.Ready && form.hallId != null && !isSaving && !isPhotoBusy && !isClosed
+    val canSave: Boolean get() = status == VisitEditStatus.Ready && form.hallId != null && !isSaving && !isPhotoBusy && !isLeaving
+
+    /** Closed, or leaving for the visit that has the imported ticket: nothing is edited or saved any more. */
+    val isLeaving: Boolean get() = isClosed || openImportedVisit != null
+}
+
+/** The QR code of an imported ticket not stored yet ([VisitEditUiState.ticketDraft]). */
+enum class DraftQrCode {
+    /** Read from the ticket; Save stores it. */
+    KEPT,
+
+    /** None could be read from the ticket. */
+    NONE,
+
+    /** Read, but the showing (the form's date and start time) is more than 7 days ago: Save leaves it out. */
+    EXPIRED,
 }

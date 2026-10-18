@@ -30,12 +30,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.model.Ticket
+import io.github.katznmeik.cinexperience.core.model.TicketDraft
+import io.github.katznmeik.cinexperience.core.model.TicketSeat
 import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
@@ -126,12 +130,72 @@ internal fun VisitTimePicker(time: LocalTime?, onTime: (LocalTime) -> Unit, onCl
     }
 }
 
+/** Under an imported ticket not saved yet (spec §6.10). */
+internal const val DRAFT_SAVED_WITH_VISIT = "From the imported ticket: saved with the visit."
+internal const val DRAFT_QR_KEPT = "QR code read from the ticket."
+internal const val DRAFT_QR_NONE = "No QR code could be read from the ticket. The booking number is kept."
+internal const val DRAFT_QR_EXPIRED = "The QR code isn't kept: the app removes it 7 days after the showing."
+internal const val DRAFT_NO_SEATS = "The seats couldn't be read from the ticket: the seat you pick is saved as the ticket's seat."
+
+/** The heading of the import's notes (spec §6.10). */
+internal const val IMPORT_NOTES_TITLE = "Fill in by hand"
+
 /**
- * The Ticket section of a visit with a ticket (spec §6.4): booking number, every
- * seat of the booking, "Show ticket" (§6.11) and "Remove ticket" (asks first).
+ * What the ticket import couldn't read or match (spec §6.10), each line with what was
+ * printed, e.g. "Hall on the ticket: Saal 9 (not in the app)". Not stored.
+ */
+@Composable
+internal fun ImportNotes(notes: List<String>) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CinexTheme.colors.surface)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            IMPORT_NOTES_TITLE,
+            style = MaterialTheme.typography.labelMedium,
+            color = CinexTheme.colors.textMuted,
+            modifier = Modifier.semantics { heading() },
+        )
+        notes.forEach { note ->
+            Text(note, style = MaterialTheme.typography.bodyMedium, color = CinexTheme.colors.text)
+        }
+    }
+}
+
+/**
+ * The Ticket section (spec §6.4) of a visit with a stored [ticket]: booking number,
+ * every seat of the booking, "Show ticket" (§6.11) and "Remove ticket" (asks first).
  */
 @Composable
 internal fun TicketSection(ticket: Ticket, removing: Boolean, enabled: Boolean, actions: VisitEditActions) {
+    TicketSectionContent(ticket.bookingNumber, ticket.seats, draftQrCode = null, removing = removing, enabled = enabled, actions = actions)
+}
+
+/**
+ * The Ticket section of an imported ticket not saved yet ([draft], spec §6.10): booking
+ * number, the seats as printed, whether its QR code is kept, and "Remove ticket"
+ * (no confirmation: nothing is stored yet). "Show ticket" comes once it is saved.
+ */
+@Composable
+internal fun TicketDraftSection(draft: TicketDraft, qrCode: DraftQrCode?, enabled: Boolean, actions: VisitEditActions) {
+    TicketSectionContent(draft.bookingNumber, draft.seats, draftQrCode = qrCode ?: DraftQrCode.NONE, removing = false, enabled = enabled, actions = actions)
+}
+
+/** [draftQrCode] `null`: a stored ticket. */
+@Composable
+private fun TicketSectionContent(
+    bookingNumber: BookingNumber,
+    seats: List<TicketSeat>,
+    draftQrCode: DraftQrCode?,
+    removing: Boolean,
+    enabled: Boolean,
+    actions: VisitEditActions,
+) {
+    val isDraft = draftQrCode != null
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionHeader("Ticket")
         Column(
@@ -142,7 +206,7 @@ internal fun TicketSection(ticket: Ticket, removing: Boolean, enabled: Boolean, 
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val number = ticket.bookingNumber.value
+            val number = bookingNumber.value
             Column(
                 Modifier.clearAndSetSemantics { contentDescription = "Booking number, ${spelledOut(number)}" },
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -160,11 +224,14 @@ internal fun TicketSection(ticket: Ticket, removing: Boolean, enabled: Boolean, 
             }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = if (ticket.seats.size == 1) "Seat of the booking" else "Seats of the booking",
+                    text = if (seats.size == 1) "Seat of the booking" else "Seats of the booking",
                     style = MaterialTheme.typography.labelMedium,
                     color = CinexTheme.colors.textMuted,
                 )
-                ticket.seats.forEach { seat ->
+                if (seats.isEmpty()) {
+                    Text(DRAFT_NO_SEATS, style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
+                }
+                seats.forEach { seat ->
                     val label = seat.label
                     Text(
                         text = label.shortText,
@@ -175,10 +242,22 @@ internal fun TicketSection(ticket: Ticket, removing: Boolean, enabled: Boolean, 
                     )
                 }
             }
+            if (draftQrCode != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val qrText = when (draftQrCode) {
+                        DraftQrCode.KEPT -> DRAFT_QR_KEPT
+                        DraftQrCode.NONE -> DRAFT_QR_NONE
+                        DraftQrCode.EXPIRED -> DRAFT_QR_EXPIRED
+                    }
+                    Text(qrText, style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.text)
+                    Text(DRAFT_SAVED_WITH_VISIT, style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted)
+                }
+            }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.Center) {
                 // Neither while the visit is saved or deleted, nor while the ticket is removed.
                 val canAct = enabled && !removing
-                OutlinedPillButton(text = "Show ticket", onClick = actions::onShowTicket, icon = null, enabled = canAct)
+                // Only a stored ticket can be shown: an imported one is stored on Save.
+                if (!isDraft) OutlinedPillButton(text = "Show ticket", onClick = actions::onShowTicket, icon = null, enabled = canAct)
                 Box(
                     modifier = Modifier
                         .heightIn(min = 48.dp)
