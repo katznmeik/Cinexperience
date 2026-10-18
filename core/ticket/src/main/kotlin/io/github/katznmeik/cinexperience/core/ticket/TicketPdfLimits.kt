@@ -58,7 +58,7 @@ object TicketPdfLimits {
 
     /**
      * Values in one content stream operand or one CMap object, nested ones included
-     * ([TicketPdfError.UNSUPPORTED]); Yorck's largest are a few dozen.
+     * ([TicketPdfError.UNSUPPORTED]); Yorck's largest, a CMap's array of targets, holds about 70.
      */
     const val MAX_OPERAND_VALUES: Int = 4_096
 

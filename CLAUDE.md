@@ -429,25 +429,40 @@ Don't duplicate config in module build files.
   reader handles only Yorck's shape (Qt 5.5: classic cross-reference table, found
   through it, never by scanning; Flate content; Type 0 / Identity-H fonts with
   `/ToUnicode`; DCT images) and refuses anything else with a `TicketPdfError`.
-  The file-level limits are in `TicketPdfLimits` (2 MB file, 4 pages, 64 page tree
-  nodes, 2,000 objects, 2 MB per unpacked stream and 8 MB together, also for the
-  content interpreted on all pages, nesting, glyph widths, shown codes, QR
-  candidates ≤ 512 px and 256 KB); smaller ones sit next to their code (CMap,
-  lexer, document, interpreter, fields). Limits count work, not distinct objects
-  (each object is read only up to the next one's offset; reused arrays, streams and
-  ranges count each time); each has a test. It never follows links, actions or
-  external data; `read()` never throws for any file content (`content()` is the
-  strict path the fuzz tests use). Fields are checked by `TicketPdfRules` (booking
-  numbers and seats by core:model's `BookingNumber` / `TicketSeat` rules; a row
-  "-" becomes `null`) and cleaned like the program's texts (`TicketText`); each is
-  `Found` or `NotFound(MISSING/INVALID/AMBIGUOUS)`, and no `toString()` shows a
-  value; several seats only where unambiguous. Values come only from their own
-  ticket block, which ends at the "Gebucht von" line: never read or returned are
-  the booker's name, "Kat.", prices, numbers, address, conditions. QR: only a grid
-  whose finder, separator, timing and alignment patterns, dark module and both
-  format copies check out and whose pattern centres lie on the grid is returned;
-  no decoding, no generation. Tests
-  use invented fixtures (`InventedTicketPdf`, `TestQrCodes`, the JDK's JPEG codec
+  The file-level limits are in `TicketPdfLimits` (2 MB file, 4 pages, 2,000
+  objects, 2 MB per unpacked stream, nesting, QR candidates ≤ 512 px and 256 KB);
+  smaller ones sit next to their code (CMap entries, lexer tokens, loading depth,
+  operands, fields). Limits count work, not distinct objects: each object is read
+  only up to the next one's offset, and per document `TicketPdfLimits` counts
+  every value any parser builds (200,000: objects, kept in the cache, content
+  streams and CMaps; at most 4,096 in one content operand or CMap object), the
+  page tree nodes visited (64), the fonts loaded (16, mappable or not), the CMap
+  codes processed in all fonts (16,384, repeated ranges each time), the glyph
+  widths (65,536, each `/W` array once however many fonts share it), the codes
+  shown (50,000, mapped or not), and the bytes unpacked (8 MB) and interpreted
+  (8 MB, a stream listed again counting again); each has a test. It never follows
+  links, actions or external data; `read()` never throws for any file content
+  (`content()` is the strict path the fuzz tests use). Fields are checked by
+  `TicketPdfRules` (booking numbers and seats by core:model's `BookingNumber` /
+  `TicketSeat` rules; a row "-" becomes `null`) and cleaned like the program's
+  texts (`TicketText`); each is `Found` or `NotFound(MISSING/INVALID/AMBIGUOUS)`,
+  and no `toString()` shows a value; several seats only where unambiguous. The
+  booker's name never becomes a field: a booker line is any line with "gebucht"
+  in its letters (any case, spaces or format characters), and the first one below
+  "Ticket" ends the block wherever it starts; labels end at the first bold line
+  after the title; no value mentions "gebucht", starts like a category ("Kat",
+  "Kategorie") or stands right above a booker line. Values come only from their
+  own ticket block; the booking number is searched in its column outside the
+  ticket blocks (Yorck's left column), never in a block. Never read or returned
+  are the booker's name, the category, prices, numbers, address, conditions. QR:
+  only a grid whose finder, separator, timing and alignment patterns, dark module
+  and both format copies check out, whose pattern centres lie on the grid and
+  whose Reed–Solomon blocks (versions 1–4, all levels) all have zero syndromes,
+  remainder bits 0, is returned: exactly the encoded code. That check reads no
+  content (no mode or character decoding, nothing returned but the grid); the app
+  generates no codes. Tests use invented fixtures (`InventedTicketPdf`;
+  `TestQrCodes`, a test-only writer of codes without content; an independent
+  encoder's codes for an invented text in `QrCodewordsTest`; the JDK's JPEG codec
   in plain JVM tests). Never commit a real ticket; `RealTicketTest` reads one
   named by `CINEX_TICKET_PDF` (skipped otherwise; keep it in the git-ignored
   `tickets/` or as `*.ticket.pdf`) and asserts and prints structural facts only.
