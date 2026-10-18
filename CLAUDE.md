@@ -71,7 +71,7 @@ Look at the screenshot PNGs after every UI change.
 | `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic (no Android) |
 | `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos), backup export/import engine |
 | `core:program` | Android lib + kotlinx.serialization | Yorck's program (v1.1, spec §11.1): model (`Program`, `Film`, `Showing`), page parser, Yorck-name → seed-key table, `ProgramLinks`, visit pre-fill, the HTTPS download (the app's **only network code**), cache `files/program/program.json`, `ProgramRepository` |
-| `core:ticket` | Android lib (+ Robolectric tests) | Yorck's ticket PDF (v1.4, spec §11.2): the own small PDF reader (`pdf/`), text in reading order (`text/`), the ticket fields (`TicketPdfReader` → `TicketPdfContent`, `TicketPdfRules`), the QR code's module grid (`qr/`, `QrModuleGrid`); pure Kotlin except the JPEG decoding (`BitmapLuminanceDecoder`) |
+| `core:ticket` | Android lib (+ Robolectric tests), uses core:model | Yorck's ticket PDF (v1.4, spec §11.2): the own small PDF reader (`pdf/`), text in reading order (`text/`), the ticket fields (`TicketPdfReader` → `TicketPdfContent`, `TicketPdfRules`), the QR code's module grid (`qr/`, `QrModuleGrid`); pure Kotlin except the JPEG decoding (`BitmapLuminanceDecoder`) |
 | `core:testing` | Android lib + Compose (tests only) | in-memory fake repositories (incl. `FakeProgramRepository`) and file stores, illustrative screenshot fixtures (incl. `buildProgram`, `SampleProgram`), `MainDispatcherRule`, `ScreenshotSurface`, `assertAccessible`, `contrastRatio` |
 | `core:ui` | Android lib + Compose | `CinexTheme`, colour/type tokens, fonts, icons, shared components (star ratings, rows, chips, messages, the message snackbar, `rememberLoadedImage`, `rememberTextWidth`, picker date conversions), date and time texts (`text/Dates.kt`), `flow/Flows.kt` (`minuteTicks`, `asResult`), `navigation/` (result message for the screen below, `CloseOnce`) |
 | `core:seatmapui` | Android lib + Compose | the hall seat map shared by `feature:seatmap` and `feature:visits`: `SeatMap` canvas, geometry/hit-testing, zoom/pan, seat visuals, `SeatLegend`, accessible `SeatPicker` |
@@ -428,17 +428,25 @@ Don't duplicate config in module build files.
 - **Ticket PDF** (`core:ticket`, spec §11.2, binding): the file is untrusted. The
   reader handles only Yorck's shape (Qt 5.5: classic cross-reference table, found
   through it, never by scanning; Flate content; Type 0 / Identity-H fonts with
-  `/ToUnicode`; DCT images) and refuses anything else with a `TicketPdfError`;
-  every limit is in `TicketPdfLimits` (2 MB file, 4 pages, 2,000 objects, 2 MB per
-  unpacked stream and 8 MB together, nesting, glyphs, ≤ 512 px QR candidates) and
-  has a test. It never follows links, actions or external data; `read()` never
-  throws for any file content (`content()` is the strict path the fuzz tests use). Fields are checked by
-  `TicketPdfRules` and cleaned like the program's texts (`TicketText`); each is
-  `Found` or `NotFound(MISSING/INVALID/AMBIGUOUS)`; several seats only where
-  unambiguous. Never read or returned: the "Gebucht von" name, prices, numbers,
-  address, conditions. QR: only a grid whose finder, separator, timing and
-  alignment patterns, dark module and both format copies check out and whose
-  pattern centres lie on the grid is returned; no decoding, no generation. Tests
+  `/ToUnicode`; DCT images) and refuses anything else with a `TicketPdfError`.
+  The file-level limits are in `TicketPdfLimits` (2 MB file, 4 pages, 64 page tree
+  nodes, 2,000 objects, 2 MB per unpacked stream and 8 MB together, also for the
+  content interpreted on all pages, nesting, glyph widths, shown codes, QR
+  candidates ≤ 512 px and 256 KB); smaller ones sit next to their code (CMap,
+  lexer, document, interpreter, fields). Limits count work, not distinct objects
+  (each object is read only up to the next one's offset; reused arrays, streams and
+  ranges count each time); each has a test. It never follows links, actions or
+  external data; `read()` never throws for any file content (`content()` is the
+  strict path the fuzz tests use). Fields are checked by `TicketPdfRules` (booking
+  numbers and seats by core:model's `BookingNumber` / `TicketSeat` rules; a row
+  "-" becomes `null`) and cleaned like the program's texts (`TicketText`); each is
+  `Found` or `NotFound(MISSING/INVALID/AMBIGUOUS)`, and no `toString()` shows a
+  value; several seats only where unambiguous. Values come only from their own
+  ticket block, which ends at the "Gebucht von" line: never read or returned are
+  the booker's name, "Kat.", prices, numbers, address, conditions. QR: only a grid
+  whose finder, separator, timing and alignment patterns, dark module and both
+  format copies check out and whose pattern centres lie on the grid is returned;
+  no decoding, no generation. Tests
   use invented fixtures (`InventedTicketPdf`, `TestQrCodes`, the JDK's JPEG codec
   in plain JVM tests). Never commit a real ticket; `RealTicketTest` reads one
   named by `CINEX_TICKET_PDF` (skipped otherwise; keep it in the git-ignored
