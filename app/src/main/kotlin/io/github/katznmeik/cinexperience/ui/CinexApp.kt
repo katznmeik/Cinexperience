@@ -7,7 +7,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -57,6 +56,7 @@ import io.github.katznmeik.cinexperience.feature.seatmap.layoutEditorScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToHallDetail
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToLayoutEditor
 import io.github.katznmeik.cinexperience.feature.tickets.ImportTicketRoute
+import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketUris
 import io.github.katznmeik.cinexperience.feature.tickets.navigateToImportTicket
 import io.github.katznmeik.cinexperience.feature.tickets.navigateToTicket
 import io.github.katznmeik.cinexperience.feature.tickets.ticketImportScreen
@@ -151,157 +151,159 @@ fun CinexApp(
             }
         },
     ) { innerPadding ->
-        Box(Modifier.padding(innerPadding)) {
-            NavHost(
-                navController = navController,
-                startDestination = CinemasRoute,
-                // Under the lock nothing below may be reached, not even by an accessibility service.
-                modifier = if (lockedByImport) Modifier.clearAndSetSemantics {} else Modifier,
-                // One consistent set of transitions (spec §7), see CinexTransitions.
-                enterTransition = CinexTransitions.enter(tabSwitch),
-                exitTransition = CinexTransitions.exit(tabSwitch),
-                popEnterTransition = CinexTransitions.popEnter,
-                popExitTransition = CinexTransitions.popExit,
-                predictivePopEnterTransition = CinexTransitions.predictivePopEnter,
-                predictivePopExitTransition = CinexTransitions.predictivePopExit,
-            ) {
-                // Cinemas tab
-                cinemasScreen(
-                    cinemaRepository = container.cinemaRepository,
-                    visitRepository = container.visitRepository,
-                    ticketRepository = container.ticketRepository,
-                    clock = container.clock,
-                    onOpenCinema = navController::navigateToCinemaDetail,
-                    onAddVisit = { navController.navigateToAddVisit() },
-                    // The Next visit card (spec §6.1): the card opens the visit, "Show ticket" its ticket.
-                    onOpenVisit = navController::navigateToEditVisit,
-                    onShowTicket = navController::navigateToTicket,
-                )
-                cinemaDetailScreen(
-                    cinemaRepository = container.cinemaRepository,
-                    hallRepository = container.hallRepository,
-                    programRepository = container.programRepository,
-                    clock = container.clock,
-                    onBack = navController::navigateUp,
-                    onOpenHall = navController::navigateToHallDetail,
-                    onCinemaDeleted = navController::closeDeletedCinema,
-                    onOpenFilm = { kind, slug -> navController.navigateToFilm(FilmKey(kind, slug)) },
-                    // "Show all in Program" switches to the Program tab, filtered to the cinema.
-                    onShowAllInProgram = { seedKey ->
-                        if (!importing) {
-                            navController.navigateToProgram(seedKey, navController.tabOptions())
-                            tabSwitch.entryId = navController.currentBackStackEntry?.id
-                        }
-                    },
-                    // The hints open the Program tab as it is, with its remembered filter.
-                    onOpenProgram = { if (!importing) navController.navigateToTab(TopLevelDestination.Program, tabSwitch) },
-                )
-                hallDetailScreen(
-                    hallRepository = container.hallRepository,
-                    seatOverrideRepository = container.seatOverrideRepository,
-                    onBack = navController::navigateUp,
-                    onEditLayout = navController::navigateToLayoutEditor,
-                    onAddVisit = navController::navigateToAddVisit,
-                    onOpenVisit = navController::navigateToEditVisit,
-                )
-                layoutEditorScreen(
-                    hallRepository = container.hallRepository,
-                    referenceImageStore = container.referenceImageStore,
-                    onClose = navController::navigateUp,
-                )
-                visitEditScreens(
-                    cinemaRepository = container.cinemaRepository,
-                    visitRepository = container.visitRepository,
-                    ticketRepository = container.ticketRepository,
-                    visitPhotoStore = container.visitPhotoStore,
-                    clock = container.clock,
-                    onClose = navController::navigateUp,
-                    onShowTicket = navController::navigateToTicket,
-                    // The imported ticket's booking number belongs to another visit (imported meanwhile).
-                    onOpenImportedVisit = { visitId ->
-                        navController.navigateToImportedVisit(visitId) { popUpTo<AddVisitRoute> { inclusive = true } }
-                    },
-                )
-                // The ticket with its QR code (v1.4, spec §6.11).
-                ticketScreen(
-                    visitRepository = container.visitRepository,
-                    hallRepository = container.hallRepository,
-                    ticketRepository = container.ticketRepository,
-                    clock = container.clock,
-                    onBack = navController::navigateUp,
-                )
-                // The ticket import (v1.4, spec §6.10): Share, Open with, Settings → Import ticket.
-                // It replaces itself with Add visit, or with the visit that has the ticket already.
-                ticketImportScreen(
-                    cinemaRepository = container.cinemaRepository,
-                    visitRepository = container.visitRepository,
-                    ticketRepository = container.ticketRepository,
-                    programRepository = container.programRepository,
-                    fileSource = container.ticketFileSource,
-                    reader = container.ticketReader,
-                    clock = container.clock,
-                    isBackupImporting = container.backupRepository.isImporting,
-                    onBack = navController::navigateUp,
-                    onOpenNewVisit = { hallId, prefill ->
-                        navController.navigateToAddVisit(hallId, prefill) { popUpTo<ImportTicketRoute> { inclusive = true } }
-                    },
-                    onOpenImportedVisit = { visitId, qrCodeNotStored ->
-                        navController.navigateToImportedVisit(visitId, qrCodeNotStored) { popUpTo<ImportTicketRoute> { inclusive = true } }
-                    },
-                )
+        NavHost(
+            navController = navController,
+            startDestination = CinemasRoute,
+            // Under the lock nothing below may be reached, not even by an accessibility service.
+            modifier = Modifier.padding(innerPadding).then(if (lockedByImport) Modifier.clearAndSetSemantics {} else Modifier),
+            // One consistent set of transitions (spec §7), see CinexTransitions.
+            enterTransition = CinexTransitions.enter(tabSwitch),
+            exitTransition = CinexTransitions.exit(tabSwitch),
+            popEnterTransition = CinexTransitions.popEnter,
+            popExitTransition = CinexTransitions.popExit,
+            predictivePopEnterTransition = CinexTransitions.predictivePopEnter,
+            predictivePopExitTransition = CinexTransitions.predictivePopExit,
+        ) {
+            // Cinemas tab
+            cinemasScreen(
+                cinemaRepository = container.cinemaRepository,
+                visitRepository = container.visitRepository,
+                ticketRepository = container.ticketRepository,
+                clock = container.clock,
+                onOpenCinema = navController::navigateToCinemaDetail,
+                onAddVisit = { navController.navigateToAddVisit() },
+                // The Next visit card (spec §6.1): the card opens the visit, "Show ticket" its ticket.
+                onOpenVisit = navController::navigateToEditVisit,
+                onShowTicket = navController::navigateToTicket,
+            )
+            cinemaDetailScreen(
+                cinemaRepository = container.cinemaRepository,
+                hallRepository = container.hallRepository,
+                programRepository = container.programRepository,
+                clock = container.clock,
+                onBack = navController::navigateUp,
+                onOpenHall = navController::navigateToHallDetail,
+                onCinemaDeleted = navController::closeDeletedCinema,
+                onOpenFilm = { kind, slug -> navController.navigateToFilm(FilmKey(kind, slug)) },
+                // "Show all in Program" switches to the Program tab, filtered to the cinema.
+                onShowAllInProgram = { seedKey ->
+                    if (!importing) {
+                        navController.navigateToProgram(seedKey, navController.tabOptions())
+                        tabSwitch.entryId = navController.currentBackStackEntry?.id
+                    }
+                },
+                // The hints open the Program tab as it is, with its remembered filter.
+                onOpenProgram = { if (!importing) navController.navigateToTab(TopLevelDestination.Program, tabSwitch) },
+            )
+            hallDetailScreen(
+                hallRepository = container.hallRepository,
+                seatOverrideRepository = container.seatOverrideRepository,
+                onBack = navController::navigateUp,
+                onEditLayout = navController::navigateToLayoutEditor,
+                onAddVisit = navController::navigateToAddVisit,
+                onOpenVisit = navController::navigateToEditVisit,
+            )
+            layoutEditorScreen(
+                hallRepository = container.hallRepository,
+                referenceImageStore = container.referenceImageStore,
+                onClose = navController::navigateUp,
+            )
+            visitEditScreens(
+                cinemaRepository = container.cinemaRepository,
+                visitRepository = container.visitRepository,
+                ticketRepository = container.ticketRepository,
+                visitPhotoStore = container.visitPhotoStore,
+                clock = container.clock,
+                onClose = navController::navigateUp,
+                onShowTicket = navController::navigateToTicket,
+                // The imported ticket's booking number belongs to another visit (imported meanwhile).
+                onOpenImportedVisit = { visitId ->
+                    navController.navigateToImportedVisit(visitId) { popUpTo<AddVisitRoute> { inclusive = true } }
+                },
+            )
+            // The ticket with its QR code (v1.4, spec §6.11).
+            ticketScreen(
+                visitRepository = container.visitRepository,
+                hallRepository = container.hallRepository,
+                ticketRepository = container.ticketRepository,
+                clock = container.clock,
+                onBack = navController::navigateUp,
+            )
+            // The ticket import (v1.4, spec §6.10): Share, Open with, Settings → Import ticket.
+            // It replaces itself with Add visit, or with the visit that has the ticket already.
+            ticketImportScreen(
+                cinemaRepository = container.cinemaRepository,
+                visitRepository = container.visitRepository,
+                ticketRepository = container.ticketRepository,
+                programRepository = container.programRepository,
+                fileSource = container.ticketFileSource,
+                reader = container.ticketReader,
+                clock = container.clock,
+                isBackupImporting = container.backupRepository.isImporting,
+                onBack = navController::navigateUp,
+                onOpenNewVisit = { hallId, prefill ->
+                    navController.navigateToAddVisit(hallId, prefill) { popUpTo<ImportTicketRoute> { inclusive = true } }
+                },
+                onOpenImportedVisit = { visitId, qrCodeNotStored ->
+                    navController.navigateToImportedVisit(visitId, qrCodeNotStored) { popUpTo<ImportTicketRoute> { inclusive = true } }
+                },
+            )
 
-                // Program tab (v1.1)
-                programScreen(
-                    programRepository = container.programRepository,
-                    cinemaRepository = container.cinemaRepository,
-                    filterStore = container.programFilterStore,
-                    clock = container.clock,
-                    onOpenFilm = navController::navigateToFilm,
-                    onLogVisit = navController::navigateToAddVisit,
-                )
-                filmScreen(
-                    programRepository = container.programRepository,
-                    cinemaRepository = container.cinemaRepository,
-                    clock = container.clock,
-                    onBack = navController::navigateUp,
-                    onLogVisit = navController::navigateToAddVisit,
-                )
+            // Program tab (v1.1)
+            programScreen(
+                programRepository = container.programRepository,
+                cinemaRepository = container.cinemaRepository,
+                filterStore = container.programFilterStore,
+                clock = container.clock,
+                onOpenFilm = navController::navigateToFilm,
+                onLogVisit = navController::navigateToAddVisit,
+            )
+            filmScreen(
+                programRepository = container.programRepository,
+                cinemaRepository = container.cinemaRepository,
+                clock = container.clock,
+                onBack = navController::navigateUp,
+                onLogVisit = navController::navigateToAddVisit,
+            )
 
-                // Rankings tab
-                rankingsScreen(
-                    rankingsRepository = container.rankingsRepository,
-                    onOpenHall = navController::navigateToHallDetail,
-                    onOpenCinema = navController::navigateToCinemaDetail,
-                )
+            // Rankings tab
+            rankingsScreen(
+                rankingsRepository = container.rankingsRepository,
+                onOpenHall = navController::navigateToHallDetail,
+                onOpenCinema = navController::navigateToCinemaDetail,
+            )
 
-                // Settings tab
-                settingsScreen(
-                    cinemaRepository = container.cinemaRepository,
-                    backupRepository = container.backupRepository,
-                    programRepository = container.programRepository,
-                    appVersion = container.appVersion,
-                    buildId = container.buildId,
-                    onOpenManage = navController::navigateToManageCinemas,
-                    onOpenAllVisits = navController::navigateToAllVisits,
-                    // Settings blocks its rows during a backup import; checked again for the picker's late result.
-                    onImportTicket = { uri -> if (!importing) navController.navigateToImportTicket(uri) },
-                    onRunsBackupImportChanged = { runsBackupImport = it },
-                )
-                manageCinemasScreen(
-                    cinemaRepository = container.cinemaRepository,
-                    hallRepository = container.hallRepository,
-                    onBack = navController::navigateUp,
-                    onOpenCinema = navController::navigateToCinemaDetail,
-                )
-                allVisitsScreen(
-                    visitRepository = container.visitRepository,
-                    clock = container.clock,
-                    onBack = navController::navigateUp,
-                    onOpenVisit = navController::navigateToEditVisit,
-                )
-            }
-            if (lockedByImport) BackupImportLock()
+            // Settings tab
+            settingsScreen(
+                cinemaRepository = container.cinemaRepository,
+                backupRepository = container.backupRepository,
+                programRepository = container.programRepository,
+                appVersion = container.appVersion,
+                buildId = container.buildId,
+                onOpenManage = navController::navigateToManageCinemas,
+                onOpenAllVisits = navController::navigateToAllVisits,
+                // Settings blocks its rows during a backup import; checked again for the picker's late result.
+                // An address too long to read opens the import without it: "Couldn't open the file".
+                onImportTicket = { uri ->
+                    if (!importing) navController.navigateToImportTicket(uri.takeIf { it.length <= TicketUris.MAX_LENGTH })
+                },
+                onRunsBackupImportChanged = { runsBackupImport = it },
+            )
+            manageCinemasScreen(
+                cinemaRepository = container.cinemaRepository,
+                hallRepository = container.hallRepository,
+                onBack = navController::navigateUp,
+                onOpenCinema = navController::navigateToCinemaDetail,
+            )
+            allVisitsScreen(
+                visitRepository = container.visitRepository,
+                clock = container.clock,
+                onBack = navController::navigateUp,
+                onOpenVisit = navController::navigateToEditVisit,
+            )
         }
+        // The lock is a dialog of its own, above everything this window shows.
+        if (lockedByImport) BackupImportLock()
     }
 }
 

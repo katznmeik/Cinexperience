@@ -19,6 +19,7 @@ import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleTickets
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.tickets.ImportTicketRoute
+import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketUris
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -94,6 +95,22 @@ class TicketImportNavigationTest {
         waitForText("ADD VISIT")
         composeRule.onNodeWithContentDescription("Booking number, T E S T 1 2 3").assertExists()
         assertEquals(listOf(attachment.toString()), files.opened.toList())
+    }
+
+    /** An address too long to read (only a misbehaving picker) opens the import, which says it can't open the file. */
+    @Test
+    fun aPickedAddressTooLongToReadSaysItCantBeOpened() {
+        showApp(FakeCinexRepository(SampleTickets.store()))
+        composeRule.onNodeWithTag(TopLevelDestination.Settings.testTag).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Import ticket").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        val picker = shadowOf(composeRule.activity).nextStartedActivityForResult
+        val tooLong = Uri.parse(attachment.toString() + "1".repeat(TicketUris.MAX_LENGTH))
+        shadowOf(composeRule.activity).receiveResult(picker.intent, Activity.RESULT_OK, Intent().setData(tooLong))
+        waitForText("Couldn't open the file. Share or pick the ticket PDF again.")
+        composeRule.onNodeWithText("IMPORT TICKET").assertExists()
+        assertTrue("never opened", files.opened.isEmpty())
     }
 
     @Test

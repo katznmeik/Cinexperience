@@ -121,7 +121,12 @@ internal fun SettingsEntry(
             override fun onRestoreSafetyCopy() = viewModel.onRestoreSafetyCopy()
             override fun onSafetyCopyChosen(copyId: Long) = viewModel.onSafetyCopyChosen(copyId)
             override fun onCancelSafetyCopyChoice() = viewModel.onCancelSafetyCopyChoice()
-            override fun onConfirmImport() = viewModel.onConfirmImport()
+            override fun onConfirmImport() {
+                viewModel.onConfirmImport()
+                // At once, in the frame the import starts in: the app's lock must not cover this screen even
+                // for one frame. False if it didn't start, so nothing is left behind.
+                reportRunsImport(viewModel.runsImport)
+            }
             override fun onCancelImport() = viewModel.onCancelImport()
             override fun onMessageShown() = viewModel.onMessageShown()
         }

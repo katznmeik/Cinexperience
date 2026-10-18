@@ -339,8 +339,9 @@ Don't duplicate config in module build files.
   has, and removed again if the transaction fails). While
   `BackupRepository.isImporting` is true the UI blocks every other write
   (tabs, Back, Settings rows; in every window of the app, `CinexApp` covers the
-  screens with `BackupImportLock`, except the Settings screen that runs the
-  import); Back is also blocked while an export runs (it
+  screens with `BackupImportLock`, a full-screen dialog that also lies above
+  dialogs open already, except the Settings screen that runs the import); Back
+  is also blocked while an export runs (it
   runs in the Settings ViewModel, which Back would clear). Once the
   transaction has committed, nothing
   (progress callbacks, file clean-up, pruning, seeding, even Errors) can turn

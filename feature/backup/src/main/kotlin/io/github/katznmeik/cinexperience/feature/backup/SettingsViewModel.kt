@@ -233,6 +233,9 @@ class SettingsViewModel(
         }
     }
 
+    /** Whether this screen runs a backup import now; read right after [onConfirmImport], before the next frame. */
+    internal val runsImport: Boolean get() = transient.value.task is BackupTask.Importing
+
     /** "Replace" in the preview: replaces all data with the previewed backup. */
     fun onConfirmImport() {
         val preview = transient.value.preview ?: return
