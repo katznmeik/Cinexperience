@@ -51,11 +51,18 @@ class QrGridReaderTest {
 
     @Test
     fun readsACodeWhoseBottomRowAndRightColumnAreMostlyLight() {
-        // Only one finder edge each: 7 (or 8) of 33 modules dark, about 21 % of the code's width.
+        // Data codewords that leave every data module light (level L: one block, its data
+        // placed first, from the right). The right column then has only the finder's edge and
+        // a format bit dark, 7 or 8 of 33 modules, about 21 % of the code's width.
         val size = 33
-        val grid = TestQrCodes.grid(size, seed = 2)
-        for (column in 9 until size) grid[(size - 1) * size + column] = false
-        for (row in 9 until size) grid[row * size + size - 1] = false
+        val format = 0b01_101
+        val light = ArrayList<Boolean>()
+        QrCodewords.forEachDataModule(size) { row, column -> light += QrCodewords.isMasked(format and 0b111, row, column) }
+        val data = IntArray(QrCodewords.blocks(size, format).dataCodewords) { i -> (0 until 8).fold(0) { byte, bit -> byte shl 1 or (if (light[i * 8 + bit]) 1 else 0) } }
+        val grid = TestQrCodes.grid(size, formatData = format, dataCodewords = data)
+        val right = (0 until size).count { grid[it * size + size - 1] }
+        val bottom = (0 until size).count { grid[(size - 1) * size + it] }
+        assertTrue("$right and $bottom dark", right <= 8 && bottom <= 12)
         assertTrue(QrGridReader.isValid(grid, size))
 
         assertReads(grid, size, TestQrCodes.render(grid, size, modulePixels = 4.0), "mostly light edges")
@@ -173,6 +180,8 @@ class QrGridReaderTest {
             "alignment pattern" to flipped(size - 7, size - 6),
             "format copy 1" to flipped(8, 2),
             "format copy 2" to flipped(size - 3, 8),
+            "a data module" to flipped(size - 1, size - 1),
+            "an error correction module" to flipped(10, 1),
         )
         for ((name, grid) in broken) {
             assertTrue(name, !QrGridReader.isValid(grid, size))
@@ -225,6 +234,44 @@ class QrGridReaderTest {
         assertEquals(first, second)
         assertEquals("level M", 0b00, (QrFormat.VALID_WORDS.indexOf(first) shr 3) and 0b11)
         assertReads(grid, 21, jpegRoundTrip(TestQrCodes.render(grid, 21), 0.75f), "independent encoder")
+    }
+
+    @Test(timeout = 120_000)
+    fun harshRendersAreReadCorrectlyOrRefusedNeverWrongly() {
+        // 2 to 5 px per module, blur, noise, JPEG at 0.6 and 0.9, and a faint line of
+        // 18 to 24 % one pixel outside the bottom or right edge: before the Reed–Solomon
+        // check, dozens of such renders were read with wrong modules.
+        val wrong = ArrayList<String>()
+        var read = 0
+        var total = 0
+        for (size in listOf(21, 25, 33)) for (tenths in listOf(20, 25, 30, 35, 40, 50)) for (blur in 0..2) for (noise in listOf(0, 30)) {
+            for (quality in listOf(0.6f, 0.9f)) for (line in listOf(null, TestQrCodes.Edge.BOTTOM, TestQrCodes.Edge.RIGHT)) {
+                val grid = TestQrCodes.grid(size, seed = total)
+                val render = TestQrCodes.render(
+                    grid, size, modulePixels = tenths / 10.0, blur = blur, noise = noise, seed = total,
+                    line = line, lineDarkness = 0.18 + 0.02 * (total % 4),
+                )
+                val result = QrGridReader.read(jpegRoundTrip(render, quality))
+                total++
+                if (result == null) continue
+                read++
+                if (!result.toBooleanArray().contentEquals(grid)) wrong += "$size modules at ${tenths / 10.0} px, blur $blur, noise $noise, quality $quality, line $line"
+            }
+        }
+        assertEquals(emptyList<String>(), wrong)
+        assertTrue("$read of $total read", read > total / 3)
+    }
+
+    @Test(timeout = 60_000)
+    fun yorcksShapeIsAlwaysRead() {
+        // 21 modules at 4 px with a 4-module quiet zone in a JPEG, with some blur and noise.
+        val failed = ArrayList<String>()
+        for (seed in 0 until 30) for (blur in 0..1) for (noise in listOf(0, 20)) for (quality in listOf(0.6f, 0.75f, 0.9f)) {
+            val grid = TestQrCodes.grid(21, seed = seed, formatData = seed % 32)
+            val result = QrGridReader.read(jpegRoundTrip(TestQrCodes.render(grid, 21, blur = blur, noise = noise, seed = seed), quality))
+            if (result?.toBooleanArray()?.contentEquals(grid) != true) failed += "seed $seed, blur $blur, noise $noise, quality $quality"
+        }
+        assertEquals(emptyList<String>(), failed)
     }
 
     /** [image] turned by [degrees] around its centre (nearest neighbour, white outside). */

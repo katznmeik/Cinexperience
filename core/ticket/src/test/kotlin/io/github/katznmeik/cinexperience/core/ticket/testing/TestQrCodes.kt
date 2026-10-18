@@ -1,7 +1,9 @@
 package io.github.katznmeik.cinexperience.core.ticket.testing
 
+import io.github.katznmeik.cinexperience.core.ticket.qr.Gf256
 import io.github.katznmeik.cinexperience.core.ticket.qr.LuminanceDecoder
 import io.github.katznmeik.cinexperience.core.ticket.qr.LuminanceImage
+import io.github.katznmeik.cinexperience.core.ticket.qr.QrCodewords
 import io.github.katznmeik.cinexperience.core.ticket.qr.QrFormat
 import io.github.katznmeik.cinexperience.core.ticket.qr.luminanceOf
 import java.awt.image.BufferedImage
@@ -16,18 +18,25 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
- * Invented QR module grids for tests: correct finder, separator, timing and
- * alignment patterns, dark module and format information (both copies), and random
- * modules everywhere else. They have the structure of a QR code but no content; the
- * app never generates or decodes codes.
+ * Invented QR module grids for tests, written like an encoder writes them (ISO/IEC
+ * 18004, 7.5 to 7.9): finder, separator, timing and alignment patterns, the dark
+ * module, both format copies, and data codewords with their Reed–Solomon error
+ * correction, interleaved and placed with the format's mask, remainder bits 0. The
+ * data codewords are random bytes, not a bit stream: the codes have no content.
+ * Test code only; the app never generates or decodes codes. The reader's own checks
+ * are compared with an independent encoder's codes in `QrCodewordsTest`.
  */
 internal object TestQrCodes {
     /** Format data: error correction level M (00) and mask 5, written as Yorck's code could be. */
     const val FORMAT_DATA = 0b00_101
 
-    fun grid(size: Int = 21, seed: Int = 7, formatData: Int = FORMAT_DATA): BooleanArray {
+    /** A code of [size] modules with [formatData]; its data codewords are [dataCodewords], or random from [seed]. */
+    fun grid(size: Int = 21, seed: Int = 7, formatData: Int = FORMAT_DATA, dataCodewords: IntArray? = null): BooleanArray {
+        val blocks = QrCodewords.blocks(size, formatData)
         val random = Random(seed)
-        val grid = BooleanArray(size * size) { random.nextBoolean() }
+        val data = dataCodewords ?: IntArray(blocks.count * blocks.dataCodewords) { random.nextInt(256) }
+        require(data.size == blocks.count * blocks.dataCodewords) { "Expected ${blocks.count * blocks.dataCodewords} data codewords" }
+        val grid = BooleanArray(size * size)
         fun set(row: Int, column: Int, dark: Boolean) {
             grid[row * size + column] = dark
         }
@@ -52,7 +61,48 @@ internal object TestQrCodes {
         }
         set(size - 8, 8, true)
         writeFormat(grid, size, QrFormat.encode(formatData))
+        val codewords = interleaved(data, blocks)
+        val mask = formatData and 0b111
+        var bit = 0
+        QrCodewords.forEachDataModule(size) { row, column ->
+            val value = bit < codewords.size * 8 && (codewords[bit / 8] shr (7 - bit % 8)) and 1 == 1
+            set(row, column, value != QrCodewords.isMasked(mask, row, column))
+            bit++
+        }
         return grid
+    }
+
+    /** The data codewords split into their blocks, each with its error correction, interleaved (7.6). */
+    private fun interleaved(data: IntArray, blocks: QrCodewords.Blocks): IntArray {
+        val split = (0 until blocks.count).map { b -> data.copyOfRange(b * blocks.dataCodewords, (b + 1) * blocks.dataCodewords) }
+        val full = split.map { it + errorCorrection(it, blocks.ecCodewords) }
+        return IntArray(blocks.total) { i -> full[i % blocks.count][i / blocks.count] }
+    }
+
+    /** The remainder of data(x) · x^[count] divided by the generator (x − α^0) … (x − α^(count − 1)). */
+    fun errorCorrection(data: IntArray, count: Int): IntArray {
+        var generator = intArrayOf(1)
+        for (i in 0 until count) {
+            val next = IntArray(generator.size + 1)
+            for (j in generator.indices) {
+                next[j] = next[j] xor generator[j]
+                next[j + 1] = next[j + 1] xor Gf256.multiply(generator[j], Gf256.exp(i))
+            }
+            generator = next
+        }
+        val remainder = IntArray(count)
+        for (codeword in data) {
+            val factor = codeword xor remainder[0]
+            for (j in 0 until count - 1) remainder[j] = remainder[j + 1] xor Gf256.multiply(generator[j + 1], factor)
+            remainder[count - 1] = Gf256.multiply(generator[count], factor)
+        }
+        return remainder
+    }
+
+    /** A grid from a hex string of its modules, row by row (`1` dark), as printed by an encoder's tool. */
+    fun fromHex(hex: String, size: Int): BooleanArray {
+        val bits = hex.flatMap { digit -> (3 downTo 0).map { (digit.digitToInt(16) shr it) and 1 == 1 } }
+        return bits.take(size * size).toBooleanArray()
     }
 
     /** Both copies of [word], most significant bit first, at the positions of ISO/IEC 18004, 7.9.1. */
@@ -68,9 +118,14 @@ internal object TestQrCodes {
     /** A grid read from text rows (`#` dark, `.` light). */
     fun parse(rows: List<String>): BooleanArray = rows.joinToString("").map { it == '#' }.toBooleanArray()
 
+    /** A side of the code. */
+    enum class Edge { BOTTOM, RIGHT }
+
     /**
      * The grid as an image: [modulePixels] px per module, [quietModules] light modules
      * around, optional box blur (radius [blur]) and uniform noise of ±[noise], dark 0..[dark], light [light].
+     * A [line] of [lineDarkness] (a share of the way from light to dark) runs along the
+     * code one pixel outside that edge, as a faint border of a printed code might.
      */
     fun render(
         grid: BooleanArray,
@@ -82,14 +137,30 @@ internal object TestQrCodes {
         dark: Int = 0,
         light: Int = 255,
         seed: Int = 3,
+        line: Edge? = null,
+        lineDarkness: Double = 0.2,
     ): LuminanceImage {
         val side = ((size + 2 * quietModules) * modulePixels).roundToInt()
+        val codeStart = floor(quietModules * modulePixels)
+        val codeEnd = floor((quietModules + size) * modulePixels)
+        val lineValue = (light - lineDarkness * (light - dark)).roundToInt()
         val raw = IntArray(side * side) { index ->
             val module = { pixel: Int -> floor((pixel / modulePixels)) - quietModules }
-            val row = module(index / side)
-            val column = module(index % side)
+            val y = index / side
+            val x = index % side
+            val row = module(y)
+            val column = module(x)
             val isDark = row in 0 until size && column in 0 until size && grid[row * size + column]
-            if (isDark) dark else light
+            val onLine = when (line) {
+                Edge.BOTTOM -> y == codeEnd + 1 && x in codeStart until codeEnd
+                Edge.RIGHT -> x == codeEnd + 1 && y in codeStart until codeEnd
+                null -> false
+            }
+            when {
+                isDark -> dark
+                onLine -> lineValue
+                else -> light
+            }
         }
         val blurred = if (blur == 0) raw else boxBlur(raw, side, blur)
         val random = Random(seed)

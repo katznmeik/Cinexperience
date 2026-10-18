@@ -8,9 +8,9 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Reads a QR code's module grid from an image of the code (spec §11.2): no
- * decoding of the content, no error correction. Yorck's code is a version-1 code
- * drawn upright with 4 px per module and a quiet zone, in a 116 × 116 px JPEG.
+ * Reads a QR code's module grid from an image of the code (spec §11.2): the content
+ * is never decoded and nothing is corrected. Yorck's code is a version-1 code drawn
+ * upright with 4 px per module and a quiet zone, in a 116 × 116 px JPEG.
  *
  * 1. Threshold between the dark and the light pixels (iterative intermeans; too
  *    little contrast is no code).
@@ -21,12 +21,13 @@ import kotlin.math.min
  *    small window around each), in each of the four 90° rotations.
  * 4. A grid is accepted only if its three finder patterns, their separators, both
  *    timing patterns, the dark module, the alignment pattern (from 25 modules on)
- *    and both copies of the format information check out, and both copies are the
- *    same valid word ([QrFormat]). Requiring both copies is strict on purpose: the
- *    redrawn code must scan, and a sampling error in the format bits is the one
- *    error the reader can see.
- * 5. The patterns' centres lie on the grid ([isOnTheGrid]), so a slanted code isn't
- *    read with wrong modules.
+ *    and both copies of the format information check out, both copies are the
+ *    same valid word ([QrFormat]), and every error correction block's Reed–Solomon
+ *    syndromes are zero ([QrCodewords]): the grid is exactly the code its encoder
+ *    wrote, not one with wrongly sampled modules, which the redrawn code would pass
+ *    on to the scanner. The check reads no content.
+ * 5. The patterns' centres lie on the grid ([isOnTheGrid]), so a slanted code is
+ *    refused early.
  *
  * Every refusal only means that no QR code is kept; the booking number stays.
  */
@@ -224,7 +225,7 @@ internal object QrGridReader {
         return true
     }
 
-    /** The structural checks of step 4 on an upright grid. */
+    /** The checks of step 4 on an upright grid. */
     internal fun isValid(grid: BooleanArray, size: Int): Boolean {
         fun dark(row: Int, column: Int) = grid[row * size + column]
         if (!isFinder(grid, size, 0, 0) || !isFinder(grid, size, 0, size - 7) || !isFinder(grid, size, size - 7, 0)) return false
@@ -244,7 +245,7 @@ internal object QrGridReader {
             }
         }
         val (first, second) = formatWords(grid, size)
-        return first == second && QrFormat.isValid(first)
+        return first == second && QrFormat.isValid(first) && QrCodewords.isValid(grid, size, QrFormat.data(first))
     }
 
     /** Both copies of the format information, most significant bit first (ISO/IEC 18004, 7.9.1). */
