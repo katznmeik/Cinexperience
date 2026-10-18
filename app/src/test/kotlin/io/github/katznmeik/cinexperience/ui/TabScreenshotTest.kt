@@ -117,7 +117,11 @@ class TabScreenshotTest {
         capture("tab_settings")
     }
 
-    /** While a backup import replaces the data, the tabs can't be switched (nothing else may write). */
+    /**
+     * While a backup import replaces the data, the tabs can't be switched (nothing else may
+     * write). Started in another window of the app, it also covers this one's screen (here
+     * Settings, which doesn't run it) with the lock (BackupImportLockTest).
+     */
     @Test
     fun tabsAreLockedWhileImporting() {
         val backup = FakeBackupRepository()
@@ -129,7 +133,10 @@ class TabScreenshotTest {
         backup.isImporting.value = true
         composeRule.onNodeWithTag(TopLevelDestination.Cinemas.testTag).assertIsNotEnabled().performClick()
         composeRule.onNodeWithTag(TopLevelDestination.Rankings.testTag).performClick()
-        composeRule.onNodeWithText("13 cinemas · 36 halls · 0 layouts drawn").assertExists()
+        composeRule.onNodeWithText(BACKUP_IMPORT_LOCK_TITLE).assertExists()
+        // Still Settings below the lock, hidden from accessibility services.
+        composeRule.onNodeWithText("13 cinemas · 36 halls · 0 layouts drawn").assertDoesNotExist()
+        composeRule.onNodeWithText("13 cinemas · 36 halls · 0 layouts drawn", useUnmergedTree = true).assertExists()
 
         backup.isImporting.value = false
         composeRule.onNodeWithTag(TopLevelDestination.Cinemas.testTag).assertIsEnabled().performClick()

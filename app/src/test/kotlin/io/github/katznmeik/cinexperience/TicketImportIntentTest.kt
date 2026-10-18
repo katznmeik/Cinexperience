@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -85,6 +86,11 @@ class TicketImportIntentTest {
         waitForText("ADD VISIT")
         composeRule.onNodeWithText(SampleTickets.FILM).assertExists()
         composeRule.onNodeWithContentDescription("Booking number, T E S T 1 2 3").assertExists()
+        // Every seat came through the route as printed: a row without a name and a fixed label too.
+        for (seat in listOf("Row 7, Seat 10", "Row 7, Seat 11", "Seat 12", "Row 8, Seat R")) {
+            assertTrue(seat, composeRule.onAllNodesWithContentDescription(seat).fetchSemanticsNodes().isNotEmpty())
+        }
+        composeRule.onNodeWithText("QR code read from the ticket.").assertExists()
         composeRule.onNodeWithText("IMPORT TICKET").assertDoesNotExist()
     }
 

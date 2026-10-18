@@ -24,6 +24,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -89,8 +90,16 @@ internal fun SettingsEntry(
     onOpenManage: () -> Unit,
     onOpenAllVisits: () -> Unit,
     onImportTicket: (uri: String) -> Unit = {},
+    onRunsBackupImportChanged: (Boolean) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // Whether this screen runs the backup import: the app's import lock covers every screen but this one.
+    val runsImport = state.backup.task is BackupTask.Importing
+    val reportRunsImport by rememberUpdatedState(onRunsBackupImportChanged)
+    DisposableEffect(runsImport) {
+        reportRunsImport(runsImport)
+        onDispose { if (runsImport) reportRunsImport(false) }
+    }
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(BackupRepository.MIME_TYPE)) { uri ->
         viewModel.onExportDestinationChosen(uri?.toString())
     }

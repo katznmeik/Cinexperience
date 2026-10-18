@@ -16,7 +16,8 @@ import java.util.Collections
 /**
  * Fakes of the ticket import for the app tests, with INVENTED data only: every file
  * "is" the ticket "TEST123" for "The Quiet Projectionist" at delphi LUX, Saal 4, Row 7 ·
- * Seat 10 and 11, Saturday 17 Oct 2026 at 20:15, with [SampleTickets.qrModules] (25 × 25,
+ * Seat 10 and 11 (plus a seat in a row without a name and a fixed label, which Saal 4
+ * doesn't have), Saturday 17 Oct 2026 at 20:15, with [SampleTickets.qrModules] (25 × 25,
  * to tell it from the stored one). No PDF is read.
  */
 internal class FakeTicketFiles : TicketFileSource {
@@ -39,7 +40,7 @@ internal object FakeTicketReader : TicketReader {
         date = TicketPdfField.Found(LocalDate.of(2026, 10, 17)),
         startTime = TicketPdfField.Found(SampleTickets.START),
         hall = TicketPdfField.Found("4"),
-        seats = TicketPdfField.Found(listOf(PrintedSeat("7", "10"), PrintedSeat("7", "11"))),
+        seats = TicketPdfField.Found(listOf(PrintedSeat("7", "10"), PrintedSeat("7", "11"), PrintedSeat(null, "12"), PrintedSeat("8", "R"))),
         qrCode = TicketPdfField.NotFound(NotFoundReason.MISSING),
     )
 
