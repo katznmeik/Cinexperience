@@ -7,19 +7,29 @@ import io.github.katznmeik.cinexperience.core.ticket.TicketPdfLimits
  * Builds objects from [lexer]'s tokens: numbers, names, strings, arrays, dictionaries,
  * `true`/`false`/`null` and, with [allowReferences], `n g R` references. Arrays and
  * dictionaries may be nested at most [TicketPdfLimits.MAX_NESTING] deep and hold at
- * most [TicketPdfLimits.MAX_CONTAINER_ITEMS] entries each.
+ * most [TicketPdfLimits.MAX_CONTAINER_ITEMS] entries each. Every value built (and
+ * every dictionary key) counts against the document's [budget], and one object
+ * returned by [next] may hold at most [maxValuesPerObject] values, nested ones
+ * included ([TicketPdfError.UNSUPPORTED] beyond).
  *
  * Any other keyword is returned as a [PdfKeyword] at the top level (content stream
  * operators, `obj`, `stream`…) and is [TicketPdfError.DAMAGED] inside an array or
  * dictionary, except in content streams ([allowReferences] false), whose arrays only
  * hold operands anyway.
  */
-internal class PdfObjectParser(private val lexer: PdfLexer, private val allowReferences: Boolean) {
+internal class PdfObjectParser(
+    private val lexer: PdfLexer,
+    private val allowReferences: Boolean,
+    private val budget: ParseBudget,
+    private val maxValuesPerObject: Int = Int.MAX_VALUE,
+) {
     private val pending = ArrayDeque<PdfToken>()
+    private var valuesInObject = 0
 
     /** The next object or keyword, or `null` at the end. */
     fun next(): PdfObject? {
         val token = nextToken() ?: return null
+        valuesInObject = 0
         return parse(token, depth = 0)
     }
 
@@ -31,7 +41,12 @@ internal class PdfObjectParser(private val lexer: PdfLexer, private val allowRef
 
     private fun nextToken(): PdfToken? = pending.removeFirstOrNull() ?: lexer.next()
 
-    private fun parse(token: PdfToken, depth: Int): PdfObject = when (token) {
+    private fun parse(token: PdfToken, depth: Int): PdfObject {
+        count()
+        return build(token, depth)
+    }
+
+    private fun build(token: PdfToken, depth: Int): PdfObject = when (token) {
         is PdfToken.Number -> if (allowReferences && token.isInteger && token.value >= 0) referenceOrNumber(token) else PdfNumber(token.value, token.isInteger)
         is PdfToken.Name -> PdfName(token.name)
         is PdfToken.Text -> PdfString(token.bytes)
@@ -83,6 +98,7 @@ internal class PdfObjectParser(private val lexer: PdfLexer, private val allowRef
             val token = nextToken() ?: damaged("Unterminated dictionary")
             if (token == PdfToken.DictEnd) return PdfDictionary(entries)
             val key = (token as? PdfToken.Name)?.name ?: damaged("Dictionary key is not a name")
+            count()
             val valueToken = nextToken() ?: damaged("Unterminated dictionary")
             if (valueToken == PdfToken.DictEnd) damaged("Dictionary key without a value")
             val value = parse(valueToken, depth)
@@ -90,6 +106,11 @@ internal class PdfObjectParser(private val lexer: PdfLexer, private val allowRef
             if (entries.put(key, value) != null) damaged("Duplicate dictionary key")
             if (entries.size > TicketPdfLimits.MAX_CONTAINER_ITEMS) refuse(TicketPdfError.UNSUPPORTED, "Dictionary too long")
         }
+    }
+
+    private fun count() {
+        budget.take()
+        if (++valuesInObject > maxValuesPerObject) refuse(TicketPdfError.UNSUPPORTED, "More than $maxValuesPerObject values in one object")
     }
 
     private fun checkDepth(depth: Int) {

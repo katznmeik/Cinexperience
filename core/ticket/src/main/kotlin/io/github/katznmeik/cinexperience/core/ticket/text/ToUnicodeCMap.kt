@@ -1,11 +1,29 @@
 package io.github.katznmeik.cinexperience.core.ticket.text
 
+import io.github.katznmeik.cinexperience.core.ticket.TicketPdfError
+import io.github.katznmeik.cinexperience.core.ticket.TicketPdfLimits
+import io.github.katznmeik.cinexperience.core.ticket.pdf.ParseBudget
 import io.github.katznmeik.cinexperience.core.ticket.pdf.PdfArray
 import io.github.katznmeik.cinexperience.core.ticket.pdf.PdfKeyword
 import io.github.katznmeik.cinexperience.core.ticket.pdf.PdfLexer
 import io.github.katznmeik.cinexperience.core.ticket.pdf.PdfObject
 import io.github.katznmeik.cinexperience.core.ticket.pdf.PdfObjectParser
 import io.github.katznmeik.cinexperience.core.ticket.pdf.PdfString
+import io.github.katznmeik.cinexperience.core.ticket.pdf.refuse
+
+/**
+ * Counts the codes all CMaps of a document make the reader process: each `bfchar`
+ * pair and each code of a used `bfrange`, repeated or not
+ * ([TicketPdfLimits.MAX_CMAP_CODES], [TicketPdfError.UNSUPPORTED] beyond).
+ */
+internal class CMapCodeBudget {
+    private var used = 0L
+
+    fun take(codes: Int) {
+        used += codes
+        if (used > TicketPdfLimits.MAX_CMAP_CODES) refuse(TicketPdfError.UNSUPPORTED, "More than ${TicketPdfLimits.MAX_CMAP_CODES} CMap codes")
+    }
+}
 
 /**
  * A font's `/ToUnicode` CMap for two-byte codes (Identity-H, ISO 32000-1, 9.10.3):
@@ -21,29 +39,26 @@ import io.github.katznmeik.cinexperience.core.ticket.pdf.PdfString
 internal object ToUnicodeCMap {
     /** Far more than a subset font has (Yorck's have about 70 glyphs each). */
     const val MAX_ENTRIES: Int = 4_096
-
-    /** Codes processed (each `bfchar` pair, each code of a range, repeated or not) before the CMap is given up. */
-    const val MAX_PROCESSED: Int = 4 * MAX_ENTRIES
     const val MAX_RANGE: Int = 256
     const val MAX_TARGET_UNITS: Int = 8
 
     /**
      * The code → text table, or `null` if the CMap holds more than [MAX_ENTRIES]
-     * mappings or makes the reader process more than [MAX_PROCESSED] codes (ranges
-     * repeated over the same codes); then the font's text is dropped. Syntax errors
-     * are thrown as DAMAGED.
+     * mappings; then the font's text is dropped. Syntax errors are thrown as DAMAGED.
+     * Every value parsed counts against [values], with at most
+     * [TicketPdfLimits.MAX_OPERAND_VALUES] in one object, and every code processed
+     * against [codes] (both shared by the document's CMaps); beyond them the file is refused.
      */
-    fun parse(data: ByteArray): Map<Int, String>? {
-        val parser = PdfObjectParser(PdfLexer(data, 0), allowReferences = false)
+    fun parse(data: ByteArray, values: ParseBudget, codes: CMapCodeBudget): Map<Int, String>? {
+        val parser = PdfObjectParser(PdfLexer(data, 0), allowReferences = false, values, TicketPdfLimits.MAX_OPERAND_VALUES)
         val map = HashMap<Int, String>()
-        var processed = 0
         while (true) {
             when ((parser.next() ?: break) as? PdfKeyword) {
                 BEGIN_BFCHAR -> while (true) {
                     val source = parser.next() ?: return map
                     if (source == END_BFCHAR) break
                     val target = parser.next() ?: return map
-                    if (++processed > MAX_PROCESSED) return null
+                    codes.take(1)
                     val code = code(source) ?: continue
                     val text = text(target) ?: continue
                     map[code] = text
@@ -54,8 +69,7 @@ internal object ToUnicodeCMap {
                     if (low == END_BFRANGE) break
                     val high = parser.next() ?: return map
                     val target = parser.next() ?: return map
-                    processed += rangeSize(code(low), code(high))
-                    if (processed > MAX_PROCESSED) return null
+                    codes.take(rangeSize(code(low), code(high)))
                     if (!addRange(map, code(low), code(high), target)) continue
                     if (map.size > MAX_ENTRIES) return null
                 }

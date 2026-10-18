@@ -15,11 +15,12 @@ internal class PdfPage(val dictionary: PdfDictionary, val resources: PdfDictiona
  * file: each must start at its offset with its own `n g obj`, so text inside
  * a stream (an image can contain anything) is never taken for an object. A stream's
  * data is located by its `/Length` (direct or indirect) and must be followed by
- * `endstream`. Objects are parsed on demand and cached; resolving an object that is
- * being parsed (e.g. a stream whose `/Length` refers to itself) or a reference chain
- * that returns to an object is a [TicketPdfError.REFERENCE_CYCLE]; objects needed
- * to parse objects (lengths of lengths…) more than a few levels deep are
- * [TicketPdfError.NESTING_TOO_DEEP].
+ * `endstream`. Objects are parsed on demand and cached, every value counting against
+ * [parseBudget] (shared with the content stream and CMap parsers). Resolving an
+ * object that is being parsed (e.g. a stream whose `/Length` refers to itself) or a
+ * reference chain that returns to an object is a [TicketPdfError.REFERENCE_CYCLE];
+ * objects needed to parse objects (lengths of lengths…) more than a few levels deep
+ * are [TicketPdfError.NESTING_TOO_DEEP].
  *
  * Nothing here follows links, actions, annotations or external files: the reader only
  * looks at the trailer, the catalogue's `/Pages`, the page tree and what
@@ -29,6 +30,8 @@ internal class PdfDocument private constructor(
     private val data: ByteArray,
     private val entries: Map<Int, XrefEntry>,
     private val trailer: PdfDictionary,
+    /** The values parsed in this document so far, by every parser. */
+    val parseBudget: ParseBudget,
 ) {
     /** An object at [offset]; it must end by [end], where the next object (or the table) starts. */
     private class XrefEntry(val offset: Int, val generation: Int, val end: Int)
@@ -183,7 +186,7 @@ internal class PdfDocument private constructor(
     }
 
     private fun parseObjectAt(number: Int, entry: XrefEntry): PdfObject {
-        val parser = PdfObjectParser(PdfLexer(data, entry.offset, entry.end), allowReferences = true)
+        val parser = PdfObjectParser(PdfLexer(data, entry.offset, entry.end), allowReferences = true, parseBudget)
         val head = listOf(parser.next(), parser.next(), parser.next())
         val expected = listOf(PdfNumber(number.toDouble(), true), PdfNumber(entry.generation.toDouble(), true), PdfKeyword("obj"))
         if (head != expected) damaged("Object not at its cross-reference offset")
@@ -238,20 +241,21 @@ internal class PdfDocument private constructor(
                 ?.takeIf { it.isInteger && it.value >= 0 && it.value < data.size }?.value?.toInt()
                 ?: damaged("Bad startxref offset")
 
+            val budget = ParseBudget()
             val lexer = PdfLexer(data, xrefOffset)
             val first = lexer.next()
             if (first != PdfToken.Keyword("xref")) {
-                if (first is PdfToken.Number) refuseCrossReferenceStream(data, xrefOffset)
+                if (first is PdfToken.Number) refuseCrossReferenceStream(data, xrefOffset, budget)
                 damaged("No cross-reference table at startxref")
             }
             val entries = readEntries(lexer, data.size, xrefOffset)
-            val trailer = PdfObjectParser(lexer, allowReferences = true).next() as? PdfDictionary ?: damaged("No trailer dictionary")
+            val trailer = PdfObjectParser(lexer, allowReferences = true, budget).next() as? PdfDictionary ?: damaged("No trailer dictionary")
             if (trailer.containsKey("Encrypt")) refuse(TicketPdfError.ENCRYPTED, "Encrypted")
             if (trailer.containsKey("Prev") || trailer.containsKey("XRefStm")) refuse(TicketPdfError.UNSUPPORTED, "Incremental update or hybrid file")
             val size = (trailer["Size"] as? PdfNumber)?.intOrNull() ?: damaged("Trailer without /Size")
             if (size > TicketPdfLimits.MAX_OBJECTS + 1) refuse(TicketPdfError.TOO_MANY_OBJECTS, "Trailer /Size $size")
             if (trailer["Root"] !is PdfReference) damaged("Trailer without /Root")
-            return PdfDocument(data, entries, trailer)
+            return PdfDocument(data, entries, trailer, budget)
         }
 
         /**
@@ -295,8 +299,8 @@ internal class PdfDocument private constructor(
         }
 
         /** A PDF 1.5 cross-reference stream: encrypted or not, outside the reader's scope. */
-        private fun refuseCrossReferenceStream(data: ByteArray, offset: Int): Nothing {
-            val parser = PdfObjectParser(PdfLexer(data, offset), allowReferences = true)
+        private fun refuseCrossReferenceStream(data: ByteArray, offset: Int, budget: ParseBudget): Nothing {
+            val parser = PdfObjectParser(PdfLexer(data, offset), allowReferences = true, budget)
             val head = runCatching { listOf(parser.next(), parser.next(), parser.next(), parser.next()) }.getOrNull()
             val dictionary = head?.getOrNull(3) as? PdfDictionary
             if (head?.getOrNull(2) == PdfKeyword("obj") && dictionary != null) {

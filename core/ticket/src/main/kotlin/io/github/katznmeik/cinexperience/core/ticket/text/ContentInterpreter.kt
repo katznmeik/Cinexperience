@@ -43,7 +43,9 @@ internal class GlyphBudget {
  * every glyph with its own `Td`, so spacing, scaling and rise don't move the text the
  * reader needs), and the spacing operands of `"`; inline images are skipped. Text is
  * read only in fonts [FontCache] can map; glyphs that aren't upright and horizontal
- * are dropped. `Do` on a form XObject is not followed.
+ * are dropped. `Do` on a form XObject is not followed. Every value parsed counts
+ * against the document's [PdfDocument.parseBudget]; one operand may hold at most
+ * [TicketPdfLimits.MAX_OPERAND_VALUES] values.
  */
 internal class ContentInterpreter(
     private val document: PdfDocument,
@@ -55,10 +57,38 @@ internal class ContentInterpreter(
         fun copy() = GraphicsState(ctm, font, fontSize, leading)
     }
 
+    /** The text matrix, moved along the baseline in place for every code shown and every `TJ` number. */
+    private class TextMatrix {
+        private var a = 1.0
+        private var b = 0.0
+        private var c = 0.0
+        private var d = 1.0
+        private var e = 0.0
+        private var f = 0.0
+
+        fun set(m: Matrix) {
+            a = m.a
+            b = m.b
+            c = m.c
+            d = m.d
+            e = m.e
+            f = m.f
+        }
+
+        /** Moves by [tx] text space units along the baseline: `translation(tx, 0) × this`. */
+        fun move(tx: Double) {
+            e += tx * a
+            f += tx * b
+        }
+
+        /** `scale(size) × this × ctm`: where a glyph of [size] is drawn. */
+        fun rendering(size: Double, ctm: Matrix): Matrix = Matrix(size * a, size * b, size * c, size * d, e, f) * ctm
+    }
+
     private var state = GraphicsState(Matrix.IDENTITY, font = null, fontSize = 0.0, leading = 0.0)
     private val saved = ArrayDeque<GraphicsState>()
     private var inText = false
-    private var textMatrix = Matrix.IDENTITY
+    private val textMatrix = TextMatrix()
     private var lineMatrix = Matrix.IDENTITY
     private val glyphs = ArrayList<Glyph>()
     private val images = ArrayList<PdfStream>()
@@ -66,7 +96,7 @@ internal class ContentInterpreter(
 
     fun run(content: ByteArray): PageContent {
         val lexer = PdfLexer(content, 0)
-        val parser = PdfObjectParser(lexer, allowReferences = false)
+        val parser = PdfObjectParser(lexer, allowReferences = false, document.parseBudget, TicketPdfLimits.MAX_OPERAND_VALUES)
         val operands = ArrayList<PdfObject>()
         while (true) {
             val obj = parser.next() ?: break
@@ -92,7 +122,7 @@ internal class ContentInterpreter(
             "cm" -> matrix(operands)?.let { state.ctm = it * state.ctm }
             "BT" -> {
                 inText = true
-                textMatrix = Matrix.IDENTITY
+                textMatrix.set(Matrix.IDENTITY)
                 lineMatrix = Matrix.IDENTITY
             }
             "ET" -> inText = false
@@ -106,7 +136,7 @@ internal class ContentInterpreter(
             }
             "TL" -> numbers(operands, 1)?.let { state.leading = it[0] }
             "Tm" -> if (inText) matrix(operands)?.let {
-                textMatrix = it
+                textMatrix.set(it)
                 lineMatrix = it
             }
             "Td" -> if (inText) numbers(operands, 2)?.let { moveLine(it[0], it[1]) }
@@ -127,7 +157,7 @@ internal class ContentInterpreter(
             "TJ" -> if (inText) (operands.lastOrNull() as? PdfArray)?.items?.forEach { item ->
                 when (item) {
                     is PdfString -> show(item.bytes)
-                    is PdfNumber -> textMatrix = Matrix.translation(-item.value / 1000.0 * state.fontSize, 0.0) * textMatrix
+                    is PdfNumber -> textMatrix.move(-item.value / 1000.0 * state.fontSize)
                     else -> Unit
                 }
             }
@@ -138,7 +168,7 @@ internal class ContentInterpreter(
 
     private fun moveLine(tx: Double, ty: Double) {
         lineMatrix = Matrix.translation(tx, ty) * lineMatrix
-        textMatrix = lineMatrix
+        textMatrix.set(lineMatrix)
     }
 
     /** Two-byte codes (Identity-H); an odd last byte is ignored. Every code counts against the [budget]. */
@@ -153,13 +183,13 @@ internal class ContentInterpreter(
             val advance = font.widths.width(code) / 1000.0 * size
             val text = font.toUnicode[code]
             if (text != null) place(text, advance, font.isBold)
-            textMatrix = Matrix.translation(advance, 0.0) * textMatrix
+            textMatrix.move(advance)
         }
     }
 
     private fun place(text: String, advance: Double, bold: Boolean) {
         val size = state.fontSize
-        val rendering = Matrix(size, 0.0, 0.0, size, 0.0, 0.0) * textMatrix * state.ctm
+        val rendering = textMatrix.rendering(size, state.ctm)
         if (!rendering.isFinite) return
         val height = rendering.d
         val width = rendering.a

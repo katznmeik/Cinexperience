@@ -157,15 +157,17 @@ class ContentInterpreterTest {
 
     @Test(timeout = 10_000)
     fun eachFontAndCMapIsBuiltOnceHoweverOftenItIsSelected() {
-        // 2,000 fonts given directly in the resources, all with one CMap of 4,000 entries,
-        // each selected ten times: built every time, this takes minutes.
+        // The most fonts a document may load, given directly in the resources, all with one CMap
+        // of 4,000 entries, and selected 20,000 times: built every time, the font and CMap
+        // limits would refuse the file.
         val cmap = "4000 beginbfchar\n" + (0 until 4000).joinToString("\n") { "<%04X> <0041>".format(it + 1) } + "\nendbfchar"
         val builder = PdfBuilder()
         val catalog = builder.reserve()
         val node = builder.reserve()
         val toUnicode = builder.addStream("", cmap.latin1())
-        val fonts = (0 until 2000).joinToString(" ") { "/G$it << /Type /Font /Subtype /Type0 /BaseFont /ArialMT /Encoding /Identity-H /ToUnicode $toUnicode 0 R >>" }
-        val content = "BT 0 0 Td " + (0 until 20_000).joinToString(" ") { "/G${it % 2000} 10 Tf" } + " <0001> Tj ET"
+        val count = TicketPdfLimits.MAX_FONTS
+        val fonts = (0 until count).joinToString(" ") { "/G$it << /Type /Font /Subtype /Type0 /BaseFont /ArialMT /Encoding /Identity-H /ToUnicode $toUnicode 0 R >>" }
+        val content = "BT 0 0 Td " + (0 until 20_000).joinToString(" ") { "/G${it % count} 10 Tf" } + " <0001> Tj ET"
         val stream = builder.addStream("", content.latin1())
         val page = builder.add("<< /Type /Page /Parent $node 0 R /Contents $stream 0 R /Resources << /Font << $fonts >> >> >>")
         builder.set(catalog, "<< /Type /Catalog /Pages $node 0 R >>")

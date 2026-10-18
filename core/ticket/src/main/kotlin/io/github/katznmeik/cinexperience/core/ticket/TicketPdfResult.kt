@@ -26,8 +26,10 @@ enum class TicketPdfError {
     /**
      * A PDF feature outside the reader's scope: cross-reference streams, incremental
      * updates, object streams, other stream filters, external stream data, too many
-     * entries in one array, dictionary or page, more glyph widths than
-     * [TicketPdfLimits.MAX_GLYPH_WIDTHS].
+     * entries in one array, dictionary or page, too many values in one content stream
+     * operand or CMap object ([TicketPdfLimits.MAX_OPERAND_VALUES]), more fonts, CMap
+     * codes or glyph widths than [TicketPdfLimits.MAX_FONTS],
+     * [TicketPdfLimits.MAX_CMAP_CODES] or [TicketPdfLimits.MAX_GLYPH_WIDTHS].
      */
     UNSUPPORTED,
 
@@ -37,7 +39,7 @@ enum class TicketPdfError {
     /** More than [TicketPdfLimits.MAX_PAGES] pages, or a page tree of more than [TicketPdfLimits.MAX_PAGE_TREE_NODES] nodes. */
     TOO_MANY_PAGES,
 
-    /** More than [TicketPdfLimits.MAX_OBJECTS] objects. */
+    /** More than [TicketPdfLimits.MAX_OBJECTS] objects, or more than [TicketPdfLimits.MAX_PARSED_VALUES] values parsed. */
     TOO_MANY_OBJECTS,
 
     /**

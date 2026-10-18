@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.core.ticket.pdf
 
 import io.github.katznmeik.cinexperience.core.ticket.TicketPdfError
+import io.github.katznmeik.cinexperience.core.ticket.TicketPdfLimits
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -14,8 +15,13 @@ class PdfLexerTest {
         return generateSequence { lexer.next() }.toList()
     }
 
-    private fun objects(text: String, references: Boolean = true): List<PdfObject> {
-        val parser = PdfObjectParser(PdfLexer(text.toByteArray(Charsets.ISO_8859_1), 0), references)
+    private fun objects(
+        text: String,
+        references: Boolean = true,
+        budget: ParseBudget = ParseBudget(),
+        maxValues: Int = Int.MAX_VALUE,
+    ): List<PdfObject> {
+        val parser = PdfObjectParser(PdfLexer(text.toByteArray(Charsets.ISO_8859_1), 0), references, budget, maxValues)
         return generateSequence { parser.next() }.toList()
     }
 
@@ -108,6 +114,29 @@ class PdfLexerTest {
     @Test
     fun tooManyEntriesAreUnsupported() {
         assertEquals(TicketPdfError.UNSUPPORTED, error { objects("[" + "0 ".repeat(10_001) + "]") })
+    }
+
+    @Test
+    fun everyValueAndKeyCountsAgainstTheDocumentsBudget() {
+        // An array of 3 numbers, a dictionary with 2 keys and 2 values, a reference, a keyword: 11 values.
+        val budget = ParseBudget()
+        repeat(TicketPdfLimits.MAX_PARSED_VALUES - 11) { budget.take() }
+        objects("[1 2 3] << /A 1 /B /C >> 4 0 R Tj", budget = budget)
+
+        assertEquals(TicketPdfError.TOO_MANY_OBJECTS, error { objects("0", budget = budget) })
+    }
+
+    @Test
+    fun oneObjectHoldsAtMostItsLimitOfValues() {
+        // The array itself and 4,095 numbers: 4,096 values; each top-level object starts afresh.
+        val limit = TicketPdfLimits.MAX_OPERAND_VALUES
+        val full = "[" + "0 ".repeat(limit - 1) + "]"
+        assertEquals(3, objects("$full $full Tj", references = false, maxValues = limit).size)
+
+        assertEquals(TicketPdfError.UNSUPPORTED, error { objects("[" + "0 ".repeat(limit) + "]", references = false, maxValues = limit) })
+        assertEquals(TicketPdfError.UNSUPPORTED, error { objects("[" + "[0] ".repeat(limit / 2) + "]", references = false, maxValues = limit) })
+        val keys = (0..limit / 2).joinToString(" ", "<< ", " >>") { "/K$it 0" }
+        assertEquals(TicketPdfError.UNSUPPORTED, error { objects(keys, references = false, maxValues = limit) })
     }
 
     @Test

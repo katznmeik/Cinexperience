@@ -6,8 +6,8 @@ package io.github.katznmeik.cinexperience.core.ticket
  * so a crafted file can't make the reader use much memory or time. The limits count
  * work, not only distinct objects: an object reused many times counts each time.
  * Yorck's real ticket is far below all of them (one page, 27 objects, about 170 KB,
- * a 55 KB content stream, fewer than 2,000 glyphs, a 116 × 116 px QR code image of
- * less than 5 KB). Smaller limits of single parts live next to their code (the
+ * a 55 KB content stream, 2 fonts, fewer than 2,000 glyphs, a 116 × 116 px QR code
+ * image of less than 5 KB). Smaller limits of single parts live next to their code (the
  * lexer's token lengths, the CMap's entries, the ticket fields' block count).
  */
 object TicketPdfLimits {
@@ -47,6 +47,29 @@ object TicketPdfLimits {
 
     /** Content streams of one page ([TicketPdfError.UNSUPPORTED]). */
     const val MAX_CONTENT_STREAMS_PER_PAGE: Int = 32
+
+    /**
+     * Values the parsers build for the whole document ([TicketPdfError.TOO_MANY_OBJECTS]):
+     * every number, name, string, keyword, reference, array and dictionary, and each
+     * dictionary key, in the objects (kept in the object cache), the content streams
+     * (operators and operands, also those dropped at once) and the CMaps.
+     */
+    const val MAX_PARSED_VALUES: Int = 200_000
+
+    /**
+     * Values in one content stream operand or one CMap object, nested ones included
+     * ([TicketPdfError.UNSUPPORTED]); Yorck's largest are a few dozen.
+     */
+    const val MAX_OPERAND_VALUES: Int = 4_096
+
+    /** Fonts loaded, each distinct font once, whether the reader can map it or not ([TicketPdfError.UNSUPPORTED]). */
+    const val MAX_FONTS: Int = 16
+
+    /**
+     * CMap codes processed in all fonts together ([TicketPdfError.UNSUPPORTED]): each
+     * `bfchar` pair and each code of a `bfrange`, repeated or not.
+     */
+    const val MAX_CMAP_CODES: Int = 16_384
 
     /** Glyph widths (codes in `/W` arrays) read in all fonts together ([TicketPdfError.UNSUPPORTED]). */
     const val MAX_GLYPH_WIDTHS: Int = 65_536

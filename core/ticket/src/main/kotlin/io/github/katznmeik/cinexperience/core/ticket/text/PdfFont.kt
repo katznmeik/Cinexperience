@@ -85,7 +85,9 @@ internal class GlyphWidthsReader(private val document: PdfDocument) {
 /**
  * Loads the fonts of a document once each. A font the reader can't map (another
  * type or encoding, no or an unusable `/ToUnicode`) is `null`: its text is dropped,
- * never guessed. Resource limits and damage found while loading still refuse the file.
+ * never guessed. Resource limits and damage found while loading still refuse the file:
+ * at most [TicketPdfLimits.MAX_FONTS] fonts are loaded, mapped or not, and all CMaps
+ * together process at most [TicketPdfLimits.MAX_CMAP_CODES] codes.
  */
 internal class FontCache(private val document: PdfDocument) {
     // Each font and each CMap is built once, however often a content stream selects it:
@@ -94,6 +96,8 @@ internal class FontCache(private val document: PdfDocument) {
     private val byDictionary = IdentityHashMap<PdfDictionary, PdfFont?>()
     private val cmaps = HashMap<Int, Map<Int, String>?>()
     private val widths = GlyphWidthsReader(document)
+    private val cmapCodes = CMapCodeBudget()
+    private var loaded = 0
 
     fun load(font: PdfObject?): PdfFont? {
         if (font is PdfReference) {
@@ -106,6 +110,7 @@ internal class FontCache(private val document: PdfDocument) {
     }
 
     private fun create(font: PdfObject?): PdfFont? {
+        if (++loaded > TicketPdfLimits.MAX_FONTS) refuse(TicketPdfError.UNSUPPORTED, "More than ${TicketPdfLimits.MAX_FONTS} fonts")
         val dictionary = document.dictionary(font) ?: return null
         if (document.name(dictionary["Subtype"]) != "Type0") return null
         if (document.name(dictionary["Encoding"]) != "Identity-H") return null
@@ -124,7 +129,7 @@ internal class FontCache(private val document: PdfDocument) {
             if (e.error == TicketPdfError.UNSUPPORTED) return null else throw e
         }
         return try {
-            ToUnicodeCMap.parse(data)
+            ToUnicodeCMap.parse(data, document.parseBudget, cmapCodes)
         } catch (e: TicketPdfException) {
             // A CMap with broken syntax: this font's text is dropped; limits still refuse the file.
             if (e.error == TicketPdfError.DAMAGED) null else throw e

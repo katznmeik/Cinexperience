@@ -135,13 +135,19 @@ class TicketPdfReader internal constructor(private val decoder: LuminanceDecoder
         return QrGridReader.read(image)
     }
 
+    /**
+     * The page's streams one after another, each followed by a line feed: a stream ends
+     * a token, but an operand or operation may go on in the next stream (ISO 32000-1, 7.8.2).
+     */
     private fun joined(streams: List<ByteArray>): ByteArray {
         if (streams.size == 1) return streams.single()
-        val out = ByteArrayOutputStream()
+        val out = ByteArray(streams.sumOf { it.size + 1 })
+        var at = 0
         for (stream in streams) {
-            out.write(stream)
-            out.write('\n'.code)
+            stream.copyInto(out, at)
+            at += stream.size
+            out[at++] = '\n'.code.toByte()
         }
-        return out.toByteArray()
+        return out
     }
 }

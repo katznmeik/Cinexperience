@@ -1,6 +1,8 @@
 package io.github.katznmeik.cinexperience.core.ticket.text
 
 import io.github.katznmeik.cinexperience.core.ticket.TicketPdfError
+import io.github.katznmeik.cinexperience.core.ticket.TicketPdfLimits
+import io.github.katznmeik.cinexperience.core.ticket.pdf.ParseBudget
 import io.github.katznmeik.cinexperience.core.ticket.pdf.TicketPdfException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -8,13 +10,22 @@ import org.junit.Test
 
 class ToUnicodeCMapTest {
 
-    private fun parse(body: String): Map<Int, String>? = ToUnicodeCMap.parse(
+    private fun parse(body: String, codes: CMapCodeBudget = CMapCodeBudget()): Map<Int, String>? = ToUnicodeCMap.parse(
         ("/CIDInit /ProcSet findresource begin 12 dict begin begincmap\n" +
             "/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n" +
             "/CMapName /Adobe-Identity-UCS def /CMapType 2 def\n" +
             "1 begincodespacerange <0000> <FFFF> endcodespacerange\n" +
             body + "\nendcmap CMapName currentdict /CMap defineresource pop end end").toByteArray(Charsets.ISO_8859_1),
+        ParseBudget(),
+        codes,
     )
+
+    private fun error(block: () -> Unit): TicketPdfError? = try {
+        block()
+        null
+    } catch (e: TicketPdfException) {
+        e.error
+    }
 
     @Test
     fun readsBfcharPairs() {
@@ -63,18 +74,37 @@ class ToUnicodeCMapTest {
 
     @Test
     fun brokenSyntaxIsDamaged() {
-        val error = try {
-            parse("1 beginbfchar <0001> <00G1> endbfchar")
-            null
-        } catch (e: TicketPdfException) {
-            e.error
-        }
-
-        assertEquals(TicketPdfError.DAMAGED, error)
+        assertEquals(TicketPdfError.DAMAGED, error { parse("1 beginbfchar <0001> <00G1> endbfchar") })
     }
 
     @Test
     fun anUnterminatedSectionKeepsWhatWasRead() {
-        assertEquals(mapOf(1 to "A"), ToUnicodeCMap.parse("beginbfchar <0001> <0041> <0002>".toByteArray(Charsets.ISO_8859_1)))
+        val data = "beginbfchar <0001> <0041> <0002>".toByteArray(Charsets.ISO_8859_1)
+
+        assertEquals(mapOf(1 to "A"), ToUnicodeCMap.parse(data, ParseBudget(), CMapCodeBudget()))
+    }
+
+    @Test
+    fun theCodesOfAllCMapsCountTogether() {
+        // Each range is used; 64 of them reach the document's limit, the next one is refused.
+        val codes = CMapCodeBudget()
+        val ranges = (0 until 16).joinToString(" ") { "<%02X00> <%02XFF> <0041>".format(it, it) }
+        repeat(TicketPdfLimits.MAX_CMAP_CODES / 4_096) { assertEquals(4_096, parse("16 beginbfrange $ranges endbfrange", codes)?.size) }
+
+        assertEquals(TicketPdfError.UNSUPPORTED, error { parse("1 beginbfchar <0001> <0041> endbfchar", codes) })
+    }
+
+    @Test
+    fun rangesOverTheSameCodesCountEachTime() {
+        val repeated = "<0000> <00FF> <0041> ".repeat(TicketPdfLimits.MAX_CMAP_CODES / 256 + 1)
+
+        assertEquals(TicketPdfError.UNSUPPORTED, error { parse("1 beginbfrange $repeated endbfrange") })
+    }
+
+    @Test
+    fun aTargetArrayOfMoreValuesThanOneObjectMayHoldIsRefused() {
+        val targets = "<0041> ".repeat(TicketPdfLimits.MAX_OPERAND_VALUES)
+
+        assertEquals(TicketPdfError.UNSUPPORTED, error { parse("1 beginbfrange <0000> <00FF> [$targets] endbfrange") })
     }
 }

@@ -105,20 +105,23 @@ class ResourceBudgetTest {
 
     @Test(timeout = 20_000)
     fun aWidthArraySharedByManyFontsIsReadOnce() {
-        // 1,900 fonts given directly in the resources, all with one /W array of 9,000 widths.
+        // The most fonts a document may load, given directly in the resources, all with one
+        // /W array of 9,000 widths: read for each font, they would exceed the width limit.
+        val count = TicketPdfLimits.MAX_FONTS
+        assertTrue(count * 9_000 > TicketPdfLimits.MAX_GLYPH_WIDTHS)
         val builder = PdfBuilder()
         val widths = builder.add("[0 [" + "500 ".repeat(9_000) + "]]")
         val toUnicode = builder.addStream("", "begincmap 1 beginbfchar <0001> <0041> endbfchar endcmap".latin1(), directLength = true)
-        val fonts = (0 until 1_900).joinToString(" ") {
+        val fonts = (0 until count).joinToString(" ") {
             "/G$it << /Type /Font /Subtype /Type0 /BaseFont /ArialMT /Encoding /Identity-H /ToUnicode $toUnicode 0 R /DescendantFonts [<< /W $widths 0 R >>] >>"
         }
-        val content = builder.addStream("", ("BT 0 0 Td " + (0 until 1_900).joinToString(" ") { "/G$it 10 Tf <0001> Tj" } + " ET").latin1())
+        val content = builder.addStream("", ("BT 0 0 Td " + (0 until count).joinToString(" ") { "/G$it 10 Tf <0001> Tj" } + " ET").latin1())
 
         var error: TicketPdfError? = null
         val bytes = allocated { error = refusal(page(builder, "$content 0 R", "<< /Font << $fonts >> >>")) }
 
         assertEquals(TicketPdfError.NOT_A_TICKET, error)
-        assertTrue("Allocated ${bytes / 1_000_000} MB", bytes < 200_000_000)
+        assertTrue("Allocated ${bytes / 1_000_000} MB", bytes < 32_000_000)
     }
 
     @Test(timeout = 10_000)
@@ -177,7 +180,7 @@ class ResourceBudgetTest {
     }
 
     @Test(timeout = 5_000)
-    fun cmapRangesRepeatedOverTheSameCodesAreGivenUp() {
+    fun cmapRangesRepeatedOverTheSameCodesAreRefused() {
         // 360,000 ranges over the same 256 codes in 4 CMaps (1.9 MB each, packed small): 92 M codes to process.
         val builder = PdfBuilder()
         val ranges = "90000 beginbfrange\n" + "<0000> <00FF> <0041>\n".repeat(90_000) + "endbfrange"
@@ -187,7 +190,102 @@ class ResourceBudgetTest {
         }
         val content = builder.addStream("", ("BT 0 0 Td " + (0 until 4).joinToString(" ") { "/F$it 10 Tf <0001> Tj" } + " ET").latin1())
 
-        // The fonts' text is dropped, so nothing is left of a ticket.
-        assertEquals(TicketPdfError.NOT_A_TICKET, refusal(page(builder, "$content 0 R", "<< /Font << $fonts >> >>")))
+        assertEquals(TicketPdfError.UNSUPPORTED, refusal(page(builder, "$content 0 R", "<< /Font << $fonts >> >>")))
+    }
+
+    @Test(timeout = 20_000)
+    fun oneOperandSpreadOverFourContentStreamsIsRefused() {
+        // Four content streams of almost 2 MB each (2 KB packed) that together hold one operand:
+        // an array of 838 arrays of 9,999 empty names, 8.4 million values.
+        val inner = "[" + "/".repeat(9_999) + "]"
+        val text = ("[" + inner.repeat(838) + "]").latin1()
+        val quarter = (text.size + 3) / 4
+        assertTrue(quarter < TicketPdfLimits.MAX_STREAM_BYTES)
+        val builder = PdfBuilder()
+        val streams = (0 until 4).map { builder.addFlateStream("", text.copyOfRange(it * quarter, minOf(text.size, (it + 1) * quarter))) }
+        val pdf = page(builder, streams.joinToString(" ", "[", "]") { "$it 0 R" })
+        assertTrue(pdf.size < 16_000)
+
+        var error: TicketPdfError? = null
+        val bytes = allocated { error = refusal(pdf) }
+
+        assertEquals(TicketPdfError.UNSUPPORTED, error)
+        assertTrue("Allocated ${bytes / 1_000_000} MB", bytes < 64_000_000)
+    }
+
+    @Test(timeout = 20_000)
+    fun aHugeEntryOfThePageDictionaryIsRefused() {
+        // 1.9 MB of empty names in an entry of the page dictionary, which the object cache would keep.
+        val inner = "[" + "/".repeat(9_999) + "]"
+        val builder = PdfBuilder()
+        val catalog = builder.reserve()
+        val node = builder.reserve()
+        val content = builder.addStream("", "BT ET".latin1())
+        val page = builder.add("<< /Type /Page /Parent $node 0 R /Contents $content 0 R /Extra [${inner.repeat(190)}] >>")
+        builder.set(node, "<< /Type /Pages /Kids [$page 0 R] /Count 1 >>")
+        builder.set(catalog, "<< /Type /Catalog /Pages $node 0 R >>")
+        val pdf = builder.build(catalog)
+        assertTrue(pdf.size < TicketPdfLimits.MAX_FILE_BYTES)
+
+        var error: TicketPdfError? = null
+        val bytes = allocated { error = refusal(pdf) }
+
+        assertEquals(TicketPdfError.TOO_MANY_OBJECTS, error)
+        assertTrue("Allocated ${bytes / 1_000_000} MB", bytes < 48_000_000)
+    }
+
+    @Test(timeout = 10_000)
+    fun valuesInContentStreamsCountForTheWholeDocument() {
+        // Operands no operator takes are dropped at once, yet each counts.
+        val builder = PdfBuilder()
+        val content = builder.addFlateStream("", "0 ".repeat(TicketPdfLimits.MAX_PARSED_VALUES).latin1())
+
+        assertEquals(TicketPdfError.TOO_MANY_OBJECTS, refusal(page(builder, "$content 0 R")))
+    }
+
+    /** [count] fonts given directly in the resources, each with its own packed CMap of [cmap], all selected once. */
+    private fun fonts(count: Int, cmap: String): ByteArray {
+        val builder = PdfBuilder()
+        val packed = PdfBuilder.deflate("begincmap $cmap endcmap".latin1())
+        val fonts = (0 until count).joinToString(" ") {
+            val stream = builder.addStream("/Filter /FlateDecode", packed, directLength = true)
+            "/F$it << /Type /Font /Subtype /Type0 /BaseFont /ArialMT /Encoding /Identity-H /ToUnicode $stream 0 R >>"
+        }
+        val content = builder.addStream("", ("BT " + (0 until count).joinToString(" ") { "/F$it 1 Tf" } + " ET").latin1())
+        return page(builder, "$content 0 R", "<< /Font << $fonts >> >>")
+    }
+
+    /** 16 ranges of 256 codes, each mapped to 8 UTF-16 units: a CMap of 4,096 long entries. */
+    private val fullCMap = "16 beginbfrange\n" +
+        (0 until 16).joinToString("\n") { "<%02X00> <%02XFF> <00410042004300440045004600470048>".format(it, it) } + "\nendbfrange"
+
+    @Test(timeout = 20_000)
+    fun manyFontsWithTheirOwnCMapsAreRefused() {
+        // 1,980 fonts, each with its own 4,096-entry CMap of a few hundred bytes: 8 M codes, a gigabyte of tables.
+        val pdf = fonts(1_980, fullCMap)
+        assertTrue(pdf.size < TicketPdfLimits.MAX_FILE_BYTES)
+
+        var error: TicketPdfError? = null
+        val bytes = allocated { error = refusal(pdf) }
+
+        assertEquals(TicketPdfError.UNSUPPORTED, error)
+        assertTrue("Allocated ${bytes / 1_000_000} MB", bytes < 32_000_000)
+    }
+
+    @Test(timeout = 10_000)
+    fun aDocumentLoadsAtMostSixteenFonts() {
+        val cmap = "1 beginbfchar <0001> <0041> endbfchar"
+
+        assertEquals(TicketPdfError.NOT_A_TICKET, refusal(fonts(TicketPdfLimits.MAX_FONTS, cmap)))
+        assertEquals(TicketPdfError.UNSUPPORTED, refusal(fonts(TicketPdfLimits.MAX_FONTS + 1, cmap)))
+    }
+
+    @Test(timeout = 10_000)
+    fun cmapCodesCountForTheWholeDocument() {
+        // Each CMap is within its own limit; four of them reach the document's.
+        val count = TicketPdfLimits.MAX_CMAP_CODES / 4_096
+
+        assertEquals(TicketPdfError.NOT_A_TICKET, refusal(fonts(count, fullCMap)))
+        assertEquals(TicketPdfError.UNSUPPORTED, refusal(fonts(count + 1, fullCMap)))
     }
 }
