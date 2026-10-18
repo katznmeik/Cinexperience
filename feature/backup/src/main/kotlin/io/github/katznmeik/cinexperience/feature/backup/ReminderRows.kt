@@ -101,7 +101,8 @@ internal fun ReminderRows(state: ReminderSettingsState, enabled: Boolean, action
                     ChoiceChip(
                         text = ReminderTexts.leadTime(leadTime),
                         selected = leadTime == settings.leadTime,
-                        onClick = { if (switchesEnabled) actions.onLeadTimeChanged(leadTime) },
+                        onClick = { actions.onLeadTimeChanged(leadTime) },
+                        enabled = switchesEnabled,
                     )
                 }
             }

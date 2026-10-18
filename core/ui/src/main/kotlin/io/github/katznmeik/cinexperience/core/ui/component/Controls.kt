@@ -116,7 +116,8 @@ fun OutlinedPillButton(
  * text; with an empty [text] the chip shows only the icon (give it a content
  * description through [modifier]). An optional [trailingIcon] follows the text as a
  * mark (e.g. a seat of the booking), sized like the text (16 sp); it is decorative,
- * so the chip's description should say what it marks.
+ * so the chip's description should say what it marks. Disabled ([enabled] false), it
+ * can't be tapped, is announced as disabled and is drawn muted.
  */
 @Composable
 fun ChoiceChip(
@@ -127,16 +128,21 @@ fun ChoiceChip(
     shape: Shape = RoundedCornerShape(18.dp),
     icon: ImageVector? = null,
     trailingIcon: ImageVector? = null,
+    enabled: Boolean = true,
 ) {
     val base = modifier
         .minimumInteractiveComponentSize()
         .heightIn(min = 36.dp)
         .clip(shape)
-        .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
-    val contentColor = if (selected) CinexTheme.colors.onPrimary else CinexTheme.colors.text
+        .selectable(selected = selected, enabled = enabled, onClick = onClick, role = Role.RadioButton)
+    val contentColor = when {
+        selected -> CinexTheme.colors.onPrimary
+        enabled -> CinexTheme.colors.text
+        else -> CinexTheme.colors.textMuted
+    }
     Row(
         modifier = if (selected) {
-            base.background(CinexTheme.colors.text)
+            base.background(if (enabled) CinexTheme.colors.text else CinexTheme.colors.textMuted)
         } else {
             base.border(1.dp, CinexTheme.colors.outline, shape)
         }.padding(horizontal = if (icon == null) 14.dp else 12.dp),

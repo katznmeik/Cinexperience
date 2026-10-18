@@ -6,8 +6,10 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.data.backup.ImportSource
 import io.github.katznmeik.cinexperience.core.model.ReminderKind
 import io.github.katznmeik.cinexperience.core.model.ReminderLeadTime
@@ -87,7 +89,10 @@ class SettingsRemindersRowsTest {
         )
         switch(ReminderTexts.BEFORE_SHOWING).assertIsNotEnabled().performClick()
         switch(ReminderTexts.RATE_VISIT).assertIsNotEnabled().performClick()
-        composeRule.onNodeWithText("3 hours").performScrollTo().performClick()
+        // The lead time chips too: disabled, not only ignored.
+        for (chip in listOf("1 hour", "2 hours", "3 hours")) composeRule.onNodeWithText(chip).performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText("3 hours").performClick()
         assertEquals(emptyList<String>(), calls)
+        composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/settings_reminders_importing.png")
     }
 }
