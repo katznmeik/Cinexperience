@@ -124,6 +124,10 @@ data class TicketSeat(val row: String?, val seat: String) {
         /** Whether [seat] is a valid [TicketSeat.seat] (see there). */
         fun isValidSeat(seat: String): Boolean = LayoutCell.Seat.isValidFixedLabel(seat) || isSeatNumber(seat)
 
+        /** The seat [row] / [seat], or `null` if either isn't valid (see the class comment). */
+        fun ofOrNull(row: String?, seat: String): TicketSeat? =
+            if ((row == null || isValidRow(row)) && isValidSeat(seat)) TicketSeat(row, seat) else null
+
         private fun isSeatNumber(text: String): Boolean = text.toIntOrNull()?.let { it >= 0 && it.toString() == text } == true
 
         /** Not blank, no surrounding spaces, no ISO control or format (`Cf`) characters, like a fixed seat label. */
