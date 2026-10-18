@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
 import io.github.katznmeik.cinexperience.core.model.QrModules
+import io.github.katznmeik.cinexperience.core.ticket.QrModuleGrid
 import io.github.katznmeik.cinexperience.core.ticket.TicketPdfContent
 import io.github.katznmeik.cinexperience.core.ticket.TicketPdfError
 import io.github.katznmeik.cinexperience.core.ticket.TicketPdfReader
@@ -74,8 +75,15 @@ val DefaultTicketReader: TicketReader = TicketReader { bytes -> TicketPdfReader(
 
 /** [TicketPdfResult] as the import's [TicketReadResult]: the checked QR grid becomes the model's [QrModules]. */
 internal fun TicketPdfResult.toReadResult(): TicketReadResult = when (this) {
-    is TicketPdfResult.Read -> TicketReadResult.Read(content, content.qrCode.valueOrNull?.let { QrModules(it.size, it.toBooleanArray()) })
+    is TicketPdfResult.Read -> TicketReadResult.Read(content, content.qrCode.valueOrNull?.toQrModulesOrNull())
     is TicketPdfResult.Refused -> TicketReadResult.Refused(error)
+}
+
+/** The grid as the model's [QrModules] (which accepts every grid the reader creates); `null`, never a refused ticket, otherwise. */
+private fun QrModuleGrid.toQrModulesOrNull(): QrModules? = try {
+    QrModules(size, toBooleanArray())
+} catch (e: IllegalArgumentException) {
+    null
 }
 
 internal object TicketFileBytes {

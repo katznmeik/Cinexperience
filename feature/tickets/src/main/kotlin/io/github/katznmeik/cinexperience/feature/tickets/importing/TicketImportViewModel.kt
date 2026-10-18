@@ -111,16 +111,9 @@ class TicketImportViewModel(
     }
 
     private suspend fun import(): TicketImportState {
-        val bytes = when (val file = readFile()) {
-            FileRead.Unreadable -> return TicketImportState.Failed(TicketImportError.OPEN_FAILED)
-            FileRead.TooLarge -> return TicketImportState.Failed(TicketImportError.TOO_LARGE)
-            is FileRead.Bytes -> file.bytes
-        }
-        val ticket = when (val result = parse(bytes)) {
-            is TicketReadResult.Refused -> return TicketImportState.Failed(
-                if (result.error == TicketPdfError.TOO_LARGE) TicketImportError.TOO_LARGE else TicketImportError.NOT_A_TICKET,
-            )
-            is TicketReadResult.Read -> result
+        val ticket = when (val read = readTicket()) {
+            is TicketFile.Failed -> return TicketImportState.Failed(read.error)
+            is TicketFile.Read -> read.ticket
         }
         val bookingNumber = ticket.content.bookingNumber.valueOrNull?.let(BookingNumber::ofOrNull)
             ?: return TicketImportState.Failed(TicketImportError.NOT_A_TICKET)
@@ -137,6 +130,27 @@ class TicketImportViewModel(
             throw e
         } catch (e: Exception) {
             TicketImportState.Failed(TicketImportError.CHECK_FAILED)
+        }
+    }
+
+    /** A read ticket, or why there is none. */
+    private sealed interface TicketFile {
+        data class Read(val ticket: TicketReadResult.Read) : TicketFile
+        data class Failed(val error: TicketImportError) : TicketFile
+    }
+
+    /** Reads the file and the ticket in it. The file's bytes don't outlive this call. */
+    private suspend fun readTicket(): TicketFile {
+        val bytes = when (val file = readFile()) {
+            FileRead.Unreadable -> return TicketFile.Failed(TicketImportError.OPEN_FAILED)
+            FileRead.TooLarge -> return TicketFile.Failed(TicketImportError.TOO_LARGE)
+            is FileRead.Bytes -> file.bytes
+        }
+        return when (val result = parse(bytes)) {
+            is TicketReadResult.Refused -> TicketFile.Failed(
+                if (result.error == TicketPdfError.TOO_LARGE) TicketImportError.TOO_LARGE else TicketImportError.NOT_A_TICKET,
+            )
+            is TicketReadResult.Read -> TicketFile.Read(result)
         }
     }
 
