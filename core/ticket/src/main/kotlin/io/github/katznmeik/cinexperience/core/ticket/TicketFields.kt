@@ -29,14 +29,19 @@ internal class TicketTextFields(
  *   "Saal …", "Reihe …", "Platz …" (the last three side by side), then
  *   "Kat. …" and "Gebucht von …", which close the block and are never read.
  *
- * Each label is accepted with its value on the same line or on the next line in the
- * same column, and with or without a colon. A block covers the segments below
- * "Ticket" from its column rightwards, up to the next "Ticket" below it or the
- * "Gebucht von" line; the first occurrence of each label in a block counts.
- * Several blocks (e.g. one page per ticket) must agree on all fields but the seats,
- * whose lists are joined (if they disagree, the seats are [NotFoundReason.AMBIGUOUS]
- * too). Two blocks side by side on one line can't be told apart and give
- * [NotFoundReason.AMBIGUOUS] fields.
+ * A block covers the segments below "Ticket" from its column rightwards, up to the
+ * next "Ticket" below it or the first line starting with "Gebucht von"; nothing from
+ * that line on (the booker's name) is ever looked at. The title comes first: the
+ * bold lines right below "Ticket" (labels are regular, so a title may start with
+ * "Zeit" or end in "Kino"). The labels are looked for only below the title, each with
+ * its value on the same line or on the next line in its column within the block (a
+ * value line that is itself a label, "Kat." or "Gebucht von" is no value), with or
+ * without a colon; the first occurrence of each label counts.
+ *
+ * Several blocks (e.g. one page per ticket) must agree on all fields but the seats;
+ * their seats are joined only if every block has the same title, cinema, date, time
+ * and hall, else they are [NotFoundReason.AMBIGUOUS]. Two blocks side by side on one
+ * line can't be told apart and give [NotFoundReason.AMBIGUOUS] fields.
  */
 internal object TicketFields {
     private const val BOOKING_NUMBER = "Buchungsnummer"
@@ -47,8 +52,11 @@ internal object TicketFields {
     private const val HALL = "Saal"
     private const val ROW = "Reihe"
     private const val SEAT = "Platz"
+    private const val CATEGORY = "Kat."
     private const val BOOKED_BY = "Gebucht von"
-    private val BLOCK_LABELS = listOf(CINEMA, DATE, TIME, HALL, ROW, SEAT)
+
+    /** Texts that start a label line: such a line is never another label's value. */
+    private val LABELS = listOf(BOOKING_NUMBER, TICKET, CINEMA, DATE, TIME, HALL, ROW, SEAT, CATEGORY)
 
     /** Film title lines at most. */
     private const val MAX_TITLE_LINES = 3
@@ -109,8 +117,9 @@ internal object TicketFields {
         val date = choose(blocks.map { it.date })
         val time = choose(blocks.map { it.time })
         val hall = choose(blocks.map { it.hall })
-        // Blocks of different showings: their seats can't be joined either.
-        val sameShowing = listOf(title, cinema, date, time, hall).none { it == TicketPdfField.NotFound(NotFoundReason.AMBIGUOUS) }
+        // Seats of several blocks belong together only if every block names the same showing in full.
+        val showings = blocks.map { listOf(it.title, it.cinema, it.date, it.time, it.hall) }
+        val sameShowing = blocks.size <= 1 || showings.all { fields -> fields.all { it is TicketPdfField.Found } } && showings.distinct().size == 1
         val fields = TicketTextFields(
             bookingNumber = choose(bookingValues.map { value -> checked(value, TicketPdfRules::bookingNumber) }, ignoreInvalid = true),
             filmTitle = title,
@@ -131,19 +140,23 @@ internal object TicketFields {
             val left = anchor.segment.x - tolerance(anchor.segment)
             val nextAnchorLine = anchors.filter { it.line > anchor.line }.minOfOrNull { it.line } ?: Int.MAX_VALUE
             val below = page.filter { it.line > anchor.line && it.line < nextAnchorLine && it.segment.x >= left }
-            val end = below.firstOrNull { it.text == BOOKED_BY || it.text.startsWith("$BOOKED_BY ") }?.line ?: Int.MAX_VALUE
-            block(anchor, below.filter { it.line < end }, page)
+            // The booker's line closes the block: nothing from it on is ever looked at.
+            val end = below.firstOrNull { it.text.startsWith(BOOKED_BY) }?.line ?: Int.MAX_VALUE
+            block(anchor, below.filter { it.line < end })
         }
     }
 
-    private fun block(anchor: Placed, segments: List<Placed>, page: List<Placed>): Block {
+    /** The fields of one block; [segments] are the block's, values are looked for only there. */
+    private fun block(anchor: Placed, segments: List<Placed>): Block {
+        val (title, titleEnd) = title(anchor, segments)
+        val labelled = segments.filter { it.line > titleEnd }
+        fun match(label: String): LabelValue? = labelled.firstNotNullOfOrNull { labelValue(label, it, labelled) }
         // A label without a value is "" (invalid), a missing label null.
-        fun field(label: String): String? = segments.firstNotNullOfOrNull { labelValue(label, it, page) }?.let { it.value ?: "" }
+        fun field(label: String): String? = match(label)?.let { it.value ?: "" }
         fun <T> checkedField(label: String, check: (String) -> T?): TicketPdfField<T> =
-            segments.firstNotNullOfOrNull { labelValue(label, it, page) }?.let { checked(it, check) }
-                ?: TicketPdfField.NotFound(NotFoundReason.MISSING)
+            match(label)?.let { checked(it, check) } ?: TicketPdfField.NotFound(NotFoundReason.MISSING)
         return Block(
-            title = title(anchor, segments),
+            title = title,
             cinema = checkedField(CINEMA, TicketPdfRules::cinema),
             date = checkedField(DATE, TicketPdfRules::date),
             time = checkedField(TIME, TicketPdfRules::time),
@@ -152,45 +165,56 @@ internal object TicketFields {
         )
     }
 
-    /** The bold line(s) right below "Ticket" in its column, up to the first line with a label. */
-    private fun title(anchor: Placed, segments: List<Placed>): TicketPdfField<String> {
-        val lines = segments.groupBy { it.line }.toSortedMap().values
+    /**
+     * The title: the bold lines right below "Ticket" in its column, each the only
+     * segment of its line (labels and values are regular, so no label check here),
+     * and the index of the last of them (the anchor's line if there is none).
+     */
+    private fun title(anchor: Placed, segments: List<Placed>): Pair<TicketPdfField<String>, Int> {
         val parts = ArrayList<String>()
         var above = anchor.segment
-        for (line in lines) {
-            val first = line.first().segment
-            val isTitleLine = line.size == 1 && first.isBold && sameColumn(first, anchor.segment) &&
-                above.y - first.y <= TITLE_LINE_DISTANCE * max(above.size, first.size) &&
-                BLOCK_LABELS.none { first.text == it || first.text.startsWith("$it ") || first.text.startsWith("$it:") }
+        var last = anchor.line
+        for ((line, placed) in segments.groupBy { it.line }.toSortedMap()) {
+            val first = placed.first().segment
+            val isTitleLine = placed.size == 1 && first.isBold && sameColumn(first, anchor.segment) &&
+                above.y - first.y <= TITLE_LINE_DISTANCE * max(above.size, first.size)
             if (!isTitleLine) break
             parts += first.text
             above = first
-            if (parts.size > MAX_TITLE_LINES) return TicketPdfField.NotFound(NotFoundReason.INVALID)
+            last = line
         }
-        if (parts.isEmpty()) return TicketPdfField.NotFound(NotFoundReason.MISSING)
-        return checked(LabelValue(parts.joinToString(" ")), TicketPdfRules::title)
+        val title = when {
+            parts.isEmpty() -> TicketPdfField.NotFound(NotFoundReason.MISSING)
+            parts.size > MAX_TITLE_LINES -> TicketPdfField.NotFound(NotFoundReason.INVALID)
+            else -> checked(LabelValue(parts.joinToString(" ")), TicketPdfRules::title)
+        }
+        return title to last
     }
 
-    /** A label found; [value] is `null` if nothing follows it. */
+    /** A label found; [value] is `null` if nothing (usable) follows it. */
     private class LabelValue(val value: String?)
 
-    /** The value of [label] if [placed] starts with it, else `null`. */
-    private fun labelValue(label: String, placed: Placed, page: List<Placed>): LabelValue? {
+    /** The value of [label] if [placed] starts with it, else `null`; a value on the next line is looked for in [scope]. */
+    private fun labelValue(label: String, placed: Placed, scope: List<Placed>): LabelValue? {
         val text = placed.text
         return when {
-            text == label || text == "$label:" -> LabelValue(valueBelow(placed, page))
+            text == label || text == "$label:" -> LabelValue(valueBelow(placed, scope))
             text.startsWith("$label: ") -> LabelValue(text.substring(label.length + 2))
             text.startsWith("$label ") -> LabelValue(text.substring(label.length + 1))
             else -> null
         }
     }
 
-    /** The first segment below [label] in its column, close enough to belong to it. */
-    private fun valueBelow(label: Placed, page: List<Placed>): String? {
-        val below = page.firstOrNull { it.line > label.line && sameColumn(it.segment, label.segment) } ?: return null
+    /** The first segment of [scope] below [label] in its column, close enough to belong to it and not a label itself. */
+    private fun valueBelow(label: Placed, scope: List<Placed>): String? {
+        val below = scope.firstOrNull { it.line > label.line && sameColumn(it.segment, label.segment) } ?: return null
         val distance = label.segment.y - below.segment.y
-        return below.text.takeIf { distance > 0 && distance <= NEXT_LINE_DISTANCE * max(label.segment.size, below.segment.size) }
+        if (distance <= 0 || distance > NEXT_LINE_DISTANCE * max(label.segment.size, below.segment.size)) return null
+        return below.text.takeUnless(::isLabelLine)
     }
+
+    private fun isLabelLine(text: String): Boolean =
+        text.startsWith(BOOKED_BY) || LABELS.any { text == it || text.startsWith("$it ") || text.startsWith("$it:") }
 
     private fun sameColumn(a: TextSegment, b: TextSegment): Boolean = abs(a.x - b.x) <= tolerance(b)
 

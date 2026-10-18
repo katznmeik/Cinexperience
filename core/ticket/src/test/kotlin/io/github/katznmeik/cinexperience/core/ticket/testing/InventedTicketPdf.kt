@@ -15,6 +15,11 @@ internal data class TicketSpec(
     val seat: String? = "10",
     val category: String? = "1 x Normal",
     val bookedBy: String? = "Erika Mustermann",
+    val bookedByLabel: String = "Gebucht von",
+    /** How far the "Gebucht von" line is indented from the block's column (8 pt on Yorck's ticket). */
+    val bookedByIndent: Double = 8.0,
+    /** Where the "Gebucht von" line's baseline is, from the top of the block's page area. */
+    val bookedByTop: Double = 353.0,
     /** Values on the line below their labels instead of next to them. */
     val valuesBelow: Boolean = false,
     /** Labels with a colon ("Kino: delphi LUX"). */
@@ -142,7 +147,7 @@ internal object InventedTicketPdf {
         cell("Reihe", x + 226.0, 257.0, ticket.row)
         cell("Platz", x + 460.0, 257.0, ticket.seat)
         cell("Kat.", x, 311.0, ticket.category, gap = 22.0)
-        ticket.bookedBy?.let { out.text(bold, 15.0, x + 8.0, 353.0 + shift, "Gebucht von $it") }
+        ticket.bookedBy?.let { out.text(bold, 15.0, x + ticket.bookedByIndent, ticket.bookedByTop + shift, "${ticket.bookedByLabel} $it") }
     }
 
     private fun leftColumn(out: QtContent, page: PageSpec, regular: TestFont, bold: TestFont) {
