@@ -22,9 +22,9 @@ import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 /*
  * The seats of an imported ticket's booking (spec §6.10, several seats): on the map
- * a dashed rim inside the seat, in the seat's on-colour (a shape, not a colour, and
- * clear of the selection ring and the neighbouring seats); for screen readers
- * "…, in this booking".
+ * a dashed rim just inside the seat's edge, in the seat's on-colour (a pattern, not
+ * only a colour, clear of the number, the selection ring and the neighbouring
+ * seats); for screen readers "…, in this booking".
  */
 
 /** Appended to a seat's screen-reader description when it belongs to the booking. */
@@ -33,15 +33,18 @@ const val IN_THIS_BOOKING: String = ", in this booking"
 /** Screen-reader text of the [BookingLegend]. */
 const val BOOKING_LEGEND_DESCRIPTION: String = "Legend: a dashed rim marks the seats of this booking."
 
-/** How far inside the seat's edge the rim runs, and its width, in dp at zoom 1. */
-private const val BOOKING_RIM_INSET = 2.2f
-private const val BOOKING_RIM_WIDTH = 1.1f
+/**
+ * How far inside the seat's edge the rim's centre runs, and its width, in dp at zoom 1:
+ * along the edge (over a "no data" seat's grey rim), clear of the seat number.
+ */
+private const val BOOKING_RIM_INSET = 0.9f
+private const val BOOKING_RIM_WIDTH = 1.3f
 
 /** Dash and gap of the rim, in dp at zoom 1. */
-private const val BOOKING_RIM_DASH = 2f
-private const val BOOKING_RIM_GAP = 1.4f
+private const val BOOKING_RIM_DASH = 2.2f
+private const val BOOKING_RIM_GAP = 1.5f
 
-/** The booking's dashed rim inside the seat [rect], in [color]; [dp] is px per dp. */
+/** The booking's dashed rim just inside the edge of the seat [rect], in [color]; [dp] is px per dp. */
 internal fun DrawScope.drawBookingMark(rect: Rect, color: Color, dp: Float) {
     val rim = rect.deflate(BOOKING_RIM_INSET * dp)
     if (rim.width <= 0f || rim.height <= 0f) return

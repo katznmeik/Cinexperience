@@ -157,9 +157,9 @@ val MAX_ZOOM_SEAT_SIZE: Dp = 44.dp
  *   description ("Selected: Row 7, Seat 10, great, favourite"). Pair the map with a
  *   [SeatLegend].
  * @param bookingSeatIds the seats of an imported ticket's booking (spec §6.10), drawn
- *   with a dashed rim inside the seat ([drawBookingMark]), so another seat of the
- *   booking can be picked; a selected one is announced "…, in this booking". Pair
- *   the map with a [BookingLegend].
+ *   with a dashed rim just inside the seat's edge ([drawBookingMark]), so another
+ *   seat of the booking can be picked; a selected one is announced "…, in this
+ *   booking". Pair the map with a [BookingLegend].
  * @param onSeatClick called with the tapped seat; `null` makes the map display-only.
  * @param onChooseSeatByLabel accessibility alternative to tapping a seat: shown to
  *   screen readers as a custom action (e.g. opening a [SeatPicker]).
