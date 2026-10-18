@@ -10,6 +10,8 @@ import androidx.room.Transaction
 import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
+import java.time.LocalTime
 
 /** A hall with everything needed to score it. */
 internal data class HallWithData(
@@ -55,8 +57,17 @@ internal data class VisitWithContext(
     @ColumnInfo(name = "hall_name") val hallName: String,
     @ColumnInfo(name = "cinema_id") val cinemaId: Long,
     @ColumnInfo(name = "cinema_name") val cinemaName: String,
+    /** The visit has a row in `ticket`. */
+    @ColumnInfo(name = "has_ticket") val hasTicket: Boolean,
     @Relation(entity = HallEntity::class, parentColumn = "hall_id", entityColumn = "id")
     val hallLayout: HallLayoutJson?,
+)
+
+/** When the showing of a ticket with QR modules starts (for their expiry). */
+internal data class TicketShowingTime(
+    @ColumnInfo(name = "visit_id") val visitId: Long,
+    val date: LocalDate,
+    @ColumnInfo(name = "start_time") val startTime: LocalTime?,
 )
 
 @Dao
@@ -143,15 +154,67 @@ internal interface VisitDao {
     @Transaction
     @Query(
         """
-        SELECT visit.*, hall.name AS hall_name, cinema.id AS cinema_id, cinema.name AS cinema_name
+        SELECT visit.*, hall.name AS hall_name, cinema.id AS cinema_id, cinema.name AS cinema_name,
+            ticket.visit_id IS NOT NULL AS has_ticket
         FROM visit
         INNER JOIN hall ON hall.id = visit.hall_id
         INNER JOIN cinema ON cinema.id = hall.cinema_id
+        LEFT JOIN ticket ON ticket.visit_id = visit.id
         ORDER BY visit.date DESC, visit.id DESC
         """,
     )
     fun observeAllWithContext(): Flow<List<VisitWithContext>>
 }
+
+/** Tickets (spec §4.7); the rules are in RoomTicketRepository. */
+@Dao
+internal interface TicketDao {
+    @Query("SELECT * FROM ticket WHERE visit_id = :visitId")
+    suspend fun get(visitId: Long): TicketEntity?
+
+    @Query("SELECT * FROM ticket WHERE visit_id = :visitId")
+    fun observe(visitId: Long): Flow<TicketEntity?>
+
+    @Query("SELECT visit_id FROM ticket WHERE booking_number = :bookingNumber")
+    suspend fun visitIdOf(bookingNumber: String): Long?
+
+    /**
+     * Inserts a ticket for a visit that has none. A booking number another ticket
+     * has fails loudly (UNIQUE index, ABORT), like a second ticket for the visit.
+     */
+    @Insert
+    suspend fun insert(ticket: TicketEntity)
+
+    /**
+     * Replaces the visit's ticket; returns 0 if the visit has none. Not an upsert:
+     * Room's upsert would turn a UNIQUE conflict on the booking number into an
+     * update of 0 rows, so the conflict would pass silently. Here it throws.
+     */
+    @Update
+    suspend fun update(ticket: TicketEntity): Int
+
+    @Query("DELETE FROM ticket WHERE visit_id = :visitId")
+    suspend fun delete(visitId: Long): Int
+
+    @Query("UPDATE ticket SET qr_modules = :qrModules WHERE visit_id = :visitId")
+    suspend fun setQrModules(visitId: Long, qrModules: String?): Int
+
+    @Query(
+        """
+        SELECT ticket.visit_id AS visit_id, visit.date AS date, visit.start_time AS start_time
+        FROM ticket INNER JOIN visit ON visit.id = ticket.visit_id
+        WHERE ticket.qr_modules IS NOT NULL
+        """,
+    )
+    suspend fun showingTimesWithQrModules(): List<TicketShowingTime>
+
+    /** Removes the QR modules of these tickets; at most [MAX_IDS_PER_QUERY] ids per call. */
+    @Query("UPDATE ticket SET qr_modules = NULL WHERE visit_id IN (:visitIds) AND qr_modules IS NOT NULL")
+    suspend fun clearQrModules(visitIds: List<Long>): Int
+}
+
+/** Ids bound in one `IN (…)` query: below SQLite's oldest limit of 999 bound parameters. */
+internal const val MAX_IDS_PER_QUERY: Int = 500
 
 @Dao
 internal interface SeatOverrideDao {
@@ -209,6 +272,9 @@ internal interface BackupDao {
     @Query("SELECT * FROM seat_override ORDER BY hall_id, seat_id")
     suspend fun seatOverrides(): List<SeatOverrideEntity>
 
+    @Query("SELECT * FROM ticket ORDER BY visit_id")
+    suspend fun tickets(): List<TicketEntity>
+
     @Query("SELECT * FROM seed_snapshot ORDER BY kind, seed_key, field")
     suspend fun seedSnapshots(): List<SeedSnapshotEntity>
 
@@ -217,6 +283,9 @@ internal interface BackupDao {
 
     @Query("DELETE FROM seat_override")
     suspend fun clearSeatOverrides()
+
+    @Query("DELETE FROM ticket")
+    suspend fun clearTickets()
 
     @Query("DELETE FROM visit")
     suspend fun clearVisits()
@@ -244,6 +313,9 @@ internal interface BackupDao {
 
     @Insert
     suspend fun insertSeatOverrides(rows: List<SeatOverrideEntity>)
+
+    @Insert
+    suspend fun insertTickets(rows: List<TicketEntity>)
 
     @Insert
     suspend fun insertSeedSnapshots(rows: List<SeedSnapshotEntity>)

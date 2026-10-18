@@ -11,6 +11,7 @@ import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.Visit
 import java.time.LocalDate
+import java.time.LocalTime
 
 /** A cinema the form's cinema picker offers, with its halls (natural name order). */
 data class CinemaOption(val id: Long, val name: String, val halls: List<Hall>)
@@ -21,6 +22,8 @@ data class CinemaOption(val id: Long, val name: String, val halls: List<Hall>)
  *
  * @property cinemaId the cinema chosen while no hall is chosen yet; `null` once a
  *   hall is chosen (the hall's cinema is the visit's cinema then).
+ * @property startTime the visit's start time ([Visit.startTime]); the form has no
+ *   field for it yet, but saving an edited visit keeps it.
  */
 data class VisitForm(
     val hallId: Long? = null,
@@ -34,6 +37,7 @@ data class VisitForm(
     val cinemaRatings: CinemaRatings = CinemaRatings.NONE,
     val note: String = "",
     val photoPath: String? = null,
+    val startTime: LocalTime? = null,
 ) {
     /** The form as it would be saved: compared to detect unsaved changes. */
     internal fun normalized(): VisitForm = copy(filmTitle = filmTitle.trim(), note = note.trim())
@@ -50,6 +54,7 @@ data class VisitForm(
         cinemaRatings = cinemaRatings,
         note = note,
         photoPath = photoPath,
+        startTime = startTime,
     )
 
     companion object {
@@ -64,6 +69,7 @@ data class VisitForm(
             cinemaRatings = visit.cinemaRatings,
             note = visit.note.orEmpty(),
             photoPath = visit.photoPath,
+            startTime = visit.startTime,
         )
     }
 }

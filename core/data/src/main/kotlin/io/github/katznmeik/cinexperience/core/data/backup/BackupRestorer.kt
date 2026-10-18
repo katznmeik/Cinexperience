@@ -132,6 +132,7 @@ internal class BackupRestorer(
     private suspend fun replaceRows(data: BackupData) {
         val dao = db.backupDao()
         dao.clearSeatOverrides()
+        dao.clearTickets()
         dao.clearVisits()
         dao.clearHalls()
         dao.clearCinemas()
@@ -140,6 +141,8 @@ internal class BackupRestorer(
         dao.insertCinemas(data.cinemas.map { it.toEntity() })
         dao.insertHalls(data.halls.map { it.toEntity() })
         dao.insertVisits(data.visits.map { it.toEntity() })
+        // Without QR modules: a backup never holds them (spec §8).
+        dao.insertTickets(data.tickets.map { it.toEntity() })
         dao.insertSeatOverrides(data.seatOverrides.map { it.toEntity() })
         dao.insertSeedSnapshots(data.seedSnapshots.map { it.toEntity() })
         dao.insertMetadata(data.metadata.map { it.toEntity() })

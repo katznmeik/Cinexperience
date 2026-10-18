@@ -39,7 +39,7 @@ internal class BackupRoundTripTest : BackupTestBase() {
         assertEquals(counts, preview.counts)
         assertEquals(Instant.parse("2026-10-03T12:05:00Z"), preview.exportedAt)
         assertEquals("1.2.3", preview.appVersion)
-        assertEquals(2, preview.backupVersion)
+        assertEquals(3, preview.backupVersion)
         assertEquals(ImportSource.FILE, preview.source)
 
         assertEquals(counts, deviceB.repository.commitImport(preview))
@@ -205,7 +205,7 @@ internal class BackupRoundTripTest : BackupTestBase() {
         )
         val manifest = BackupFormat.manifestJson.decodeFromString(BackupManifest.serializer(), entries[0].second.decodeToString())
         assertEquals("cinexperience-backup", manifest.format)
-        assertEquals(2, manifest.backupVersion)
+        assertEquals(3, manifest.backupVersion)
         assertEquals("2026-10-03T12:05:00Z", manifest.exportedAt)
     }
 

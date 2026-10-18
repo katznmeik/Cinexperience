@@ -1,11 +1,13 @@
 package io.github.katznmeik.cinexperience.core.data.backup
 
 import android.annotation.SuppressLint
+import io.github.katznmeik.cinexperience.core.data.db.StartTimes
 import io.github.katznmeik.cinexperience.core.data.files.ReferenceImageStore
 import io.github.katznmeik.cinexperience.core.data.files.VisitPhotoStore
 import io.github.katznmeik.cinexperience.core.data.json.LayoutJson
 import io.github.katznmeik.cinexperience.core.data.json.LayoutTooLargeException
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
+import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.model.DataLimits
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.ScreenSizeRules
@@ -17,6 +19,8 @@ import io.github.katznmeik.cinexperience.core.model.TextLimits
 import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_LONG_TEXT_LENGTH
 import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_NAME_LENGTH
 import io.github.katznmeik.cinexperience.core.model.TextLimits.MAX_ROW_LABEL_LENGTH
+import io.github.katznmeik.cinexperience.core.model.Ticket
+import io.github.katznmeik.cinexperience.core.model.TicketSeat
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -79,7 +83,10 @@ internal class ValidationProblem(val detail: String, val missingFile: Boolean = 
  * visits → halls, overrides → halls and a seat of that hall's layout; at most
  * one favourite per hall; every layout decodes with this app's layout reader (a
  * layout it can't read is rejected, never carried along silently); known enum
- * keys; ratings 1–5; valid dates; a seat id mark in 1..[SeatLayout.MAX_SEAT_ID]
+ * keys; ratings 1–5; valid dates and start times ("HH:mm"); tickets → visits,
+ * at most one per visit, valid booking numbers ([BookingNumber]) that no other
+ * ticket has, 1 to [Ticket.MAX_SEATS] different seats that [TicketSeat]
+ * accepts; a seat id mark in 1..[SeatLayout.MAX_SEAT_ID]
  * and visit seat ids below it; a screen width and distance that
  * [ScreenSizeRules] accepts (positive and at most [ScreenSizeRules.MAX_WIDTH],
  * 0 to [ScreenSizeRules.MAX_DISTANCE]); a screen offset that
@@ -167,6 +174,7 @@ internal object BackupValidator {
             } catch (e: DateTimeParseException) {
                 problem("$label has an invalid date.", e)
             }
+            if (visit.startTime != null && !StartTimes.isValid(visit.startTime)) problem("$label has an invalid start time.")
             // A seat id is always below its layout's nextSeatId, so below MAX_SEAT_ID.
             if (visit.seatId != null && visit.seatId !in SeatLayout.FIRST_SEAT_ID until SeatLayout.MAX_SEAT_ID) {
                 problem("$label has an invalid seat.")
@@ -179,6 +187,23 @@ internal object BackupValidator {
                 if (ScreeningFormat.entries.none { it.storageKey == key }) problem("$label has an unknown screening format.")
             }
             visit.photoPath?.let { checkFile(it, VisitPhotoStore.FOLDER, files, "the photo of $label") }
+        }
+
+        // Booking numbers are not named in the messages: they are what the QR code holds.
+        val ticketVisits = HashSet<Long>()
+        val bookingNumbers = HashSet<String>()
+        for (ticket in data.tickets) {
+            if (ticket.visitId !in visitIds) problem("a ticket belongs to a visit that isn't there.")
+            val label = "the ticket of visit ${ticket.visitId}"
+            if (!ticketVisits.add(ticket.visitId)) problem("visit ${ticket.visitId} has two tickets.")
+            if (!BookingNumber.isValid(ticket.bookingNumber)) problem("$label has an invalid booking number.")
+            if (!bookingNumbers.add(ticket.bookingNumber)) problem("two tickets have the same booking number.")
+            val seats = ticket.seats
+            if (seats.size !in 1..Ticket.MAX_SEATS || seats.toSet().size != seats.size ||
+                seats.any { (it.row != null && !TicketSeat.isValidRow(it.row)) || !TicketSeat.isValidSeat(it.seat) }
+            ) {
+                problem("$label has invalid seats.")
+            }
         }
 
         val overrideKeys = HashSet<Pair<Long, Int>>()

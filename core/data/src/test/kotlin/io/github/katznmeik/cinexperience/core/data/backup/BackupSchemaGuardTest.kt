@@ -9,7 +9,10 @@ import io.github.katznmeik.cinexperience.core.data.db.HallEntity
 import io.github.katznmeik.cinexperience.core.data.db.MetadataEntity
 import io.github.katznmeik.cinexperience.core.data.db.SeatOverrideEntity
 import io.github.katznmeik.cinexperience.core.data.db.SeedSnapshotEntity
+import io.github.katznmeik.cinexperience.core.data.db.TicketEntity
 import io.github.katznmeik.cinexperience.core.data.db.VisitEntity
+import io.github.katznmeik.cinexperience.core.data.json.TicketSeatsJson
+import io.github.katznmeik.cinexperience.core.model.TicketSeat
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
@@ -26,6 +29,7 @@ import org.junit.Test
 import java.lang.reflect.Constructor
 import java.lang.reflect.Modifier
 import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * Ties the Room schema to the backup (CLAUDE.md "A new table or column must also
@@ -60,6 +64,21 @@ internal class BackupSchemaGuardTest : BackupTestBase() {
         BackupTable("app_metadata", MetadataEntity::class.java, BackupMetadata.serializer(), { it.toBackup() }, { it.toEntity() }) {
             it.metadata.size
         },
+        BackupTable(
+            "ticket",
+            TicketEntity::class.java,
+            BackupTicket.serializer(),
+            { it.toBackup() },
+            { it.toEntity() },
+            // The seats are stored as JSON, which the backup reads; the QR modules are never backed up (spec §8).
+            values = mapOf(
+                "seats" to (
+                    TicketSeatsJson.encode(listOf(TicketSeat("7", "10"))) to
+                        TicketSeatsJson.encode(listOf(TicketSeat(null, "R"), TicketSeat("8", "1")))
+                    ),
+            ),
+            notBackedUp = setOf("qrModules"),
+        ) { it.tickets.size },
     )
 
     @Test
@@ -104,6 +123,7 @@ internal class BackupSchemaGuardTest : BackupTestBase() {
             assertEquals("Rows of '${table.name}' the backup reads", rows.size, table.rowsIn(data))
         }
         val before = tables.associateWith { dump(deviceA.db, it) }
+        assertTrue("buildRealisticData must give a ticket QR modules", before.getValue("ticket").any { "qr_modules=TEXT" in it })
 
         val doc = deviceA.document("backup.zip")
         deviceA.repository.export(doc)
@@ -111,8 +131,13 @@ internal class BackupSchemaGuardTest : BackupTestBase() {
         deviceB.repository.commitImport(deviceB.repository.prepareImport(doc))
 
         // Raw rows, every column, straight from SQLite: nothing goes through the DTOs here.
-        for (table in tables) assertEquals("Rows of '$table' after export and import", before.getValue(table), dump(deviceB.db, table))
+        // Only the tickets' QR modules stay behind (spec §8).
+        val expected = before + ("ticket" to before.getValue("ticket").map { it.replace(QR_COLUMN, "qr_modules=NULL") })
+        for (table in tables) assertEquals("Rows of '$table' after export and import", expected.getValue(table), dump(deviceB.db, table))
     }
+
+    /** A ticket's QR modules in a [dump] row (the last column; Base64 has no comma). */
+    private val QR_COLUMN = Regex("qr_modules=TEXT [^,]*")
 
     /** The highest exported schema version and its tables (name → field names), Room's own tables left out. */
     private fun newestSchema(): Pair<Int, Map<String, Set<String>>> {
@@ -159,12 +184,19 @@ internal class BackupSchemaGuardTest : BackupTestBase() {
             }.sorted()
         }
 
+    /**
+     * @property values test values (base, alternative) of fields that need a valid
+     *   value, by field name; the others get generated values.
+     * @property notBackedUp fields the backup deliberately leaves out: they come back `null`.
+     */
     private class BackupTable<E : Any, B>(
         val name: String,
         val entity: Class<E>,
         val serializer: KSerializer<B>,
         val toBackup: (E) -> B,
         val toEntity: (B) -> E,
+        val values: Map<String, Pair<Any, Any>> = emptyMap(),
+        val notBackedUp: Set<String> = emptySet(),
         val rowsIn: (BackupData) -> Int,
     ) {
         /** The primary constructor (Kotlin's synthetic default-argument constructor left out). */
@@ -189,22 +221,28 @@ internal class BackupSchemaGuardTest : BackupTestBase() {
             val types = constructor.parameterTypes
             val names = fieldNames()
             assertEquals("${entity.simpleName}: one field per constructor parameter", types.size, names.size)
+            assertTrue("${entity.simpleName}: unknown fields in values / notBackedUp", names.containsAll(values.keys + notBackedUp))
+
+            // A row as it comes back from the backup: the fields it leaves out are null.
+            fun restored(args: List<Any>): E =
+                constructor.newInstance(*args.mapIndexed { i, value -> value.takeIf { names[i] !in notBackedUp } }.toTypedArray())
 
             // Every parameter set, all values distinct and none equal to a Kotlin default (0, false, 1, 0f).
-            val base = types.mapIndexed { i, type -> value(type, i, alternative = false) }
+            val base = types.mapIndexed { i, type -> value(names[i], type, i, alternative = false) }
             val row = constructor.newInstance(*base.toTypedArray())
-            assertEquals("${entity.simpleName}: every field survives the backup", row, roundTrip(row))
+            assertEquals("${entity.simpleName}: every field survives the backup", restored(base), roundTrip(row))
 
             // Each parameter changed alone, so two fields of the same type (e.g. two booleans) can't be swapped.
             for (i in types.indices) {
-                val args = base.toMutableList().also { it[i] = value(types[i], i, alternative = true) }
+                val args = base.toMutableList().also { it[i] = value(names[i], types[i], i, alternative = true) }
                 val changed = constructor.newInstance(*args.toTypedArray())
                 assertNotEquals("${entity.simpleName}.${names[i]}: the alternative value differs", row, changed)
-                assertEquals("${entity.simpleName}.${names[i]} survives the backup", changed, roundTrip(changed))
+                assertEquals("${entity.simpleName}.${names[i]} survives the backup", restored(args), roundTrip(changed))
             }
         }
 
-        private fun value(type: Class<*>, index: Int, alternative: Boolean): Any {
+        private fun value(field: String, type: Class<*>, index: Int, alternative: Boolean): Any {
+            values[field]?.let { (base, other) -> return if (alternative) other else base }
             val n = index + if (alternative) 500 else 100
             return when (type) {
                 java.lang.Long.TYPE, java.lang.Long::class.java -> 1_000L + n
@@ -213,6 +251,7 @@ internal class BackupSchemaGuardTest : BackupTestBase() {
                 java.lang.Boolean.TYPE, java.lang.Boolean::class.java -> !alternative
                 String::class.java -> "$name-$index-${if (alternative) "b" else "a"}"
                 LocalDate::class.java -> LocalDate.of(2026, 1, 1).plusDays(n.toLong())
+                LocalTime::class.java -> LocalTime.of(n / 60 % 24, n % 60)
                 else -> fail("${entity.simpleName}: add a test value for parameter $index of type ${type.name}") as Nothing
             }
         }

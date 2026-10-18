@@ -6,6 +6,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.time.LocalDate
+import java.time.LocalTime
 
 /*
  * Room tables (spec §4). Column names are snake_case and must never be renamed
@@ -13,7 +14,8 @@ import java.time.LocalDate
  * layout as versioned JSON (see LayoutJson.kt).
  *
  * Deleting a cinema deletes its halls; deleting a hall deletes its visits and
- * seat overrides (ON DELETE CASCADE). The UI confirms before deleting.
+ * seat overrides; deleting a visit deletes its ticket (ON DELETE CASCADE). The UI
+ * confirms before deleting.
  */
 
 @Entity(
@@ -112,6 +114,36 @@ internal data class VisitEntity(
     val note: String?,
     /** App-private relative file path. */
     @ColumnInfo(name = "photo_path") val photoPath: String?,
+    /** The showing's start, Berlin clock time, as "HH:mm" (Visit.startTime). Added in schema version 3. */
+    @ColumnInfo(name = "start_time") val startTime: LocalTime? = null,
+)
+
+/**
+ * The ticket of a visit (spec §4.7): at most one per visit (the visit id is the
+ * primary key), deleted with it. The booking number is unique across tickets.
+ * Written only through TicketRepository, whose model types check every value.
+ * Added in schema version 3.
+ */
+@Entity(
+    tableName = "ticket",
+    foreignKeys = [
+        ForeignKey(
+            entity = VisitEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["visit_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index(value = ["booking_number"], unique = true)],
+)
+internal data class TicketEntity(
+    @PrimaryKey @ColumnInfo(name = "visit_id") val visitId: Long,
+    /** BookingNumber.value */
+    @ColumnInfo(name = "booking_number") val bookingNumber: String,
+    /** Every seat of the booking, as TicketSeatsJson. */
+    val seats: String,
+    /** The QR code (QrModules.encode); null once removed (7 days after the showing) or after a restore. */
+    @ColumnInfo(name = "qr_modules") val qrModules: String?,
 )
 
 @Entity(

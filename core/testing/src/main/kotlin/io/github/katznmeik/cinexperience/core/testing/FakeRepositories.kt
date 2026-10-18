@@ -4,9 +4,12 @@ import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.DeleteResult
 import io.github.katznmeik.cinexperience.core.data.repository.HallLimitReachedException
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
+import io.github.katznmeik.cinexperience.core.data.repository.SaveTicketResult
 import io.github.katznmeik.cinexperience.core.data.repository.SaveVisitResult
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
+import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
+import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.model.Cinema
 import io.github.katznmeik.cinexperience.core.model.CinemaDetail
 import io.github.katznmeik.cinexperience.core.model.CinemaSummary
@@ -15,6 +18,7 @@ import io.github.katznmeik.cinexperience.core.model.Hall
 import io.github.katznmeik.cinexperience.core.model.HallDetail
 import io.github.katznmeik.cinexperience.core.model.HallSummary
 import io.github.katznmeik.cinexperience.core.model.NameOrder
+import io.github.katznmeik.cinexperience.core.model.QrModules
 import io.github.katznmeik.cinexperience.core.model.ScreenOffsetRules
 import io.github.katznmeik.cinexperience.core.model.ScreenSizeRules
 import io.github.katznmeik.cinexperience.core.model.SeatColour
@@ -23,7 +27,9 @@ import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
 import io.github.katznmeik.cinexperience.core.model.SeatOverride
 import io.github.katznmeik.cinexperience.core.model.SeatOverrides
+import io.github.katznmeik.cinexperience.core.model.ShowingTime
 import io.github.katznmeik.cinexperience.core.model.TextLimits
+import io.github.katznmeik.cinexperience.core.model.Ticket
 import io.github.katznmeik.cinexperience.core.model.Visit
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
 import io.github.katznmeik.cinexperience.core.model.cinemaScores
@@ -37,6 +43,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import java.time.Instant
 
 /** Newest first: by date, then by insertion order (id), like the Room repositories. */
 private val NEWEST_FIRST = compareByDescending<Visit> { it.date }.thenByDescending { it.id }
@@ -51,6 +58,8 @@ private const val LONG = TextLimits.MAX_LONG_TEXT_LENGTH
  *   with that label). A favourite in [overrides] takes precedence for its hall.
  * @property overrides manual colours and favourites by seat id, as written by the
  *   [SeatOverrideRepository] methods.
+ * @property tickets the visits' tickets, as written by the [TicketRepository]
+ *   methods: at most one per visit, deleted with it, booking numbers unique.
  */
 data class FakeStore(
     val cinemas: List<Cinema> = emptyList(),
@@ -58,7 +67,15 @@ data class FakeStore(
     val visits: List<Visit> = emptyList(),
     val favourites: Map<Long, SeatLabel> = emptyMap(),
     val overrides: List<SeatOverride> = emptyList(),
+    val tickets: List<Ticket> = emptyList(),
 ) {
+    /** Without the visits that aren't in [keep] and their tickets (Room's ON DELETE CASCADE). */
+    fun withVisits(keep: (Visit) -> Boolean): FakeStore {
+        val kept = visits.filter(keep)
+        val ids = kept.mapTo(HashSet()) { it.id }
+        return copy(visits = kept, tickets = tickets.filter { it.visitId in ids })
+    }
+
     /** The hall's overrides, with the [favourites] label shortcut resolved to a seat id. */
     fun overridesOf(hallId: Long): List<SeatOverride> {
         val own = overrides.filter { it.hallId == hallId }
@@ -97,7 +114,8 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
     CinemaRepository,
     HallRepository,
     VisitRepository,
-    SeatOverrideRepository {
+    SeatOverrideRepository,
+    TicketRepository {
 
     val store = MutableStateFlow(initial)
 
@@ -197,10 +215,9 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         if (cinema.isPreloaded) return DeleteResult.PRELOADED
         store.update { s ->
             val hallIds = s.halls.filter { it.cinemaId == cinemaId }.map { it.id }.toSet()
-            s.copy(
+            s.withVisits { it.hallId !in hallIds }.copy(
                 cinemas = s.cinemas - cinema,
                 halls = s.halls.filter { it.id !in hallIds },
-                visits = s.visits.filter { it.hallId !in hallIds },
                 favourites = s.favourites - hallIds,
                 overrides = s.overrides.filter { it.hallId !in hallIds },
             )
@@ -317,9 +334,8 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         val hall = getHall(hallId) ?: return DeleteResult.NOT_FOUND
         if (hall.isPreloaded) return DeleteResult.PRELOADED
         store.update { s ->
-            s.copy(
+            s.withVisits { it.hallId != hallId }.copy(
                 halls = s.halls.filter { it.id != hallId },
-                visits = s.visits.filter { it.hallId != hallId },
                 favourites = s.favourites - hallId,
                 overrides = s.overrides.filter { it.hallId != hallId },
             )
@@ -330,10 +346,18 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
     // VisitRepository
 
     override fun observeAllVisits(): Flow<List<VisitListItem>> = data.map { s ->
+        val ticketVisits = s.tickets.mapTo(HashSet()) { it.visitId }
         s.visits.sortedWith(NEWEST_FIRST).map { visit ->
             val hall = s.halls.first { it.id == visit.hallId }
             val cinema = s.cinemas.first { it.id == hall.cinemaId }
-            VisitListItem(visit, cinema.id, cinema.name, hall.name, visit.seatId?.let { hall.layout?.labels()?.labelOf(it) })
+            VisitListItem(
+                visit,
+                cinema.id,
+                cinema.name,
+                hall.name,
+                visit.seatId?.let { hall.layout?.labels()?.labelOf(it) },
+                hasTicket = visit.id in ticketVisits,
+            )
         }
     }.distinctUntilChanged()
 
@@ -349,6 +373,17 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
      */
     override suspend fun saveVisit(visit: Visit): SaveVisitResult {
         write()
+        val (saved, seatCleared) = checkedVisit(visit)
+        // The visit's ticket stays, like Room's UPDATE.
+        store.update { st -> st.copy(visits = st.visits.filter { it.id != saved.id } + saved) }
+        return SaveVisitResult(saved.id, seatCleared)
+    }
+
+    /**
+     * [visit] as [saveVisit] stores it, with its new id, and whether its seat was
+     * cleared. Throws like Room for an unknown visit or hall; nothing is changed.
+     */
+    private fun checkedVisit(visit: Visit): Pair<Visit, Boolean> {
         val s = store.value
         val stored = if (visit.id == 0L) null else requireNotNull(s.visits.firstOrNull { it.id == visit.id }) { "No visit ${visit.id}" }
         val hall = requireNotNull(s.halls.firstOrNull { it.id == visit.hallId }) { "No hall ${visit.hallId}" }
@@ -361,15 +396,68 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
             photoPath = visit.photoPath.clean(),
             seatId = if (seatValid) visit.seatId else null,
         )
-        store.update { st -> st.copy(visits = st.visits.filter { it.id != saved.id } + saved) }
-        return SaveVisitResult(saved.id, seatCleared = !seatValid)
+        return saved to !seatValid
     }
 
+    /** Like Room: the visit's ticket goes with it (ON DELETE CASCADE). */
     override suspend fun deleteVisit(visitId: Long): Boolean {
         write()
         val exists = store.value.visits.any { it.id == visitId }
-        store.update { s -> s.copy(visits = s.visits.filter { it.id != visitId }) }
+        store.update { s -> s.withVisits { it.id != visitId } }
         return exists
+    }
+
+    // TicketRepository: like Room, at most one ticket per visit, booking numbers unique.
+
+    override fun observeTicket(visitId: Long): Flow<Ticket?> =
+        data.map { s -> s.tickets.firstOrNull { it.visitId == visitId } }.distinctUntilChanged()
+
+    override suspend fun getTicket(visitId: Long): Ticket? = store.value.tickets.firstOrNull { it.visitId == visitId }
+
+    override suspend fun findVisitId(bookingNumber: BookingNumber): Long? =
+        store.value.tickets.firstOrNull { it.bookingNumber == bookingNumber }?.visitId
+
+    override suspend fun saveVisitWithTicket(visit: Visit, ticket: Ticket): SaveTicketResult {
+        write()
+        require(ticket.visitId == visit.id) { "The ticket belongs to visit ${ticket.visitId}, not ${visit.id}" }
+        val owner = findVisitId(ticket.bookingNumber)
+        if (owner != null && owner != visit.id) return SaveTicketResult.BookingNumberInUse(owner)
+        val (saved, seatCleared) = checkedVisit(visit)
+        val savedTicket = ticket.copy(visitId = saved.id)
+        // One update, so the visit and its ticket appear together, like Room's transaction.
+        store.update { st ->
+            st.copy(
+                visits = st.visits.filter { it.id != saved.id } + saved,
+                tickets = st.tickets.filter { it.visitId != saved.id } + savedTicket,
+            )
+        }
+        return SaveTicketResult.Saved(saved.id, seatCleared)
+    }
+
+    override suspend fun removeTicket(visitId: Long): Boolean {
+        write()
+        val exists = store.value.tickets.any { it.visitId == visitId }
+        store.update { s -> s.copy(tickets = s.tickets.filter { it.visitId != visitId }) }
+        return exists
+    }
+
+    override suspend fun storeQrModules(visitId: Long, qrModules: QrModules): Boolean {
+        write()
+        val exists = store.value.tickets.any { it.visitId == visitId }
+        store.update { s -> s.copy(tickets = s.tickets.map { if (it.visitId == visitId) it.copy(qrModules = qrModules) else it }) }
+        return exists
+    }
+
+    /** Like Room: the expiry comes from [ShowingTime], by the visit's date and start time. */
+    override suspend fun removeExpiredQrModules(now: Instant): Int {
+        write()
+        val visits = store.value.visits.associateBy { it.id }
+        val expired = store.value.tickets.filter { ticket ->
+            val visit = visits[ticket.visitId]
+            ticket.qrModules != null && visit != null && ShowingTime.qrModulesExpired(visit.date, visit.startTime, now)
+        }.mapTo(HashSet()) { it.visitId }
+        store.update { s -> s.copy(tickets = s.tickets.map { if (it.visitId in expired) it.copy(qrModules = null) else it }) }
+        return expired.size
     }
 
     // SeatOverrideRepository: like Room, the seat must be in the hall's current layout.

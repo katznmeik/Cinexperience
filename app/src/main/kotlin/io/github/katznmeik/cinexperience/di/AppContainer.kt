@@ -59,7 +59,10 @@ interface AppContainer {
     /** The Program tab's current and saved filters (app settings, spec §6.9, §8). */
     val programFilterStore: ProgramFilterStore
 
-    /** "Now" for the Program tab, the film page and a cinema's "Now showing": the system clock. */
+    /**
+     * "Now" for the Program tab, the film page, a cinema's "Now showing" and the
+     * QR codes' expiry at start: the system clock.
+     */
     val clock: Clock get() = Clock.systemDefaultZone()
 
     /** Housekeeping when the app starts (once per process), off the main thread. */
@@ -110,10 +113,12 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     /**
      * Deletes reference screenshots and visit photos that nothing uses any more
-     * (left by an editor or visit form that never saved, or by deleted halls).
+     * (left by an editor or visit form that never saved, or by deleted halls), and
+     * the QR codes of tickets whose showing is more than 7 days past (spec §4.7).
      */
     override fun onAppStart() {
         if (!started.compareAndSet(false, true)) return
         applicationScope.launch { data.sweepOrphanFiles() }
+        applicationScope.launch { data.removeExpiredQrModules(clock.instant()) }
     }
 }

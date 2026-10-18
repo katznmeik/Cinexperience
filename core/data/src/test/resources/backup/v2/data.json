@@ -1,0 +1,97 @@
+{
+    "backupVersion": 2,
+    "cinemas": [
+        {
+            "id": 3,
+            "name": "Kiezkino",
+            "address": "Weserstraße 1",
+            "notes": null,
+            "isPreloaded": false,
+            "seedKey": null,
+            "isFavourite": true
+        }
+    ],
+    "halls": [
+        {
+            "id": 8,
+            "cinemaId": 3,
+            "name": "Saal A",
+            "layoutJson": "{\"formatVersion\":1,\"nextSeatId\":7,\"rows\":[{\"cells\":\"SSS|SSS\",\"seatIds\":[1,2,3,4,5,6]}]}",
+            "screenWidth": 5.0,
+            "screenDistance": 1.5,
+            "referenceImagePath": null,
+            "notes": null,
+            "isPreloaded": false,
+            "seedKey": null,
+            "nextSeatId": 7,
+            "screenOffset": -1.5
+        }
+    ],
+    "visits": [
+        {
+            "id": 21,
+            "hallId": 8,
+            "date": "2026-10-04",
+            "filmTitle": "The Quiet Projectionist",
+            "seatId": 5,
+            "screeningFormat": "OV",
+            "hallRatings": {
+                "sound": 4,
+                "picture": 5,
+                "screenSize": null,
+                "seatComfort": 3,
+                "legroom": null,
+                "steepness": null
+            },
+            "seatRating": 5,
+            "cinemaRatings": {
+                "atmosphere": 4,
+                "barSnacks": null,
+                "popcorn": null,
+                "seatComfort": null
+            },
+            "note": "Row 1 is fine",
+            "photoPath": null
+        },
+        {
+            "id": 22,
+            "hallId": 8,
+            "date": "2026-10-09",
+            "filmTitle": null,
+            "seatId": null,
+            "screeningFormat": null,
+            "hallRatings": {
+                "sound": null,
+                "picture": null,
+                "screenSize": null,
+                "seatComfort": null,
+                "legroom": null,
+                "steepness": null
+            },
+            "seatRating": null,
+            "cinemaRatings": {
+                "atmosphere": null,
+                "barSnacks": null,
+                "popcorn": null,
+                "seatComfort": null
+            },
+            "note": null,
+            "photoPath": null
+        }
+    ],
+    "seatOverrides": [
+        {
+            "hallId": 8,
+            "seatId": 5,
+            "colour": null,
+            "isFavourite": true
+        }
+    ],
+    "seedSnapshots": [],
+    "metadata": [
+        {
+            "key": "seed_version",
+            "value": "6"
+        }
+    ]
+}
