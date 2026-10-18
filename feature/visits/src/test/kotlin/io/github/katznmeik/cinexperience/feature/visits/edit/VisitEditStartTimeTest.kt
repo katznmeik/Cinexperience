@@ -17,9 +17,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 /**
- * The visit form has no start time field yet (v1.4 adds it later), but editing a
- * visit must keep the start time it has (e.g. from a ticket import), also after
- * process death, and must not touch its ticket.
+ * Editing a visit without touching its Start time field keeps the start time it has
+ * (e.g. from a ticket import), also after process death, and doesn't touch its
+ * ticket. (The field itself: VisitStartTimeFieldTest.)
  */
 class VisitEditStartTimeTest {
 

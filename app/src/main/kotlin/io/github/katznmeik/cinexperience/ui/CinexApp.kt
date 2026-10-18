@@ -51,6 +51,7 @@ import io.github.katznmeik.cinexperience.feature.seatmap.hallDetailScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.layoutEditorScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToHallDetail
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToLayoutEditor
+import io.github.katznmeik.cinexperience.feature.tickets.navigateToTicket
 import io.github.katznmeik.cinexperience.feature.tickets.ticketScreen
 import io.github.katznmeik.cinexperience.feature.visits.allVisitsScreen
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAddVisit
@@ -168,8 +169,10 @@ fun CinexApp(
             visitEditScreens(
                 cinemaRepository = container.cinemaRepository,
                 visitRepository = container.visitRepository,
+                ticketRepository = container.ticketRepository,
                 visitPhotoStore = container.visitPhotoStore,
                 onClose = navController::navigateUp,
+                onShowTicket = navController::navigateToTicket,
             )
             // The ticket with its QR code (v1.4, spec §6.11).
             ticketScreen(
@@ -222,6 +225,7 @@ fun CinexApp(
             )
             allVisitsScreen(
                 visitRepository = container.visitRepository,
+                clock = container.clock,
                 onBack = navController::navigateUp,
                 onOpenVisit = navController::navigateToEditVisit,
             )

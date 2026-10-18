@@ -29,13 +29,16 @@ import io.github.katznmeik.cinexperience.core.ui.component.BackTopBar
 import io.github.katznmeik.cinexperience.core.ui.component.InfoText
 import io.github.katznmeik.cinexperience.core.ui.component.RowDivider
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenTitle
+import io.github.katznmeik.cinexperience.core.ui.component.SectionHeader
 import io.github.katznmeik.cinexperience.core.ui.component.StarRatingDisplay
 import io.github.katznmeik.cinexperience.core.ui.component.isLargeText
 import io.github.katznmeik.cinexperience.core.ui.text.countText
 import io.github.katznmeik.cinexperience.core.ui.text.dateText
 import io.github.katznmeik.cinexperience.core.ui.text.isolate
+import io.github.katznmeik.cinexperience.core.ui.text.showingDayText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 import io.github.katznmeik.cinexperience.feature.visits.UNTITLED
+import java.time.LocalDate
 
 @Composable
 internal fun AllVisitsEntry(viewModel: AllVisitsViewModel, onBack: () -> Unit, onOpenVisit: (Long) -> Unit) {
@@ -53,7 +56,27 @@ internal fun VisitListItem.detailText(): String = listOfNotNull(
     visit.screeningFormat?.displayName,
 ).joinToString(" · ")
 
-/** All visits (spec §6.8): newest first; tap to edit. */
+/**
+ * Third line of an upcoming visit (spec §6.8), with its start time: "Tomorrow ·
+ * 20:15 · Row 7 · Seat 10 · OmU", "Sat 17 Oct · 20:15 · …" ([today] in Berlin).
+ */
+internal fun VisitListItem.upcomingDetailText(today: LocalDate): String = listOfNotNull(
+    showingDayText(visit.date, visit.startTime, today),
+    seatLabel?.shortText,
+    visit.screeningFormat?.displayName,
+).joinToString(" · ")
+
+/** The subtitle: "12 visits · newest first", with upcoming visits "12 visits · 2 upcoming". */
+internal fun AllVisitsUiState.subtitle(): String = when {
+    count == 0 -> "No visits yet"
+    upcoming.isEmpty() -> "${countText(count, "visit")} · newest first"
+    else -> "${countText(count, "visit")} · ${upcoming.size} upcoming"
+}
+
+/**
+ * All visits (spec §6.8): the Upcoming section first (soonest first, with the start
+ * time), then the other visits newest first; tap to edit.
+ */
 @Composable
 internal fun AllVisitsScreen(
     state: AllVisitsUiState,
@@ -71,7 +94,7 @@ internal fun AllVisitsScreen(
                 ScreenTitle("All visits")
                 if (!state.isLoading && state.errorMessage == null) {
                     Text(
-                        text = if (state.visits.isEmpty()) "No visits yet" else "${countText(state.visits.size, "visit")} · newest first",
+                        text = state.subtitle(),
                         style = MaterialTheme.typography.bodyMedium,
                         color = CinexTheme.colors.textMuted,
                     )
@@ -80,16 +103,31 @@ internal fun AllVisitsScreen(
         }
         when {
             state.errorMessage != null -> item(key = "error") { InfoText(state.errorMessage, horizontalPadding = 20.dp) }
-            !state.isLoading && state.visits.isEmpty() -> item(key = "empty") {
+            !state.isLoading && state.count == 0 -> item(key = "empty") {
                 InfoText(
                     "Visits you log with \"Add visit\" on the Cinemas tab or a hall's page appear here.",
                     horizontalPadding = 20.dp,
                 )
             }
-            else -> itemsIndexed(state.visits, key = { _, item -> item.visit.id }) { index, item ->
-                Column(Modifier.padding(horizontal = 12.dp)) {
-                    if (index > 0) RowDivider()
-                    VisitRow(item, onClick = { onOpenVisit(item.visit.id) })
+            else -> {
+                val today = state.today
+                if (state.upcoming.isNotEmpty() && today != null) {
+                    item(key = "upcoming-header") { SectionHeader("Upcoming", Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)) }
+                    itemsIndexed(state.upcoming, key = { _, item -> "upcoming-${item.visit.id}" }) { index, item ->
+                        Column(Modifier.padding(horizontal = 12.dp)) {
+                            if (index > 0) RowDivider()
+                            VisitRow(item, item.upcomingDetailText(today), onClick = { onOpenVisit(item.visit.id) })
+                        }
+                    }
+                    if (state.visits.isNotEmpty()) {
+                        item(key = "past-header") { SectionHeader("Past visits", Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 4.dp)) }
+                    }
+                }
+                itemsIndexed(state.visits, key = { _, item -> item.visit.id }) { index, item ->
+                    Column(Modifier.padding(horizontal = 12.dp)) {
+                        if (index > 0) RowDivider()
+                        VisitRow(item, item.detailText(), onClick = { onOpenVisit(item.visit.id) })
+                    }
                 }
             }
         }
@@ -97,7 +135,7 @@ internal fun AllVisitsScreen(
 }
 
 @Composable
-private fun VisitRow(item: VisitListItem, onClick: () -> Unit) {
+private fun VisitRow(item: VisitListItem, detail: String, onClick: () -> Unit) {
     val visit = item.visit
     // The stars grow with the text: with large text they go under it, so the texts keep the width.
     val starsBelow = isLargeText()
@@ -121,7 +159,7 @@ private fun VisitRow(item: VisitListItem, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(item.placeText(), style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(item.detailText(), style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = CinexTheme.colors.textMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (starsBelow && visit.seatRating != null) StarRatingDisplay(visit.seatRating?.value, Modifier.padding(top = 2.dp))
         }
         if (!starsBelow && visit.seatRating != null) StarRatingDisplay(visit.seatRating?.value)

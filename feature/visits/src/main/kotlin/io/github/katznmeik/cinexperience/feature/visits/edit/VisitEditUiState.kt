@@ -9,6 +9,7 @@ import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
 import io.github.katznmeik.cinexperience.core.model.SeatLayout
+import io.github.katznmeik.cinexperience.core.model.Ticket
 import io.github.katznmeik.cinexperience.core.model.Visit
 import java.time.LocalDate
 import java.time.LocalTime
@@ -22,8 +23,8 @@ data class CinemaOption(val id: Long, val name: String, val halls: List<Hall>)
  *
  * @property cinemaId the cinema chosen while no hall is chosen yet; `null` once a
  *   hall is chosen (the hall's cinema is the visit's cinema then).
- * @property startTime the visit's start time ([Visit.startTime]); the form has no
- *   field for it yet, but saving an edited visit keeps it.
+ * @property startTime the visit's start time ([Visit.startTime], Berlin clock time,
+ *   to the minute), from the optional Start time field; `null` = none.
  */
 data class VisitForm(
     val hallId: Long? = null,
@@ -79,6 +80,9 @@ enum class VisitEditStatus { Loading, Ready, NotFound, LoadFailed }
 sealed interface VisitEditDialog {
     data object ConfirmDiscard : VisitEditDialog
     data object ConfirmDelete : VisitEditDialog
+
+    /** "Remove ticket" (spec §6.4): removes the stored ticket at once, like "Delete visit". */
+    data object ConfirmRemoveTicket : VisitEditDialog
 }
 
 /**
@@ -96,6 +100,10 @@ data class SeatPickerState(val seatId: SeatId?)
  * @property seatPickerUnavailable why the seat can't be picked (no hall chosen,
  *   no layout); `null` when it can.
  * @property cameraRequest a capture URI the screen should hand to the camera app now.
+ * @property ticket the stored visit's ticket (spec §4.7), shown in the Ticket
+ *   section; `null` without one. The form never saves it: Save writes only the
+ *   visit, so the ticket and its QR code stay as they are.
+ * @property isRemovingTicket "Remove ticket" is being written.
  */
 data class VisitEditUiState(
     val status: VisitEditStatus = VisitEditStatus.Loading,
@@ -123,6 +131,8 @@ data class VisitEditUiState(
     val dialog: VisitEditDialog? = null,
     val message: String? = null,
     val isClosed: Boolean = false,
+    val ticket: Ticket? = null,
+    val isRemovingTicket: Boolean = false,
 ) {
     /** Save is always allowed once a hall is chosen (spec §6.4). */
     val canSave: Boolean get() = status == VisitEditStatus.Ready && form.hallId != null && !isSaving && !isPhotoBusy && !isClosed
