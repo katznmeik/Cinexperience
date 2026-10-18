@@ -165,7 +165,8 @@ Don't duplicate config in module build files.
   `CinemaFilter.FAVOURITES` is a filter, not a sort: only favourites, always in
   score order; the sort chips go back to `ALL` with their sort. Sort and filter live in the ViewModel (not persisted).
 - **Tickets** (v1.4, spec §4.7): `Ticket` (core:model: `BookingNumber`,
-  `TicketSeat`, `QrModules`, checked in `init`), written only through
+  `TicketSeat`, `QrModules`, checked in `init`; 0 to `MAX_SEATS` seats, none
+  when they couldn't be read from the ticket), written only through
   `TicketRepository`: at most one per visit, deleted with it, a booking number
   of another visit is refused (`SaveTicketResult.BookingNumberInUse`, nothing
   saved). Visits are always updated, never REPLACEd: a replace would
@@ -192,12 +193,13 @@ Don't duplicate config in module build files.
   `ImportTicketRoute` only while no backup import runs. Only `content:` URIs of
   other apps are read (`TicketUris`), at most `TicketPdfLimits.MAX_FILE_BYTES`, in
   memory only, never logged; failures are `TicketImportError` messages; no valid
-  booking number, no import. `findVisitId` first (imported before: open that visit,
-  store a new QR code if it has none still kept). Else `TicketMatching` (pure; the
+  booking number, no import. `findVisitId` first (imported before: open that visit;
+  a new QR code is stored with the guarded `restoreQrModules`, never during a backup
+  import, and the form says if that failed). Else `TicketMatching` (pure; the
   cached program only) fills Add visit with a `TicketDraft` and notes, kept in the
-  form's saved state; Save drops an expired QR code and takes the picked seat when
-  the ticket's seats weren't read. New files under `feature/tickets/` need
-  `git add -f` (`.gitignore`'s `tickets/`). The ticket screen draws the QR code with
+  form's saved state; Save drops an expired QR code and keeps the seats as printed
+  (none if unread; a ticket without seats shows the visit's own seat as "Your
+  seat"). The ticket screen draws the QR code with
   whole-pixel modules and a 4-module quiet zone; while it shows the code,
   `KeepScreenBrightAndOn` holds the window at full brightness with
   `FLAG_KEEP_SCREEN_ON` and restores both when it leaves the composition
@@ -336,7 +338,9 @@ Don't duplicate config in module build files.
   (`BackupRestorer`: imported files are added under names no existing file
   has, and removed again if the transaction fails). While
   `BackupRepository.isImporting` is true the UI blocks every other write
-  (tabs, Back, Settings rows); Back is also blocked while an export runs (it
+  (tabs, Back, Settings rows; in every window of the app, `CinexApp` covers the
+  screens with `BackupImportLock`, except the Settings screen that runs the
+  import); Back is also blocked while an export runs (it
   runs in the Settings ViewModel, which Back would clear). Once the
   transaction has committed, nothing
   (progress callbacks, file clean-up, pruning, seeding, even Errors) can turn
