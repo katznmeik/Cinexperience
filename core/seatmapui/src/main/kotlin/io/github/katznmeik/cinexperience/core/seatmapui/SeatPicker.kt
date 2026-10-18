@@ -130,8 +130,10 @@ fun seatChoices(layout: SeatLayout): List<SeatRowChoice> = seatChoices(layout.la
  *
  * @param seatVisuals the map's seat states; when not empty, each chip also
  *   announces its seat's state ("Row 7, Seat 10, great, favourite").
- * @param bookingSeatIds the seats of an imported ticket's booking (spec §6.10): their
- *   chips carry a ticket mark after the number and are announced "…, in this booking".
+ * @param bookingSeatIds the seats of an imported ticket's booking (spec §6.10), in the
+ *   booking's order: their chips carry a ticket mark after the number and are announced
+ *   "…, in this booking". Without a selected seat, the picker starts on the row of the
+ *   first of them.
  */
 @Composable
 fun SeatPicker(
@@ -143,8 +145,8 @@ fun SeatPicker(
     bookingSeatIds: Set<SeatId> = emptySet(),
 ) {
     if (choices.isEmpty()) return
-    val initialRow = remember(choices, selectedSeatId) {
-        choices.indexOfFirst { row -> row.seats.any { it.seatId == selectedSeatId } }.coerceAtLeast(0)
+    val initialRow = remember(choices, selectedSeatId, bookingSeatIds) {
+        choices.rowOf(selectedSeatId) ?: bookingSeatIds.firstNotNullOfOrNull { choices.rowOf(it) } ?: 0
     }
     var rowIndex by rememberSaveable(choices.size) { mutableIntStateOf(initialRow) }
     LaunchedEffect(choices, selectedSeatId) {
@@ -201,6 +203,10 @@ fun SeatPicker(
         }
     }
 }
+
+/** The index of the row choice that holds [seatId]; `null` if none does. */
+private fun List<SeatRowChoice>.rowOf(seatId: SeatId?): Int? =
+    seatId?.let { id -> indexOfFirst { row -> row.seats.any { it.seatId == id } }.takeIf { it >= 0 } }
 
 @Composable
 private fun PickerHeader(text: String) {
