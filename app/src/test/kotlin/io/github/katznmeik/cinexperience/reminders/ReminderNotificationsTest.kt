@@ -58,9 +58,13 @@ class ReminderNotificationsTest {
         shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         val settings = FakeReminderSettingsStore(ReminderSettings(beforeShowing = true, rateAfterVisit = true))
         val container = FakeAppContainer(FakeCinexRepository(store), clock = clock, reminderSettingsStore = settings)
+        token = container.reminders.intentToken
         assertTrue(runBlocking { container.reminders.notifier.onAlarm(reminder) })
         return notifications.getNotification(ReminderNotifier.tag(visit), ReminderNotifier.id(reminder.kind))
     }
+
+    /** The token of the last container (the same for all: it lives in the app's preferences). */
+    private var token: ReminderIntentToken? = null
 
     private val Notification.title: String? get() = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
     private val Notification.text: String? get() = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
@@ -73,6 +77,10 @@ class ReminderNotificationsTest {
         assertEquals(ComponentName(context, MainActivity::class.java), intent.component)
         assertEquals(action, intent.action)
         assertEquals(visit, intent.getLongExtra(ReminderIntents.EXTRA_VISIT_ID, 0))
+        // With the installation's token, so MainActivity takes it from this notification only.
+        val carried = intent.getStringExtra(ReminderIntents.EXTRA_TOKEN)
+        assertTrue(checkNotNull(token).matches(carried))
+        assertEquals(32, carried!!.length)
     }
 
     /** Every text the notification and its public version hold. */

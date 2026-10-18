@@ -5,6 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import io.github.katznmeik.cinexperience.core.data.settings.SharedPreferencesReminderSettingsStore
 import io.github.katznmeik.cinexperience.core.model.ReminderKind
 import io.github.katznmeik.cinexperience.core.program.ProgramFiles
+import io.github.katznmeik.cinexperience.reminders.AlarmReminderScheduler
+import io.github.katznmeik.cinexperience.reminders.ReminderIntentToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -27,33 +29,39 @@ class BackupRulesTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
 
-    /** (section, domain) of every `<include>`, and the number of `<exclude>` rules. */
-    private fun rules(resource: Int): Pair<List<Pair<String?, String>>, Int> {
+    /** (section, domain) of every `<include>`, and (section, "domain/path") of every `<exclude>`. */
+    private fun rules(resource: Int): Pair<List<Pair<String?, String>>, List<Pair<String?, String>>> {
         val parser = context.resources.getXml(resource)
         val includes = mutableListOf<Pair<String?, String>>()
-        var excludes = 0
+        val excludes = mutableListOf<Pair<String?, String>>()
         var section: String? = null
         while (parser.next() != XmlPullParser.END_DOCUMENT) {
             if (parser.eventType != XmlPullParser.START_TAG) continue
             when (parser.name) {
                 "cloud-backup", "device-transfer" -> section = parser.name
                 "include" -> includes += section to parser.getAttributeValue(null, "domain")
-                "exclude" -> excludes++
+                "exclude" -> excludes += section to parser.getAttributeValue(null, "domain") + "/" + parser.getAttributeValue(null, "path")
             }
         }
         return includes to excludes
     }
 
+    /** The reminders' phone-local preference files (spec §11.3): their alarms' bookkeeping and the intents' token. */
+    private val phoneLocal = listOf("sharedpref/reminder_alarms.xml", "sharedpref/reminder_intents.xml")
+
     @Test
     fun onlyTheDatabaseAndPreferencesAreBackedUp() {
         val (includes, excludes) = rules(R.xml.data_extraction_rules)
         val expected = listOf("database", "sharedpref")
-        assertEquals(expected, includes.filter { it.first == "cloud-backup" }.map { it.second })
-        assertEquals(expected, includes.filter { it.first == "device-transfer" }.map { it.second })
-        assertEquals(0, excludes) // with includes, everything else (the files domain) is left out
+        for (section in listOf("cloud-backup", "device-transfer")) {
+            assertEquals(expected, includes.filter { it.first == section }.map { it.second })
+            // With includes, everything else (the files domain) is left out; only the phone-local preferences are excluded.
+            assertEquals(phoneLocal, excludes.filter { it.first == section }.map { it.second })
+        }
 
-        val (legacy, _) = rules(R.xml.backup_rules)
+        val (legacy, legacyExcludes) = rules(R.xml.backup_rules)
         assertEquals(expected, legacy.map { it.second })
+        assertEquals(phoneLocal, legacyExcludes.map { it.second })
     }
 
     /**
@@ -78,9 +86,19 @@ class BackupRulesTest {
         assertTrue(runBlocking { store.update { it.with(ReminderKind.BEFORE_SHOWING, true) } })
         val file = File(context.dataDir, "shared_prefs/${SharedPreferencesReminderSettingsStore.PREFERENCES_NAME}.xml")
         assertTrue(file.path, file.isFile)
-        val (includes, _) = rules(R.xml.data_extraction_rules)
+        val (includes, excludes) = rules(R.xml.data_extraction_rules)
         assertTrue(includes.contains("cloud-backup" to "sharedpref"))
         assertTrue(includes.contains("device-transfer" to "sharedpref"))
+        assertTrue(excludes.none { it.second == "sharedpref/" + file.name })
+    }
+
+    /** The names the exclusions use are the files' real names. */
+    @Test
+    fun theExcludedFilesAreTheRemindersPhoneLocalOnes() {
+        assertEquals(
+            phoneLocal,
+            listOf(AlarmReminderScheduler.PREFERENCES_NAME, ReminderIntentToken.PREFERENCES_NAME).map { "sharedpref/$it.xml" },
+        )
     }
 
     @Test

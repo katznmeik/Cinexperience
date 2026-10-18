@@ -73,18 +73,38 @@ class ReminderCoordinatorTest {
     }
 
     @Test
-    fun changesSettleIntoOneRun() = runTest {
+    fun aChangeIsPlannedAtOnce() = runTest {
+        started()
+        // A save, and the app is swiped away right after: the run doesn't wait for the debounce.
+        repository.saveVisit(repository.getVisit(visit)!!.copy(startTime = LocalTime.of(19, 0)))
+        runCurrent()
+        assertEquals(2, scheduler.plans.size)
+        assertEquals(ReminderKind.BEFORE_SHOWING to at("2026-10-17T15:00:00Z"), scheduler.last!!.times().first())
+    }
+
+    @Test
+    fun quickFurtherChangesSettleIntoOneMoreRun() = runTest {
         started()
         repository.saveVisit(repository.getVisit(visit)!!.copy(startTime = LocalTime.of(19, 0)))
-        advanceTimeBy(500)
+        runCurrent()
+        advanceTimeBy(300)
+        repository.saveVisit(repository.getVisit(visit)!!.copy(startTime = LocalTime.of(20, 0)))
+        advanceTimeBy(300)
         repository.saveVisit(repository.getVisit(visit)!!.copy(startTime = LocalTime.of(21, 0)))
+        runCurrent()
+        assertEquals("the first at once, the others wait", 2, scheduler.plans.size)
         settle()
-        assertEquals(2, scheduler.plans.size)
+        assertEquals(3, scheduler.plans.size)
         // 21:00 summer time = 19:00 UTC.
         assertEquals(
             listOf(ReminderKind.BEFORE_SHOWING to at("2026-10-17T17:00:00Z"), ReminderKind.RATE_VISIT to at("2026-10-17T22:00:00Z")),
             scheduler.last!!.times(),
         )
+        // Quiet again: the next change is planned at once.
+        advanceTimeBy(5_000)
+        repository.deleteVisit(visit)
+        runCurrent()
+        assertEquals(4, scheduler.plans.size)
     }
 
     @Test
@@ -159,15 +179,55 @@ class ReminderCoordinatorTest {
     }
 
     @Test
-    fun aFailingRepositoryIsTriedAgain() = runTest {
+    fun aLastingRepositoryFailureIsTriedAgainWithoutLimitAndNeverCrashes() = runTest {
         repository.observeFailure = IOException("database")
         assertFalse(coordinator().rescheduleNow())
+        // Started in the test's background scope: an exception escaping it would fail the test.
         coordinator().start(backgroundScope)
-        settle()
+        // Tries after 5, 10, 20, 40, 80 and 160 s, then every 5 minutes: well past three tries.
+        advanceTimeBy(20 * 60_000L)
+        runCurrent()
         assertTrue(scheduler.plans.isEmpty())
+        // Also during a backup import.
+        importing.value = true
+        advanceTimeBy(10 * 60_000L)
+        importing.value = false
+        runCurrent()
+        assertTrue(scheduler.plans.isEmpty())
+
         repository.observeFailure = null
-        advanceTimeBy(6_000)
-        settle()
+        advanceTimeBy(ReminderCoordinator.MAX_RETRY_DELAY.inWholeMilliseconds + 1)
+        runCurrent()
         assertEquals(listOf(showtime, rate), scheduler.last!!.times())
+    }
+
+    @Test
+    fun theRetryDelayGrowsToFiveMinutes() {
+        assertEquals(listOf(5L, 10, 20, 40, 80, 160, 300, 300), (0L..7L).map { ReminderCoordinator.retryDelay(it).inWholeSeconds })
+        assertEquals(300L, ReminderCoordinator.retryDelay(Long.MAX_VALUE).inWholeSeconds)
+    }
+
+    @Test
+    fun anErrorWhileSchedulingIsCaught() = runTest {
+        val failing = object : ReminderScheduler {
+            var calls = 0
+            override fun schedule(reminders: List<PlannedReminder>, now: Instant) {
+                if (calls++ == 0) throw OutOfMemoryError("test")
+                scheduler.schedule(reminders, now)
+            }
+
+            override fun scheduleRetry(at: Instant, now: Instant) = scheduler.scheduleRetry(at, now)
+        }
+        val coordinator = ReminderCoordinator(repository, repository, program, settings, importing, failing, clock)
+        assertFalse(coordinator.rescheduleNow())
+        coordinator.start(backgroundScope)
+        runCurrent()
+        assertEquals(listOf(showtime, rate), scheduler.last!!.times())
+    }
+
+    @Test
+    fun aRetryIsACheckInAQuarterOfAnHourLater() {
+        coordinator().scheduleRetry()
+        assertEquals(listOf(SampleProgram.FETCHED_AT.plusSeconds(15 * 60)), scheduler.retries)
     }
 }

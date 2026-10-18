@@ -60,6 +60,14 @@ class ReminderRuntimesTest {
     }
 
     @Test
+    fun aShowingOfAnotherFilmSaysNothingAboutTheVisitsEnd() {
+        // The only showing at 20:15 is another film: unknown (start + 2.5 h), not its runtime.
+        assertEquals(emptyMap<Long, Int>(), ReminderRuntimes.of(program, listOf(item(1, "20:15", film = "Another Film")), seedKeys))
+        // The visit's own film (ignoring case and runs of spaces) gives it.
+        assertEquals(mapOf(1L to 104), ReminderRuntimes.of(program, listOf(item(1, "20:15", film = "the quiet  projectionist ")), seedKeys))
+    }
+
+    @Test
     fun severalShowingsAtThatTimeAreToldApartByTheFilm() {
         val visits = listOf(
             item(1, "22:30", film = "paper  kites"),

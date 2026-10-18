@@ -14,6 +14,7 @@ import io.github.katznmeik.cinexperience.core.testing.FakeBackupRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
 import io.github.katznmeik.cinexperience.core.testing.SampleTickets
+import io.github.katznmeik.cinexperience.reminders.ReminderIntentToken
 import io.github.katznmeik.cinexperience.reminders.ReminderIntents
 import io.github.katznmeik.cinexperience.reminders.ReminderNotifier
 import io.github.katznmeik.cinexperience.ui.FakeAppContainer
@@ -37,7 +38,9 @@ import org.robolectric.annotation.GraphicsMode
  * §11.3 rule 7), through [MainActivity] with fakes ([TestCinexApplication]): once (not
  * again after recreation or from the recent apps), also when the activity runs already,
  * and only once a running backup import has ended. An unknown visit shows the screen's
- * message; an intent without a valid visit opens nothing. Nothing is written.
+ * message; an intent without a valid visit, or without the installation's token (another
+ * app's), opens nothing; one for the screen shown already opens no second copy. Nothing
+ * is written.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -53,6 +56,9 @@ class ReminderIntentTest {
     private val stored = repository.store.value
     private val visit = SampleTickets.VISIT
     private var activity: ActivityController<MainActivity>? = null
+
+    /** The installation's token, as the notifications' intents carry it. */
+    private val token: String? get() = ReminderIntentToken(context).current()
 
     private fun launch(intent: Intent, savedState: Bundle? = null): ActivityController<MainActivity> {
         TestCinexApplication.next = FakeAppContainer(repository, backupRepository = backup)
@@ -103,7 +109,7 @@ class ReminderIntentTest {
 
     @Test
     fun theNotificationOpensTheVisit() {
-        launch(ReminderIntents.openVisit(context, visit))
+        launch(ReminderIntents.openVisit(context, visit, token))
         assertTheVisitIsOpen()
         pressBack()
         assertOnTheCinemasTab()
@@ -116,7 +122,7 @@ class ReminderIntentTest {
         val tag = ReminderNotifier.tag(visit)
         val id = ReminderNotifier.id(ReminderKind.BEFORE_SHOWING)
         context.getSystemService(NotificationManager::class.java).notify(tag, id, Notification())
-        launch(ReminderIntents.showTicket(context, visit))
+        launch(ReminderIntents.showTicket(context, visit, token))
         assertTheTicketIsOpen()
         assertNull(notifications.getNotification(tag, id))
         pressBack()
@@ -126,10 +132,10 @@ class ReminderIntentTest {
 
     @Test
     fun anUnknownVisitShowsTheScreensMessage() {
-        launch(ReminderIntents.openVisit(context, 99_999))
+        launch(ReminderIntents.openVisit(context, 99_999, token))
         waitForText("This visit no longer exists.")
         finish()
-        launch(ReminderIntents.showTicket(context, 99_999))
+        launch(ReminderIntents.showTicket(context, 99_999, token))
         waitForText("This ticket no longer exists.")
         assertEquals(stored, repository.store.value)
     }
@@ -138,8 +144,8 @@ class ReminderIntentTest {
     fun anIntentWithoutAValidVisitOpensNothing() {
         for (intent in listOf(
             Intent(context, MainActivity::class.java).setAction(ReminderIntents.ACTION_OPEN_VISIT),
-            ReminderIntents.openVisit(context, visit).putExtra(ReminderIntents.EXTRA_VISIT_ID, -4L),
-            ReminderIntents.showTicket(context, visit).putExtra(ReminderIntents.EXTRA_VISIT_ID, "7001"),
+            ReminderIntents.openVisit(context, visit, token).putExtra(ReminderIntents.EXTRA_VISIT_ID, -4L),
+            ReminderIntents.showTicket(context, visit, token).putExtra(ReminderIntents.EXTRA_VISIT_ID, "7001"),
         )) {
             launch(intent)
             assertOnTheCinemasTab()
@@ -148,8 +154,54 @@ class ReminderIntentTest {
     }
 
     @Test
+    fun anotherAppsIntentWithoutTheTokenOpensNothing() {
+        for (intent in listOf(
+            // Straight to MainActivity, as any app could send it.
+            Intent(context, MainActivity::class.java).setAction(ReminderIntents.ACTION_OPEN_VISIT).putExtra(ReminderIntents.EXTRA_VISIT_ID, visit),
+            ReminderIntents.showTicket(context, visit, null),
+            ReminderIntents.showTicket(context, visit, "0".repeat(32)),
+            ReminderIntents.openVisit(context, visit, token!!.reversed()),
+        )) {
+            launch(intent)
+            assertOnTheCinemasTab()
+            finish()
+        }
+        // Not either when the app runs already.
+        val launched = launch(launcher())
+        launched.newIntent(ReminderIntents.openVisit(context, visit, null))
+        assertOnTheCinemasTab()
+    }
+
+    @Test
+    fun theFormShownAlreadyIsNotOpenedTwice() {
+        val launched = launch(ReminderIntents.openVisit(context, visit, token))
+        assertTheVisitIsOpen()
+        launched.newIntent(ReminderIntents.openVisit(context, visit, token))
+        composeRule.waitForIdle()
+        assertTheVisitIsOpen()
+        // One form: Back leads to the Cinemas tab.
+        pressBack()
+        assertOnTheCinemasTab()
+    }
+
+    @Test
+    fun theTicketShownAlreadyIsNotOpenedTwiceButAnotherScreenOpensOnTop() {
+        val launched = launch(ReminderIntents.showTicket(context, visit, token))
+        assertTheTicketIsOpen()
+        launched.newIntent(ReminderIntents.showTicket(context, visit, token))
+        composeRule.waitForIdle()
+        // The visit's form is another screen: it opens on top of the ticket.
+        launched.newIntent(ReminderIntents.openVisit(context, visit, token))
+        assertTheVisitIsOpen()
+        pressBack()
+        assertTheTicketIsOpen()
+        pressBack()
+        assertOnTheCinemasTab()
+    }
+
+    @Test
     fun theVisitIsNotOpenedAgainAfterRecreation() {
-        val launched = launch(ReminderIntents.openVisit(context, visit))
+        val launched = launch(ReminderIntents.openVisit(context, visit, token))
         assertTheVisitIsOpen()
         launched.recreate()
         assertTheVisitIsOpen()
@@ -160,7 +212,7 @@ class ReminderIntentTest {
 
     @Test
     fun anIntentFromTheRecentAppsIsNotOpenedAgain() {
-        launch(ReminderIntents.openVisit(context, visit).addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY))
+        launch(ReminderIntents.openVisit(context, visit, token).addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY))
         assertOnTheCinemasTab()
     }
 
@@ -168,7 +220,7 @@ class ReminderIntentTest {
     fun aReminderTappedWhileTheAppRunsOpensOnTop() {
         val launched = launch(launcher())
         assertOnTheCinemasTab()
-        launched.newIntent(ReminderIntents.showTicket(context, visit))
+        launched.newIntent(ReminderIntents.showTicket(context, visit, token))
         assertTheTicketIsOpen()
         pressBack()
         assertOnTheCinemasTab()
@@ -177,7 +229,7 @@ class ReminderIntentTest {
     @Test
     fun aReminderWaitsForARunningBackupImport() {
         backup.isImporting.value = true
-        launch(ReminderIntents.openVisit(context, visit))
+        launch(ReminderIntents.openVisit(context, visit, token))
         composeRule.waitForIdle()
         composeRule.onNodeWithText("EDIT VISIT").assertDoesNotExist()
         backup.isImporting.value = false

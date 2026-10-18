@@ -14,6 +14,7 @@ import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.data.settings.ReminderSettingsStore
 import io.github.katznmeik.cinexperience.core.model.PlannedReminder
+import io.github.katznmeik.cinexperience.core.model.ReminderAlarmChain
 import io.github.katznmeik.cinexperience.core.model.ReminderKind
 import io.github.katznmeik.cinexperience.core.model.ReminderSchedule
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
@@ -75,6 +76,7 @@ class ReminderNotifier(
     private val visitRepository: VisitRepository,
     private val ticketRepository: TicketRepository,
     private val settingsStore: ReminderSettingsStore,
+    private val intentToken: ReminderIntentToken,
     private val clock: Clock,
 ) {
     /** Creates the two channels (again: Android keeps the owner's choices and updates only the names). */
@@ -92,17 +94,19 @@ class ReminderNotifier(
                         .build(),
                 ),
             )
-        } catch (e: RuntimeException) {
+        } catch (e: Throwable) {
             // Created with the next notification.
         }
     }
 
     /**
-     * The alarm of [reminder] fired: posts its notification if it is still due. Returns
-     * whether it was posted. A repository failure is thrown (the receiver's runner,
-     * [Reminders.runForReceiver], catches it: nothing is posted).
+     * The alarm of [reminder] fired: posts its notification if its time has come (also
+     * when Android delivered the alarm late, [ReminderAlarmChain.isDue]) and it is still
+     * due. Returns whether it was posted. A repository failure is thrown (the receiver's
+     * runner, [Reminders.runForReceiver], catches it: nothing is posted).
      */
     suspend fun onAlarm(reminder: PlannedReminder): Boolean {
+        if (!ReminderAlarmChain.isDue(reminder.at, clock.instant())) return false
         if (!notificationsAllowed()) return false
         val settings = settingsStore.settings.first()
         val item = visitRepository.observeAllVisits().first().firstOrNull { it.visit.id == reminder.visitId }
@@ -143,10 +147,10 @@ class ReminderNotifier(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(public)
-            .setContentIntent(activity(ReminderIntents.openVisit(context, visitId)))
+            .setContentIntent(activity(ReminderIntents.openVisit(context, visitId, intentToken.current())))
             .setAutoCancel(true)
         if (withTicket) {
-            builder.addAction(0, ReminderNotificationTexts.SHOW_TICKET, activity(ReminderIntents.showTicket(context, visitId)))
+            builder.addAction(0, ReminderNotificationTexts.SHOW_TICKET, activity(ReminderIntents.showTicket(context, visitId, intentToken.current())))
         }
         if (showtime) {
             // Gone once the showing has long started (like the Next visit card, spec §6.1).
@@ -191,7 +195,7 @@ class ReminderNotifier(
         fun cancel(context: Context, visitId: Long, kind: ReminderKind) {
             try {
                 NotificationManagerCompat.from(context).cancel(tag(visitId), id(kind))
-            } catch (e: RuntimeException) {
+            } catch (e: Throwable) {
                 // Nothing to remove.
             }
         }

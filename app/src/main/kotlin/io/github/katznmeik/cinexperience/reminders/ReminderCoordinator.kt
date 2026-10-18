@@ -11,25 +11,28 @@ import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.retry
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -42,9 +45,11 @@ import kotlin.time.Duration.Companion.seconds
  * Each run plans with [ReminderSchedule.plan] at [clock]'s now and hands the plan to
  * [scheduler]; runs happen one at a time. Nothing is scheduled while a backup import
  * runs ([isImporting]): the run waits until it has ended. While both reminders are
- * off, the visits and the program aren't observed at all (the plan is empty).
+ * off, the visits and the program aren't observed at all (the plan is empty). Nothing
+ * here throws into the caller's scope: a failing repository is tried again, also an
+ * `Error` such as out of memory is caught; only cancellation ends it.
  */
-@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+@OptIn(ExperimentalCoroutinesApi::class)
 class ReminderCoordinator(
     private val visitRepository: VisitRepository,
     private val cinemaRepository: CinemaRepository,
@@ -88,24 +93,41 @@ class ReminderCoordinator(
 
     /**
      * Observes the inputs in [scope] until it ends (started once per process, from
-     * `AppContainer.onAppStart`): after each change has settled for [debounce] (and once
-     * no backup import runs), one run. A failing repository is tried again a few times.
+     * `AppContainer.onAppStart`): a change after a quiet time is planned at once (so a
+     * save followed by closing the app still sets its alarms), further changes within
+     * [debounce] give one more run once they have settled; never while a backup import
+     * runs. A failing repository is tried again without limit, after a growing pause
+     * (5 s, doubled up to [MAX_RETRY_DELAY]).
      */
     fun start(scope: CoroutineScope): Job = scope.launch {
         combine(inputs, isImporting) { inputs, importing -> inputs.takeUnless { importing } }
-            .debounce(debounce)
-            .retry(RETRIES) { e ->
-                if (e is CancellationException) return@retry false
-                delay(RETRY_DELAY)
+            .leadingDebounce(debounce)
+            .retryWhen { cause, attempt ->
+                if (cause is CancellationException) return@retryWhen false
+                delay(retryDelay(attempt))
                 true
             }
+            .buffer(Channel.CONFLATED)
             .collect { inputs -> if (inputs != null) runSafely { apply(inputs) } }
+    }
+
+    /**
+     * After planning failed (or took too long) in a receiver: a check-in in
+     * [RETRY_AFTER] plans again. Never throws.
+     */
+    fun scheduleRetry() {
+        try {
+            val now = clock.instant()
+            scheduler.scheduleRetry(now.plus(RETRY_AFTER), now)
+        } catch (e: Throwable) {
+            // The next start or change plans again.
+        }
     }
 
     /**
      * Schedules from the current data once; false if that wasn't possible (a backup
      * import runs: the observer started by [start] schedules once it has ended, or the
-     * data couldn't be read). Never throws, except cancellation of the caller.
+     * data couldn't be read; also an `Error`). Never throws, except cancellation of the caller.
      */
     suspend fun rescheduleNow(): Boolean {
         if (isImporting.value) return false
@@ -124,8 +146,9 @@ class ReminderCoordinator(
     private suspend fun apply(inputs: Inputs): Boolean = runs.withLock {
         if (isImporting.value) return@withLock false
         val runtimes = ReminderRuntimes.of(inputs.program, inputs.visits, inputs.seedKeys)
-        val plan = ReminderSchedule.plan(inputs.visits.map { it.visit }, inputs.settings, runtimes, clock.instant())
-        scheduler.schedule(plan)
+        val now = clock.instant()
+        val plan = ReminderSchedule.plan(inputs.visits.map { it.visit }, inputs.settings, runtimes, now)
+        scheduler.schedule(plan, now)
         true
     }
 
@@ -133,15 +156,61 @@ class ReminderCoordinator(
         block()
     } catch (e: CancellationException) {
         throw e
-    } catch (e: Exception) {
-        // The data couldn't be read: the next change or start tries again. (Nothing is logged: no visit data in logs.)
+    } catch (e: Throwable) {
+        // The data couldn't be read (even an Error such as out of memory): the next change or
+        // start tries again. (Nothing is logged: no visit data in logs.)
         false
     }
 
     companion object {
-        /** How long the inputs must stay unchanged before a run (several writes of one save give one run). */
+        /** Further changes within this time after a run give one more run once they have settled. */
         val DEBOUNCE: Duration = 1.seconds
-        private const val RETRIES = 3L
-        private val RETRY_DELAY: Duration = 5.seconds
+
+        /** The longest pause before a failing repository is tried again. */
+        val MAX_RETRY_DELAY: Duration = 5.minutes
+
+        /** A receiver whose planning failed tries again with a check-in this much later. */
+        val RETRY_AFTER: java.time.Duration = java.time.Duration.ofMinutes(15)
+
+        private val FIRST_RETRY_DELAY: Duration = 5.seconds
+
+        /** 5 s, 10 s, 20 s, … at most [MAX_RETRY_DELAY]. */
+        internal fun retryDelay(attempt: Long): Duration =
+            if (attempt >= 6) MAX_RETRY_DELAY else minOf(FIRST_RETRY_DELAY * (1 shl attempt.toInt()), MAX_RETRY_DELAY)
+    }
+}
+
+/**
+ * The first value after a quiet time at once (leading edge); values that follow within
+ * [window] are collected, and the last of them is emitted once [window] has passed without
+ * a new one (trailing edge).
+ */
+internal fun <T> Flow<T>.leadingDebounce(window: Duration): Flow<T> = channelFlow {
+    val values = Channel<T>(Channel.CONFLATED)
+    launch {
+        this@leadingDebounce.collect { values.send(it) }
+        values.close()
+    }
+    while (true) {
+        // isClosed, not a null value: null is a value here (a backup import runs).
+        val first = values.receiveCatching()
+        if (first.isClosed) return@channelFlow
+        send(first.getOrThrow())
+        while (true) {
+            val next = withTimeoutOrNull(window) { values.receiveCatching() } ?: break
+            if (next.isClosed) return@channelFlow
+            // Wait for the changes to settle, then the latest one.
+            var latest = next.getOrThrow()
+            while (true) {
+                val more = withTimeoutOrNull(window) { values.receiveCatching() }
+                if (more == null) break
+                if (more.isClosed) {
+                    send(latest)
+                    return@channelFlow
+                }
+                latest = more.getOrThrow()
+            }
+            send(latest)
+        }
     }
 }

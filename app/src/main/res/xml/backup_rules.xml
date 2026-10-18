@@ -2,9 +2,12 @@
 <!--
   Auto Backup rules for Android 11 and lower (unused while minSdk is 34, kept in
   step with data_extraction_rules.xml): only the database and shared preferences,
-  so files/reference/, files/photos/ and files/program/ are not backed up.
+  so files/reference/, files/photos/ and files/program/ are not backed up; nor are the
+  reminders' phone-local preference files.
 -->
 <full-backup-content>
     <include domain="database" path="." />
     <include domain="sharedpref" path="." />
+    <exclude domain="sharedpref" path="reminder_alarms.xml" />
+    <exclude domain="sharedpref" path="reminder_intents.xml" />
 </full-backup-content>

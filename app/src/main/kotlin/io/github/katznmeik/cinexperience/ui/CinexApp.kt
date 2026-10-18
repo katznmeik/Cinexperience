@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -33,6 +34,7 @@ import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.ui.component.CinexNavigationBar
 import io.github.katznmeik.cinexperience.core.ui.component.CinexNavigationBarItem
@@ -56,12 +58,14 @@ import io.github.katznmeik.cinexperience.feature.seatmap.layoutEditorScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToHallDetail
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToLayoutEditor
 import io.github.katznmeik.cinexperience.feature.tickets.ImportTicketRoute
+import io.github.katznmeik.cinexperience.feature.tickets.TicketRoute
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketUris
 import io.github.katznmeik.cinexperience.feature.tickets.navigateToImportTicket
 import io.github.katznmeik.cinexperience.feature.tickets.navigateToTicket
 import io.github.katznmeik.cinexperience.feature.tickets.ticketImportScreen
 import io.github.katznmeik.cinexperience.feature.tickets.ticketScreen
 import io.github.katznmeik.cinexperience.feature.visits.AddVisitRoute
+import io.github.katznmeik.cinexperience.feature.visits.EditVisitRoute
 import io.github.katznmeik.cinexperience.feature.visits.allVisitsScreen
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAddVisit
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAllVisits
@@ -88,7 +92,8 @@ import io.github.katznmeik.cinexperience.reminders.ReminderTarget
  *
  * [pendingReminder] is a tapped reminder (spec §11.3 rule 7): it opens the visit
  * (`EditVisitRoute`) or with "Show ticket" its ticket (`TicketRoute`) on top of what is
- * shown, the same way, and [onPendingReminderOpened] marks it as handled.
+ * shown, the same way (unless that very screen is shown already), and
+ * [onPendingReminderOpened] marks it as handled.
  *
  * While a backup import runs, in this window of the app or another one, the screens
  * are covered by [BackupImportLock], except the Settings screen here that runs it.
@@ -132,7 +137,9 @@ fun CinexApp(
     LaunchedEffect(pendingReminder, importing, navigationReady) {
         val target = pendingReminder ?: return@LaunchedEffect
         if (importing || !navigationReady) return@LaunchedEffect
-        if (target.showTicket) navController.navigateToTicket(target.visitId) else navController.navigateToEditVisit(target.visitId)
+        if (!navController.currentBackStackEntry.shows(target)) {
+            if (target.showTicket) navController.navigateToTicket(target.visitId) else navController.navigateToEditVisit(target.visitId)
+        }
         reminderOpened()
     }
 
@@ -323,6 +330,16 @@ fun CinexApp(
 }
 
 private fun <T> barSpec() = tween<T>(CinexTransitions.DURATION_MS, easing = FastOutSlowInEasing)
+
+/** Whether this entry is the screen [target] opens: that visit's form, or with "Show ticket" its ticket. */
+private fun NavBackStackEntry?.shows(target: ReminderTarget): Boolean {
+    val destination = this?.destination ?: return false
+    return if (target.showTicket) {
+        destination.hasRoute(TicketRoute::class) && toRoute<TicketRoute>().visitId == target.visitId
+    } else {
+        destination.hasRoute(EditVisitRoute::class) && toRoute<EditVisitRoute>().visitId == target.visitId
+    }
+}
 
 private fun NavDestination?.isOn(tab: TopLevelDestination): Boolean =
     this?.hierarchy?.any { it.hasRoute(tab.route::class) } == true

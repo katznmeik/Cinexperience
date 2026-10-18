@@ -24,6 +24,7 @@ import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketFileSou
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketReader
 import io.github.katznmeik.cinexperience.reminders.AlarmReminderScheduler
 import io.github.katznmeik.cinexperience.reminders.ReminderCoordinator
+import io.github.katznmeik.cinexperience.reminders.ReminderIntentToken
 import io.github.katznmeik.cinexperience.reminders.ReminderNotifier
 import io.github.katznmeik.cinexperience.reminders.Reminders
 import kotlinx.coroutines.CoroutineScope
@@ -145,6 +146,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val programFilterStore: ProgramFilterStore by lazy { SharedPreferencesProgramFilterStore(applicationContext) }
 
     override val reminders: Reminders by lazy {
+        val intentToken = ReminderIntentToken(applicationContext)
         Reminders(
             coordinator = ReminderCoordinator(
                 visitRepository = visitRepository,
@@ -155,7 +157,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
                 scheduler = AlarmReminderScheduler(applicationContext),
                 clock = clock,
             ),
-            notifier = ReminderNotifier(applicationContext, visitRepository, ticketRepository, reminderSettingsStore, clock),
+            notifier = ReminderNotifier(applicationContext, visitRepository, ticketRepository, reminderSettingsStore, intentToken, clock),
+            intentToken = intentToken,
             scope = applicationScope,
         )
     }

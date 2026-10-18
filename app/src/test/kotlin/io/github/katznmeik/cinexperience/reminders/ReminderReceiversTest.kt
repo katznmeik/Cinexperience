@@ -48,8 +48,8 @@ class ReminderReceiversTest {
     private val repository = FakeCinexRepository(SampleTickets.store())
     private val settings = FakeReminderSettingsStore(ReminderSettings(beforeShowing = true, rateAfterVisit = true))
     private val clock = MutableClock(Instant.parse("2026-10-17T16:16:00Z")) // 1 min after the 2 h reminder
-    private val container = FakeAppContainer(repository, clock = clock, reminderSettingsStore = settings)
-    private val scheduler get() = container.reminderScheduler
+    private val scheduler = RecordingReminderScheduler()
+    private val container = FakeAppContainer(repository, clock = clock, reminderSettingsStore = settings, reminderScheduler = scheduler)
     private val notifications get() = shadowOf(context.getSystemService(NotificationManager::class.java))
 
     private val visit = SampleTickets.VISIT
@@ -101,11 +101,41 @@ class ReminderReceiversTest {
             ReminderRestartReceiver().onReceive(context, Intent(action))
         }
         ReminderRestartReceiver().onReceive(context, Intent())
-        // The alarm receiver takes only a complete reminder of its own action.
+        // The alarm receiver takes only a complete reminder or a check-in of its own actions.
         ReminderAlarmReceiver().onReceive(context, ReminderAlarms.intent(context, showtime).setAction(Intent.ACTION_BOOT_COMPLETED))
         ReminderAlarmReceiver().onReceive(context, ReminderAlarms.baseIntent(context, visit, ReminderKind.BEFORE_SHOWING))
+        ReminderAlarmReceiver().onReceive(context, Intent("com.example.CHECK_IN"))
         assertTrue(scheduler.plans.isEmpty())
         assertEquals(0, notifications.size())
+    }
+
+    @Test
+    fun aCheckInOnlyPlansAgain() {
+        clock.now = Instant.parse("2026-10-17T15:00:00Z")
+        broadcast(ReminderAlarms.checkInIntent(context))
+        assertEquals(1, scheduler.plans.size)
+        assertEquals(listOf(showtime, rate), scheduler.last)
+        assertEquals(0, notifications.size())
+    }
+
+    @Test
+    fun aReminderAlarmBeforeItsTimeIsTakenAsACheckIn() {
+        // Only a check-in comes before the reminder's time; an alarm that does is only a reason to plan.
+        clock.now = Instant.parse("2026-10-17T16:10:00Z")
+        fire(showtime)
+        assertEquals(0, notifications.size())
+        assertEquals(1, scheduler.plans.size)
+    }
+
+    @Test
+    fun aRestartWhosePlanFailsSetsARetryCheckIn() {
+        repository.observeFailure = java.io.IOException("database")
+        broadcast(Intent(Intent.ACTION_BOOT_COMPLETED))
+        assertTrue(scheduler.plans.isEmpty())
+        assertEquals(listOf(clock.now.plusSeconds(15 * 60)), scheduler.retries)
+        // An alarm whose plan fails too.
+        fire(showtime)
+        assertEquals(2, scheduler.retries.size)
     }
 
     @Test
@@ -113,6 +143,7 @@ class ReminderReceiversTest {
         fire(showtime)
         assertTrue(posted() != null)
         assertEquals("then scheduled again", listOf(rate), scheduler.last)
+        assertTrue(scheduler.retries.isEmpty())
         clock.now = Instant.parse("2026-10-17T21:20:00Z")
         fire(rate)
         assertTrue(posted(ReminderKind.RATE_VISIT) != null)

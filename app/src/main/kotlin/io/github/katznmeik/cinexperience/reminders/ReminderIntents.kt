@@ -14,39 +14,42 @@ data class ReminderTarget(val visitId: Long, val showTicket: Boolean)
 
 /**
  * The intents of a reminder's notification: explicit intents to [MainActivity] with
- * an app-specific action and the visit id. Tapping the notification opens the visit
- * (`EditVisitRoute`), "Show ticket" its ticket (`TicketRoute`). They only open a
- * screen, never write: an unknown or deleted visit shows that screen's message.
- * [MainActivity] is exported, so another app could send them too; that opens a screen
- * of this app, nothing more.
+ * an app-specific action, the visit id and the installation's [ReminderIntentToken].
+ * Tapping the notification opens the visit (`EditVisitRoute`), "Show ticket" its ticket
+ * (`TicketRoute`). They only open a screen, never write: an unknown or deleted visit
+ * shows that screen's message. [MainActivity] is exported, so another app could send the
+ * same actions; without the token (which only the notifications' immutable pending
+ * intents carry) they open nothing.
  */
 object ReminderIntents {
     const val ACTION_OPEN_VISIT: String = "io.github.katznmeik.cinexperience.action.OPEN_VISIT"
     const val ACTION_SHOW_TICKET: String = "io.github.katznmeik.cinexperience.action.SHOW_TICKET"
     const val EXTRA_VISIT_ID: String = "io.github.katznmeik.cinexperience.extra.VISIT_ID"
+    const val EXTRA_TOKEN: String = "io.github.katznmeik.cinexperience.extra.TOKEN"
 
-    fun openVisit(context: Context, visitId: Long): Intent = intent(context, ACTION_OPEN_VISIT, visitId)
+    fun openVisit(context: Context, visitId: Long, token: String?): Intent = intent(context, ACTION_OPEN_VISIT, visitId, token)
 
-    fun showTicket(context: Context, visitId: Long): Intent = intent(context, ACTION_SHOW_TICKET, visitId)
+    fun showTicket(context: Context, visitId: Long, token: String?): Intent = intent(context, ACTION_SHOW_TICKET, visitId, token)
 
     /**
      * In the app's own task: an activity already showing gets the intent (`onNewIntent`)
      * and opens the screen on top of what it shows. The identifier keeps the pending
      * intents of different visits apart.
      */
-    private fun intent(context: Context, action: String, visitId: Long): Intent =
+    private fun intent(context: Context, action: String, visitId: Long, token: String?): Intent =
         Intent(context, MainActivity::class.java)
             .setAction(action)
             .setIdentifier("visit-$visitId")
             .putExtra(EXTRA_VISIT_ID, visitId)
+            .putExtra(EXTRA_TOKEN, token)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
     /**
-     * What [intent] asks to open; `null` if it is no reminder intent, has no valid visit
-     * id, or was launched again from the recent apps
-     * ([Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY]: an intent is handled once).
+     * What [intent] asks to open; `null` if it is no reminder intent, doesn't carry
+     * [token] (another app's), has no valid visit id, or was launched again from the
+     * recent apps ([Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY]: an intent is handled once).
      */
-    fun targetOf(intent: Intent?): ReminderTarget? {
+    fun targetOf(intent: Intent?, token: ReminderIntentToken): ReminderTarget? {
         intent ?: return null
         if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
         val showTicket = when (intent.action) {
@@ -54,13 +57,14 @@ object ReminderIntents {
             ACTION_SHOW_TICKET -> true
             else -> return null
         }
-        val visitId = try {
-            intent.getLongExtra(EXTRA_VISIT_ID, 0L)
+        val (visitId, candidate) = try {
+            intent.getLongExtra(EXTRA_VISIT_ID, 0L) to intent.getStringExtra(EXTRA_TOKEN)
         } catch (e: RuntimeException) {
             // A malformed extra from another app (e.g. BadParcelableException).
-            0L
+            0L to null
         }
-        return if (visitId > 0) ReminderTarget(visitId, showTicket) else null
+        if (visitId <= 0 || !token.matches(candidate)) return null
+        return ReminderTarget(visitId, showTicket)
     }
 }
 
@@ -78,9 +82,9 @@ class IncomingReminderViewModel(private val savedState: SavedStateHandle) : View
     /** The screen to open, `null` if none is waiting. */
     val pending: StateFlow<ReminderTarget?> = _pending.asStateFlow()
 
-    /** Takes what [intent] asks to open ([ReminderIntents.targetOf]); a newer one replaces a waiting one. Returns it. */
-    fun offer(intent: Intent?): ReminderTarget? {
-        val target = ReminderIntents.targetOf(intent) ?: return null
+    /** Takes what [intent] asks to open ([ReminderIntents.targetOf] with [token]); a newer one replaces a waiting one. Returns it. */
+    fun offer(intent: Intent?, token: ReminderIntentToken): ReminderTarget? {
+        val target = ReminderIntents.targetOf(intent, token) ?: return null
         savedState[VISIT_KEY] = target.visitId
         savedState[TICKET_KEY] = target.showTicket
         _pending.value = target

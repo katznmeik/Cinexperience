@@ -6,15 +6,22 @@
   photos (files/photos/) would count against the 25 MB backup quota. Those are covered by the
   app's own backup export / import (Settings). The downloaded Yorck program
   (files/program/, v1.1) is left out too: it can always be downloaded again (spec §8, §11.1).
-  BackupRulesTest checks this.
+  Two preference files are phone-local state and left out as well (v1.4, spec §11.3): the
+  reminders' alarm bookkeeping (reminder_alarms.xml; alarms don't move to another phone) and
+  the token of the reminders' notification intents (reminder_intents.xml). The reminder
+  settings (reminder_settings.xml) are backed up. BackupRulesTest checks this.
 -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
+        <exclude domain="sharedpref" path="reminder_alarms.xml" />
+        <exclude domain="sharedpref" path="reminder_intents.xml" />
     </cloud-backup>
     <device-transfer>
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
+        <exclude domain="sharedpref" path="reminder_alarms.xml" />
+        <exclude domain="sharedpref" path="reminder_intents.xml" />
     </device-transfer>
 </data-extraction-rules>

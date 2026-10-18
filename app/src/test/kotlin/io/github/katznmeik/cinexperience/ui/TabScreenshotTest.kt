@@ -33,7 +33,9 @@ import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketFileSou
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketReader
 import io.github.katznmeik.cinexperience.reminders.RecordingReminderScheduler
 import io.github.katznmeik.cinexperience.reminders.ReminderCoordinator
+import io.github.katznmeik.cinexperience.reminders.ReminderIntentToken
 import io.github.katznmeik.cinexperience.reminders.ReminderNotifier
+import io.github.katznmeik.cinexperience.reminders.ReminderScheduler
 import io.github.katznmeik.cinexperience.reminders.Reminders
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,7 +65,7 @@ internal class FakeAppContainer(
     override val ticketFileSource: TicketFileSource = ContentTicketFileSource(RuntimeEnvironment.getApplication()),
     override val ticketReader: TicketReader = DefaultTicketReader,
     override val reminderSettingsStore: FakeReminderSettingsStore = FakeReminderSettingsStore(),
-    val reminderScheduler: RecordingReminderScheduler = RecordingReminderScheduler(),
+    val reminderScheduler: ReminderScheduler = RecordingReminderScheduler(),
     /** Runs the receivers' work at once, on the calling thread, until it suspends. */
     reminderScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
 ) : AppContainer {
@@ -80,9 +82,11 @@ internal class FakeAppContainer(
     override val visitPhotoStore = FakeVisitPhotoStore()
     override val programFilterStore = InMemoryProgramFilterStore()
     override val reminders: Reminders by lazy {
+        val intentToken = ReminderIntentToken(applicationContext)
         Reminders(
             ReminderCoordinator(repository, repository, programRepository, reminderSettingsStore, backupRepository.isImporting, reminderScheduler, clock),
-            ReminderNotifier(applicationContext, repository, repository, reminderSettingsStore, clock),
+            ReminderNotifier(applicationContext, repository, repository, reminderSettingsStore, intentToken, clock),
+            intentToken,
             reminderScope,
         )
     }

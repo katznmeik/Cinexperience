@@ -28,7 +28,8 @@ import io.github.katznmeik.cinexperience.ui.CinexApp
  *
  * A reminder's notification (spec §11.3) opens the visit or its ticket through
  * `ReminderIntents` the same way: once, in the app's own task (`onNewIntent` when the
- * activity shows already), and only once no backup import runs.
+ * activity shows already), only once no backup import runs, and only with the
+ * installation's token (`ReminderIntentToken`), which another app's intent lacks.
  */
 class MainActivity : ComponentActivity() {
 
@@ -65,7 +66,7 @@ class MainActivity : ComponentActivity() {
 
     private fun offer(intent: Intent?) {
         incomingTicket.offer(intent, packageName)
-        val reminder = incomingReminder.offer(intent)
+        val reminder = incomingReminder.offer(intent, (application as CinexApplication).container.reminders.intentToken)
         // "Show ticket" is a button of the notification, which stays otherwise (a tap on the notification removes it).
         if (reminder != null && reminder.showTicket) ReminderNotifier.cancel(this, reminder.visitId, ReminderKind.BEFORE_SHOWING)
     }
