@@ -37,6 +37,32 @@ class QrGridReaderTest {
     }
 
     @Test
+    fun readsEverySizeAtFractionalModuleSizes() {
+        // With the alignment pattern's centre window reaching its dark ring, versions 2-4
+        // were refused at many of these sizes.
+        val failed = ArrayList<String>()
+        for (size in listOf(21, 25, 29, 33)) for (tenths in 25..60) {
+            val grid = TestQrCodes.grid(size, seed = size * 100 + tenths)
+            val read = QrGridReader.read(TestQrCodes.render(grid, size, modulePixels = tenths / 10.0))
+            if (read?.toBooleanArray()?.contentEquals(grid) != true) failed += "$size modules at ${tenths / 10.0} px"
+        }
+        assertEquals(emptyList<String>(), failed)
+    }
+
+    @Test
+    fun readsACodeWhoseBottomRowAndRightColumnAreMostlyLight() {
+        // Only one finder edge each: 7 (or 8) of 33 modules dark, about 21 % of the code's width.
+        val size = 33
+        val grid = TestQrCodes.grid(size, seed = 2)
+        for (column in 9 until size) grid[(size - 1) * size + column] = false
+        for (row in 9 until size) grid[row * size + size - 1] = false
+        assertTrue(QrGridReader.isValid(grid, size))
+
+        assertReads(grid, size, TestQrCodes.render(grid, size, modulePixels = 4.0), "mostly light edges")
+        assertReads(grid, size, jpegRoundTrip(TestQrCodes.render(grid, size, modulePixels = 3.0, blur = 1, noise = 20), 0.75f), "blurred")
+    }
+
+    @Test
     fun readsYorcksShapeThroughAJpeg() {
         // 21 modules at 4 px with a 4-module quiet zone: 116 × 116 px, as on the real ticket.
         val grid = TestQrCodes.grid(21)

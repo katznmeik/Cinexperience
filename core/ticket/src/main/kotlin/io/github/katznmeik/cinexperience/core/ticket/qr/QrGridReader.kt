@@ -15,7 +15,7 @@ import kotlin.math.min
  * 1. Threshold between the dark and the light pixels (iterative intermeans; too
  *    little contrast is no code).
  * 2. The code's bounding box: the outermost rows and columns with dark pixels, then
- *    those with at least a quarter of that box dark (so specks and blurred edges
+ *    those with at least 15 % of that box dark (so specks and blurred edges
  *    don't count). It must be about square.
  * 3. For 21, 25, 29 and 33 modules: the module centres are sampled (the mean of a
  *    small window around each), in each of the four 90° rotations.
@@ -40,8 +40,12 @@ internal object QrGridReader {
     /** Rows and columns with fewer dark pixels than this don't count for the bounding box (JPEG specks). */
     private const val MIN_DARK_PIXELS = 2
 
-    /** The share of the rough bounding box's width that the code's outer rows and columns have dark. */
-    private const val EDGE_SHARE = 0.25
+    /**
+     * The share of the rough bounding box's width an outer row or column of the code has
+     * dark at least: each holds the edge of one or two finder patterns, 7 or 14 of at
+     * most 33 modules (21 %); with a margin for a rough box made wider by specks.
+     */
+    private const val EDGE_SHARE = 0.15
 
     /** The bounding box may be this share of a module less square. */
     private const val SQUARENESS = 0.5
@@ -85,8 +89,9 @@ internal object QrGridReader {
             val (emptyTop, emptyLeft) = corners.first { it !in finders }
             val row = if (emptyTop == 0) 6 else size - 7
             val column = if (emptyLeft == 0) 6 else size - 7
-            // The alignment pattern's dark centre module inside its light ring.
-            if (!isCentred(image, threshold, box, size, row + 0.5, column + 0.5, halfSide = 1.5)) return false
+            // The alignment pattern's dark centre module and half its light ring (the full
+            // ring would reach the dark ring at fractional module sizes).
+            if (!isCentred(image, threshold, box, size, row + 0.5, column + 0.5, halfSide = 1.0)) return false
         }
         return true
     }
@@ -170,9 +175,9 @@ internal object QrGridReader {
         val left = columns.indexOfFirst { it >= MIN_DARK_PIXELS }
         val right = columns.indexOfLast { it >= MIN_DARK_PIXELS }
         if (top < 0 || left < 0) return null
-        // Second pass: the code's outer rows and columns are at least 14 of at most 33 modules
-        // dark (two finder patterns), so a quarter of the rough box. Blurred, noisy edges
-        // just outside the code have only a few dark pixels.
+        // Second pass: rows and columns with at least EDGE_SHARE of the rough box dark, as
+        // the code's outer ones are. Blurred, noisy edges just outside the code have only a
+        // few dark pixels.
         val minInRow = max(MIN_DARK_PIXELS, ceil(EDGE_SHARE * (right - left + 1)).toInt())
         val minInColumn = max(MIN_DARK_PIXELS, ceil(EDGE_SHARE * (bottom - top + 1)).toInt())
         val refinedTop = rows.indexOfFirst { it >= minInRow }
