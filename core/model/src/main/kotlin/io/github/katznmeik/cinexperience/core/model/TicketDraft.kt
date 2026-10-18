@@ -5,8 +5,8 @@ package io.github.katznmeik.cinexperience.core.model
  * it until Save, which stores it with the new visit as its [Ticket]; Back drops it.
  *
  * @property seats every seat of the booking as printed, in the ticket's order, at
- *   most [Ticket.MAX_SEATS], none twice. Empty when the ticket's seats couldn't be
- *   read; Save then takes the seat picked in the form ([toTicket]).
+ *   most [Ticket.MAX_SEATS], none twice; empty when the ticket's seats couldn't be
+ *   read (the ticket is then stored without seats).
  * @property qrModules the QR code's modules, `null` if none could be read.
  *
  * Its text ([toString]) hides the booking number and the modules (see
@@ -24,17 +24,13 @@ data class TicketDraft(
 
     /**
      * The ticket to store with a new visit (`visitId` 0, see `TicketRepository.saveVisitWithTicket`):
-     * the draft's seats, or, if none were read, [ownSeat] (the seat picked in the form).
-     * `null` if there is no seat at all: a [Ticket] has at least one.
+     * the draft's seats as printed (none if they couldn't be read).
      *
      * @param qrModules the QR code to store, by default the draft's (pass `null` to drop
      *   one that has expired, [ShowingTime.qrModulesExpired]).
      */
-    fun toTicket(ownSeat: TicketSeat?, qrModules: QrModules? = this.qrModules): Ticket? {
-        val ticketSeats = seats.ifEmpty { listOfNotNull(ownSeat) }
-        if (ticketSeats.isEmpty()) return null
-        return Ticket(visitId = 0, bookingNumber = bookingNumber, seats = ticketSeats, qrModules = qrModules)
-    }
+    fun toTicket(qrModules: QrModules? = this.qrModules): Ticket =
+        Ticket(visitId = 0, bookingNumber = bookingNumber, seats = seats, qrModules = qrModules)
 }
 
 /**
@@ -54,10 +50,3 @@ fun LayoutLabels.seatOf(seat: TicketSeat): SeatId? {
     }
     return found
 }
-
-/**
- * This seat as a ticket's seat ([TicketSeat]): its row label and its number or fixed
- * label; `null` if they don't fit [TicketSeat]'s rules (only a layout from an older
- * build could hold such a label).
- */
-fun SeatLabel.toTicketSeatOrNull(): TicketSeat? = TicketSeat.ofOrNull(row, seat)

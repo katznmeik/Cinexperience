@@ -19,15 +19,13 @@ class TicketDraftTest {
     fun theDraftBecomesATicketOfANewVisit() {
         val seats = listOf(TicketSeat("7", "10"), TicketSeat("7", "11"))
         val draft = TicketDraft(number, seats, qr)
-        assertEquals(Ticket(0, number, seats, qr), draft.toTicket(ownSeat = TicketSeat("7", "11")))
-        assertEquals(Ticket(0, number, seats), draft.toTicket(ownSeat = null, qrModules = null), "an expired QR code is left out")
+        assertEquals(Ticket(0, number, seats, qr), draft.toTicket())
+        assertEquals(Ticket(0, number, seats), draft.toTicket(qrModules = null), "an expired QR code is left out")
     }
 
     @Test
-    fun withoutPrintedSeatsTheSeatPickedInTheFormIsTheTicketsSeat() {
-        val draft = TicketDraft(number, emptyList(), qr)
-        assertEquals(Ticket(0, number, listOf(TicketSeat("7", "10")), qr), draft.toTicket(TicketSeat("7", "10")))
-        assertNull(draft.toTicket(ownSeat = null), "a ticket needs a seat")
+    fun withoutPrintedSeatsTheTicketHasNone() {
+        assertEquals(Ticket(0, number, emptyList(), qr), TicketDraft(number, emptyList(), qr).toTicket())
     }
 
     @Test
@@ -82,13 +80,5 @@ class TicketDraftTest {
         val labels = layout.labels()
         assertNull(labels.seatOf(TicketSeat("1", "1")))
         assertNull(labels.seatOf(TicketSeat("1", "2")))
-    }
-
-    @Test
-    fun aSeatLabelBecomesATicketSeat() {
-        assertEquals(TicketSeat("7", "10"), SeatLabel("7", "10").toTicketSeatOrNull())
-        assertEquals(TicketSeat(null, "12"), SeatLabel(null, "12", SeatKind.SOFA).toTicketSeatOrNull())
-        assertEquals(TicketSeat("8", "R"), SeatLabel("8", "R").toTicketSeatOrNull())
-        assertNull(SeatLabel(" 7", "10").toTicketSeatOrNull())
     }
 }

@@ -441,11 +441,16 @@ class FakeCinexRepository(initial: FakeStore = FakeStore()) :
         return exists
     }
 
-    override suspend fun storeQrModules(visitId: Long, qrModules: QrModules): Boolean {
+    /** Like Room: one guarded write, only for that visit's ticket with [bookingNumber] and no QR modules. */
+    override suspend fun restoreQrModules(visitId: Long, bookingNumber: BookingNumber, qrModules: QrModules): Boolean {
         write()
-        val exists = store.value.tickets.any { it.visitId == visitId }
-        store.update { s -> s.copy(tickets = s.tickets.map { if (it.visitId == visitId) it.copy(qrModules = qrModules) else it }) }
-        return exists
+        fun matches(ticket: Ticket) = ticket.visitId == visitId && ticket.bookingNumber == bookingNumber && ticket.qrModules == null
+        var stored = false
+        store.update { s ->
+            stored = s.tickets.any(::matches)
+            s.copy(tickets = s.tickets.map { if (matches(it)) it.copy(qrModules = qrModules) else it })
+        }
+        return stored
     }
 
     /** Like Room: the expiry comes from [ShowingTime], by the visit's date and start time. */

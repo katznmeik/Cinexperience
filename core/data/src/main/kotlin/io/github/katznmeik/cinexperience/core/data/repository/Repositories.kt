@@ -210,12 +210,14 @@ interface TicketRepository {
     suspend fun removeTicket(visitId: Long): Boolean
 
     /**
-     * Stores [qrModules] for the visit's ticket again, e.g. when the ticket is
-     * imported again after they were removed (spec §6.10); false if the visit has
-     * no ticket. Modules that are already expired are stored too and go with the
-     * next [removeExpiredQrModules].
+     * Stores [qrModules] for the visit's ticket again when the ticket is imported
+     * again after they were removed (spec §6.10), in one guarded write: only if that
+     * ticket still has [bookingNumber] and no QR modules, so a ticket that changed
+     * since it was read (removed, replaced, or given a QR code meanwhile) is left
+     * alone. False if nothing was stored. Modules that are already expired are
+     * stored too and go with the next [removeExpiredQrModules].
      */
-    suspend fun storeQrModules(visitId: Long, qrModules: QrModules): Boolean
+    suspend fun restoreQrModules(visitId: Long, bookingNumber: BookingNumber, qrModules: QrModules): Boolean
 
     /**
      * Removes the QR modules of every ticket whose showing ended long enough ago

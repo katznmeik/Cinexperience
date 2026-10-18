@@ -17,6 +17,9 @@ class TicketSeatsJsonTest {
         val json = TicketSeatsJson.encode(seats)
         assertEquals("""[{"row":"7","seat":"10"},{"row":"7","seat":"11"},{"row":null,"seat":"R"}]""", json)
         assertEquals(seats, TicketSeatsJson.decode(json))
+        // No seats: they couldn't be read from the ticket.
+        assertEquals("[]", TicketSeatsJson.encode(emptyList()))
+        assertEquals(emptyList<TicketSeat>(), TicketSeatsJson.decode("[]"))
     }
 
     @Test
@@ -25,7 +28,6 @@ class TicketSeatsJsonTest {
             "",
             "null",
             "{}",
-            "[]", // no seat
             """[{"row":"7"}]""", // no seat field
             """[{"seat":"10"}]""", // no row field
             """[{"row":"7","seat":"10","kind":"SOFA"}]""",

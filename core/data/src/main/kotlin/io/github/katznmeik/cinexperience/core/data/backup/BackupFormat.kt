@@ -264,7 +264,7 @@ internal data class BackupTicket(
     val visitId: Long,
     /** BookingNumber.value, e.g. `"TEST123"`. */
     val bookingNumber: String,
-    /** Every seat of the booking, in its order. */
+    /** Every seat of the booking, in its order; empty when they couldn't be read from the ticket. */
     val seats: List<BackupTicketSeat>,
 )
 
