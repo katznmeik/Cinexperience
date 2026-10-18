@@ -7,6 +7,12 @@
     <!-- Predictive back (spec §7) on every supported version, not only from targetSdk 36
          on Android 16: the NavHost animates it with the app's own transitions. -->
 
+    <!-- The reminders (spec §11.3 rule 6): notifications (asked at runtime when a reminder
+         is switched on in Settings) and the restart broadcast, after which the reminders'
+         alarms are set again. Normal, inexact alarms: no exact-alarm permission. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:name=".CinexApplication"
         android:allowBackup="true"
@@ -44,6 +50,23 @@
                 <data android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
+
+        <!-- A reminder's alarm (spec §11.3): only the app's own alarms reach it. -->
+        <receiver
+            android:name=".reminders.ReminderAlarmReceiver"
+            android:exported="false" />
+        <!-- Schedules the reminders again after a restart, an app update and a time zone
+             change. Exported for these protected system broadcasts only; it checks the
+             action, so any other intent is ignored. -->
+        <receiver
+            android:name=".reminders.ReminderRestartReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

@@ -68,6 +68,7 @@ import io.github.katznmeik.cinexperience.feature.visits.navigateToAllVisits
 import io.github.katznmeik.cinexperience.feature.visits.navigateToEditVisit
 import io.github.katznmeik.cinexperience.feature.visits.navigateToImportedVisit
 import io.github.katznmeik.cinexperience.feature.visits.visitEditScreens
+import io.github.katznmeik.cinexperience.reminders.ReminderTarget
 
 /**
  * Root composable: bottom navigation (shown on the four tab screens only, as in
@@ -85,6 +86,10 @@ import io.github.katznmeik.cinexperience.feature.visits.visitEditScreens
  * [onPendingTicketImportOpened] then marks it as handled. The import replaces itself
  * with Add visit or with the visit that has the ticket already.
  *
+ * [pendingReminder] is a tapped reminder (spec §11.3 rule 7): it opens the visit
+ * (`EditVisitRoute`) or with "Show ticket" its ticket (`TicketRoute`) on top of what is
+ * shown, the same way, and [onPendingReminderOpened] marks it as handled.
+ *
  * While a backup import runs, in this window of the app or another one, the screens
  * are covered by [BackupImportLock], except the Settings screen here that runs it.
  */
@@ -95,6 +100,8 @@ fun CinexApp(
     navController: NavHostController = rememberNavController(),
     pendingTicketImport: ImportTicketRoute? = null,
     onPendingTicketImportOpened: () -> Unit = {},
+    pendingReminder: ReminderTarget? = null,
+    onPendingReminderOpened: () -> Unit = {},
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -120,6 +127,13 @@ fun CinexApp(
         if (importing || !navigationReady) return@LaunchedEffect
         navController.navigate(route)
         ticketImportOpened()
+    }
+    val reminderOpened by rememberUpdatedState(onPendingReminderOpened)
+    LaunchedEffect(pendingReminder, importing, navigationReady) {
+        val target = pendingReminder ?: return@LaunchedEffect
+        if (importing || !navigationReady) return@LaunchedEffect
+        if (target.showTicket) navController.navigateToTicket(target.visitId) else navController.navigateToEditVisit(target.visitId)
+        reminderOpened()
     }
 
     Scaffold(

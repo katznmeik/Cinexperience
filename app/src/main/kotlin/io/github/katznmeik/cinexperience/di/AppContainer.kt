@@ -22,6 +22,10 @@ import io.github.katznmeik.cinexperience.feature.tickets.importing.ContentTicket
 import io.github.katznmeik.cinexperience.feature.tickets.importing.DefaultTicketReader
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketFileSource
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketReader
+import io.github.katznmeik.cinexperience.reminders.AlarmReminderScheduler
+import io.github.katznmeik.cinexperience.reminders.ReminderCoordinator
+import io.github.katznmeik.cinexperience.reminders.ReminderNotifier
+import io.github.katznmeik.cinexperience.reminders.Reminders
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -32,8 +36,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Manual dependency injection (no Hilt, spec §10). The container owns the
  * app-wide singletons — the Room database, the repositories from core:data, the
- * reference screenshot and visit photo stores and the program repository from
- * core:program — and hands them to ViewModel factories in the feature modules.
+ * reference screenshot and visit photo stores, the program repository from
+ * core:program and the reminders — and hands them to ViewModel factories in the
+ * feature modules.
  */
 interface AppContainer {
     val applicationContext: Context
@@ -70,6 +75,12 @@ interface AppContainer {
 
     /** The reminder settings (spec §6.7, §11.3; app settings, spec §8): Settings writes them, the reminders follow them. */
     val reminderSettingsStore: ReminderSettingsStore
+
+    /**
+     * The reminders (spec §11.3): their scheduling (started in [onAppStart]), their
+     * notifications and the receivers' background work. One per process.
+     */
+    val reminders: Reminders
 
     /**
      * Opens the ticket PDF of the ticket import (spec §6.10): a `content:` URI of
@@ -133,16 +144,39 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val programFilterStore: ProgramFilterStore by lazy { SharedPreferencesProgramFilterStore(applicationContext) }
 
+    override val reminders: Reminders by lazy {
+        Reminders(
+            coordinator = ReminderCoordinator(
+                visitRepository = visitRepository,
+                cinemaRepository = cinemaRepository,
+                programRepository = programRepository,
+                settingsStore = reminderSettingsStore,
+                isImporting = backupRepository.isImporting,
+                scheduler = AlarmReminderScheduler(applicationContext),
+                clock = clock,
+            ),
+            notifier = ReminderNotifier(applicationContext, visitRepository, ticketRepository, reminderSettingsStore, clock),
+            scope = applicationScope,
+        )
+    }
+
     private val started = AtomicBoolean(false)
 
     /**
      * Deletes reference screenshots and visit photos that nothing uses any more
      * (left by an editor or visit form that never saved, or by deleted halls), and
      * the QR codes of tickets whose showing is more than 7 days past (spec §4.7).
+     * Starts the reminders' scheduling (spec §11.3 rule 4), which then follows every
+     * change of the visits, the reminder settings and the program, and creates their
+     * notification channels.
      */
     override fun onAppStart() {
         if (!started.compareAndSet(false, true)) return
         applicationScope.launch { data.sweepOrphanFiles() }
         applicationScope.launch { data.removeExpiredQrModules(clock.instant()) }
+        applicationScope.launch {
+            reminders.notifier.createChannels()
+            reminders.coordinator.start(this)
+        }
     }
 }
