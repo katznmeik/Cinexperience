@@ -14,7 +14,6 @@ import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.data.settings.ReminderSettingsStore
 import io.github.katznmeik.cinexperience.core.model.PlannedReminder
-import io.github.katznmeik.cinexperience.core.model.ReminderAlarmChain
 import io.github.katznmeik.cinexperience.core.model.ReminderKind
 import io.github.katznmeik.cinexperience.core.model.ReminderSchedule
 import io.github.katznmeik.cinexperience.core.model.SeatLabel
@@ -100,13 +99,12 @@ class ReminderNotifier(
     }
 
     /**
-     * The alarm of [reminder] fired: posts its notification if its time has come (also
-     * when Android delivered the alarm late, [ReminderAlarmChain.isDue]) and it is still
-     * due. Returns whether it was posted. A repository failure is thrown (the receiver's
-     * runner, [Reminders.runForReceiver], catches it: nothing is posted).
+     * The alarm of [reminder] fired: posts its notification if it is still due. Returns
+     * whether it was posted (the caller then marks it posted, so no plan sets it again).
+     * A repository failure is thrown (the receiver's runner, [Reminders.runForReceiver],
+     * catches it: nothing is posted).
      */
     suspend fun onAlarm(reminder: PlannedReminder): Boolean {
-        if (!ReminderAlarmChain.isDue(reminder.at, clock.instant())) return false
         if (!notificationsAllowed()) return false
         val settings = settingsStore.settings.first()
         val item = visitRepository.observeAllVisits().first().firstOrNull { it.visit.id == reminder.visitId }
@@ -118,7 +116,12 @@ class ReminderNotifier(
         return post(reminder, notification(reminder, info, withTicket))
     }
 
-    /** The notification of [reminder] for [item]; with [withTicket] it has "Show ticket". */
+    /**
+     * The notification of [reminder] for [item]; with [withTicket] it has "Show ticket".
+     * Tapping it opens the visit; without the installation's token (it couldn't be stored,
+     * [ReminderIntentToken.current]) it has no tap targets, as MainActivity would open
+     * nothing anyway; the next notification tries to store the token again.
+     */
     internal fun notification(reminder: PlannedReminder, item: ReminderVisitInfo, withTicket: Boolean): Notification {
         val visitId = reminder.visitId
         val showtime = reminder.kind == ReminderKind.BEFORE_SHOWING
@@ -147,10 +150,14 @@ class ReminderNotifier(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(public)
-            .setContentIntent(activity(ReminderIntents.openVisit(context, visitId, intentToken.current())))
             .setAutoCancel(true)
-        if (withTicket) {
-            builder.addAction(0, ReminderNotificationTexts.SHOW_TICKET, activity(ReminderIntents.showTicket(context, visitId, intentToken.current())))
+            .setOnlyAlertOnce(true)
+        val token = intentToken.current()
+        if (token != null) {
+            builder.setContentIntent(activity(ReminderIntents.openVisit(context, visitId, token)))
+            if (withTicket) {
+                builder.addAction(0, ReminderNotificationTexts.SHOW_TICKET, activity(ReminderIntents.showTicket(context, visitId, token)))
+            }
         }
         if (showtime) {
             // Gone once the showing has long started (like the Next visit card, spec §6.1).

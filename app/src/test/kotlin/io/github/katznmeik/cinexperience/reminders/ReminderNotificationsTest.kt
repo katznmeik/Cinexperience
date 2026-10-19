@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import io.github.katznmeik.cinexperience.MainActivity
@@ -97,6 +98,7 @@ class ReminderNotificationsTest {
         assertEquals(ReminderNotifier.SHOWTIME_CHANNEL_ID, notification.channelId)
         assertEquals(NotificationCompat.CATEGORY_REMINDER, notification.category)
         assertTrue("removed when tapped", notification.flags and Notification.FLAG_AUTO_CANCEL != 0)
+        assertTrue("posted again (the same visit and kind), it doesn't sound again", notification.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
         assertOpens(notification.contentIntent, ReminderIntents.ACTION_OPEN_VISIT)
         // Gone 30 minutes after the start (20:45 Berlin), like the Next visit card.
         assertEquals(Duration.between(clock.now, Instant.parse("2026-10-17T18:45:00Z")).toMillis(), notification.timeoutAfter)
@@ -152,6 +154,29 @@ class ReminderNotificationsTest {
             // Never the booking number, in any text of either version.
             assertTrue(notification.allTexts().none { it.contains(SampleTickets.BOOKING_NUMBER.value) })
         }
+    }
+
+    @Test
+    fun withoutAStoredTokenTheNotificationHasNoTapTargetsAndTheNextOneTriesAgain() {
+        shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val preferences = FailingCommits(context.getSharedPreferences("token_test", Context.MODE_PRIVATE), failures = 1)
+        val intentToken = ReminderIntentToken { preferences }
+        val repository = FakeCinexRepository(SampleTickets.store())
+        val settings = FakeReminderSettingsStore(ReminderSettings(beforeShowing = true, rateAfterVisit = true))
+        val notifier = ReminderNotifier(context, repository, repository, settings, intentToken, clock)
+        fun posted() = checkNotNull(notifications.getNotification(ReminderNotifier.tag(visit), ReminderNotifier.id(ReminderKind.BEFORE_SHOWING)))
+
+        // The token couldn't be stored: MainActivity wouldn't open anything, so nothing to tap.
+        assertTrue(runBlocking { notifier.onAlarm(showtime) })
+        assertNull(posted().contentIntent)
+        assertNull("no Show ticket, although the QR code is kept", posted().actions)
+        assertEquals("\u2068${SampleTickets.FILM}\u2069 starts at 20:15", posted().title)
+
+        // The next notification stores it and opens the visit.
+        assertTrue(runBlocking { notifier.onAlarm(showtime) })
+        token = intentToken
+        assertOpens(posted().contentIntent, ReminderIntents.ACTION_OPEN_VISIT)
+        assertOpens(posted().actions.single().actionIntent, ReminderIntents.ACTION_SHOW_TICKET)
     }
 
     @Test

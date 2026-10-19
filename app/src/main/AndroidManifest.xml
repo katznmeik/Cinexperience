@@ -7,11 +7,15 @@
     <!-- Predictive back (spec §7) on every supported version, not only from targetSdk 36
          on Android 16: the NavHost animates it with the app's own transitions. -->
 
-    <!-- The reminders (spec §11.3 rule 6): notifications (asked at runtime when a reminder
-         is switched on in Settings) and the restart broadcast, after which the reminders'
-         alarms are set again. Normal, inexact alarms: no exact-alarm permission. -->
+    <!-- The reminders (spec §11.3 rules 5 and 6): notifications (asked at runtime when a
+         reminder is switched on in Settings), the restart broadcast, after which the
+         reminders' alarms are set again, and exact alarms, so a reminder comes on time also
+         when the app hasn't been opened for days. USE_EXACT_ALARM is granted at install
+         (no prompt; not SCHEDULE_EXACT_ALARM). The app isn't distributed through Google
+         Play, whose policy reserves USE_EXACT_ALARM for alarm and calendar apps. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
         android:name=".CinexApplication"

@@ -1,8 +1,8 @@
 package io.github.katznmeik.cinexperience.reminders
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.core.content.edit
 import java.security.MessageDigest
 import java.security.SecureRandom
 
@@ -25,17 +25,30 @@ class ReminderIntentToken(private val openPreferences: () -> SharedPreferences) 
     @Volatile
     private var cached: String? = null
 
-    /** The token, created on first use; `null` only if it couldn't be stored (no notification then opens a screen). */
+    /**
+     * The token, created and stored on first use; `null` if it couldn't be read or stored
+     * (then no notification can open a screen; the next call tries again). Only a stored
+     * token is handed out, so a notification never carries one that MainActivity, maybe in
+     * a later process, doesn't know.
+     */
     @Synchronized
     fun current(): String? {
         cached?.let { return it }
         return try {
-            val stored = prefs.getString(KEY, null)?.takeIf { it.length == LENGTH }
-            val token = stored ?: newToken().also { created -> prefs.edit(commit = true) { putString(KEY, created) } }
-            token.also { cached = it }
+            val token = prefs.getString(KEY, null)?.takeIf { it.length == LENGTH } ?: newToken().takeIf(::store)
+            token?.also { cached = it }
         } catch (e: Throwable) {
             null
         }
+    }
+
+    /** Stores [token]; whether it was written (commit's result, which the KTX `edit { }` doesn't return). */
+    private fun store(token: String): Boolean {
+        @SuppressLint("UseKtx")
+        val editor = prefs.edit()
+        editor.putString(KEY, token)
+        val committed = editor.commit()
+        return committed
     }
 
     /** Whether [candidate] is the token (compared in constant time); false while there is none. */

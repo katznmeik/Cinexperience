@@ -3,6 +3,7 @@ package io.github.katznmeik.cinexperience.reminders
 import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.data.settings.ReminderSettingsStore
+import io.github.katznmeik.cinexperience.core.model.PlannedReminder
 import io.github.katznmeik.cinexperience.core.model.ReminderSchedule
 import io.github.katznmeik.cinexperience.core.model.ReminderSettings
 import io.github.katznmeik.cinexperience.core.model.VisitListItem
@@ -25,11 +26,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.onTimeout
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -97,18 +98,38 @@ class ReminderCoordinator(
      * save followed by closing the app still sets its alarms), further changes within
      * [debounce] give one more run once they have settled; never while a backup import
      * runs. A failing repository is tried again without limit, after a growing pause
-     * (5 s, doubled up to [MAX_RETRY_DELAY]).
+     * (5 s, doubled up to [MAX_RETRY_DELAY]); once data arrives again, the pause starts
+     * at 5 s again.
      */
     fun start(scope: CoroutineScope): Job = scope.launch {
-        combine(inputs, isImporting) { inputs, importing -> inputs.takeUnless { importing } }
-            .leadingDebounce(debounce)
-            .retryWhen { cause, attempt ->
-                if (cause is CancellationException) return@retryWhen false
-                delay(retryDelay(attempt))
-                true
+        var failures = 0L
+        while (true) {
+            try {
+                combine(inputs, isImporting) { inputs, importing -> inputs.takeUnless { importing } }
+                    .leadingDebounce(debounce)
+                    .buffer(Channel.CONFLATED)
+                    .collect { inputs ->
+                        // Data arrived: the repositories work (again).
+                        failures = 0
+                        if (inputs != null) runSafely { apply(inputs) }
+                    }
+                return@launch // The inputs never end; if they did, there would be nothing more to plan.
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Even an Error: tried again after a pause, never thrown into the app's scope.
+                delay(retryDelay(failures++))
             }
-            .buffer(Channel.CONFLATED)
-            .collect { inputs -> if (inputs != null) runSafely { apply(inputs) } }
+        }
+    }
+
+    /** [reminder] was posted: no plan sets its alarm again ([ReminderScheduler.markPosted]). Never throws. */
+    fun markPosted(reminder: PlannedReminder) {
+        try {
+            scheduler.markPosted(reminder)
+        } catch (e: Throwable) {
+            // At worst the alarm is set again and its fire-time check decides.
+        }
     }
 
     /**
@@ -183,34 +204,50 @@ class ReminderCoordinator(
 /**
  * The first value after a quiet time at once (leading edge); values that follow within
  * [window] are collected, and the last of them is emitted once [window] has passed without
- * a new one (trailing edge).
+ * a new one (trailing edge). A value and the end of a window that come at the same moment
+ * lose nothing: `select` takes the value first, as kotlinx's `debounce` does.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 internal fun <T> Flow<T>.leadingDebounce(window: Duration): Flow<T> = channelFlow {
     val values = Channel<T>(Channel.CONFLATED)
     launch {
         this@leadingDebounce.collect { values.send(it) }
         values.close()
     }
+    // A value waiting for its window to pass; NONE if there is none (null is a value here: a backup import runs).
+    var pending: Any? = NONE
+    // No value within the last window: the next one goes out at once.
+    var quiet = true
     while (true) {
-        // isClosed, not a null value: null is a value here (a backup import runs).
-        val first = values.receiveCatching()
-        if (first.isClosed) return@channelFlow
-        send(first.getOrThrow())
-        while (true) {
-            val next = withTimeoutOrNull(window) { values.receiveCatching() } ?: break
-            if (next.isClosed) return@channelFlow
-            // Wait for the changes to settle, then the latest one.
-            var latest = next.getOrThrow()
-            while (true) {
-                val more = withTimeoutOrNull(window) { values.receiveCatching() }
-                if (more == null) break
-                if (more.isClosed) {
-                    send(latest)
-                    return@channelFlow
+        val ended = select {
+            values.onReceiveCatching { result ->
+                if (result.isClosed) {
+                    @Suppress("UNCHECKED_CAST")
+                    if (pending !== NONE) send(pending as T)
+                    true
+                } else {
+                    val value = result.getOrThrow()
+                    if (quiet) send(value) else pending = value
+                    quiet = false
+                    false
                 }
-                latest = more.getOrThrow()
             }
-            send(latest)
+            if (!quiet) {
+                onTimeout(window) {
+                    if (pending !== NONE) {
+                        @Suppress("UNCHECKED_CAST")
+                        send(pending as T)
+                        pending = NONE
+                    } else {
+                        quiet = true
+                    }
+                    false
+                }
+            }
         }
+        if (ended) return@channelFlow
     }
 }
+
+/** No value waiting ([leadingDebounce]). */
+private object NONE

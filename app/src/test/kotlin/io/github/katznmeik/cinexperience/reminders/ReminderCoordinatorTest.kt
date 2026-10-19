@@ -1,17 +1,23 @@
 package io.github.katznmeik.cinexperience.reminders
 
+import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.model.PlannedReminder
 import io.github.katznmeik.cinexperience.core.model.Rating
 import io.github.katznmeik.cinexperience.core.model.ReminderKind
 import io.github.katznmeik.cinexperience.core.model.ReminderLeadTime
 import io.github.katznmeik.cinexperience.core.model.ReminderSettings
+import io.github.katznmeik.cinexperience.core.model.VisitListItem
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeReminderSettingsStore
 import io.github.katznmeik.cinexperience.core.testing.SampleProgram
 import io.github.katznmeik.cinexperience.core.testing.SampleTickets
 import io.github.katznmeik.cinexperience.core.testing.buildProgram
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -202,6 +208,38 @@ class ReminderCoordinatorTest {
     }
 
     @Test
+    fun onceDataArrivesALaterFailureIsTriedAgainAfterFiveSeconds() = runTest {
+        // The visits' flow can break while it runs (e.g. the database closes under it).
+        val broken = MutableStateFlow(false)
+        val tries = ArrayList<Long>()
+        val visits = object : VisitRepository by repository {
+            override fun observeAllVisits(): Flow<List<VisitListItem>> = flow {
+                tries += testScheduler.currentTime
+                emitAll(repository.observeAllVisits().combine(broken) { items, isBroken -> if (isBroken) throw IOException("database") else items })
+            }
+        }
+        repository.observeFailure = IOException("database")
+        ReminderCoordinator(visits, repository, program, settings, importing, scheduler, clock).start(backgroundScope)
+        // Four failures at the start: tried after 5, 10, 20 and 40 s.
+        advanceTimeBy(36_000)
+        repository.observeFailure = null
+        advanceTimeBy(40_000)
+        runCurrent()
+        assertEquals(listOf(0L, 5_000, 15_000, 35_000, 75_000), tries)
+        assertEquals(1, scheduler.plans.size)
+
+        // Data arrived: the next failure (at 76 s) starts the pauses at 5 s again (not 80 s).
+        broken.value = true
+        runCurrent()
+        broken.value = false
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(listOf(0L, 5_000, 15_000, 35_000, 75_000, 81_000), tries)
+        assertEquals(2, scheduler.plans.size)
+        assertEquals(listOf(showtime, rate), scheduler.last!!.times())
+    }
+
+    @Test
     fun theRetryDelayGrowsToFiveMinutes() {
         assertEquals(listOf(5L, 10, 20, 40, 80, 160, 300, 300), (0L..7L).map { ReminderCoordinator.retryDelay(it).inWholeSeconds })
         assertEquals(300L, ReminderCoordinator.retryDelay(Long.MAX_VALUE).inWholeSeconds)
@@ -217,6 +255,8 @@ class ReminderCoordinatorTest {
             }
 
             override fun scheduleRetry(at: Instant, now: Instant) = scheduler.scheduleRetry(at, now)
+
+            override fun markPosted(reminder: PlannedReminder) = scheduler.markPosted(reminder)
         }
         val coordinator = ReminderCoordinator(repository, repository, program, settings, importing, failing, clock)
         assertFalse(coordinator.rescheduleNow())

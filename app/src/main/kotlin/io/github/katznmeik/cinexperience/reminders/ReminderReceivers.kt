@@ -6,11 +6,11 @@ import android.content.Intent
 import io.github.katznmeik.cinexperience.CinexApplication
 
 /**
- * A reminder alarm fired (spec §11.3): a reminder's own alarm is checked again and its
- * notification posted ([ReminderNotifier.onAlarm]); a check-in only plans. Either way the
- * reminders are planned again, so the chain of alarms goes on ([ReminderAlarmChain]) and
- * the reminders beyond the plan's limit follow. Not exported: only the app's own alarms
- * reach it, and only with [ReminderAlarms.ACTION] or [ReminderAlarms.ACTION_CHECK_IN].
+ * A reminder alarm fired (spec §11.3): the reminder is checked again and its notification
+ * posted ([ReminderNotifier.onAlarm]) and marked as posted, so no plan sets it again; a
+ * retry check-in only plans. Either way the reminders are planned again, so the ones
+ * beyond the plan's limit follow. Not exported: only the app's own alarms reach it, and
+ * only with [ReminderAlarms.ACTION] or [ReminderAlarms.ACTION_CHECK_IN].
  */
 class ReminderAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -21,7 +21,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         }
         val reminders = context.reminders() ?: return
         reminders.runForReceiver(goAsync(), intent.isForeground()) {
-            if (reminder != null) reminders.notifier.onAlarm(reminder)
+            if (reminder != null && reminders.notifier.onAlarm(reminder)) reminders.coordinator.markPosted(reminder)
             reminders.coordinator.rescheduleNow()
         }
     }

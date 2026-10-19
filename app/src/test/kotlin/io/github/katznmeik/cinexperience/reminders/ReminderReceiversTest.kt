@@ -119,12 +119,14 @@ class ReminderReceiversTest {
     }
 
     @Test
-    fun aReminderAlarmBeforeItsTimeIsTakenAsACheckIn() {
-        // Only a check-in comes before the reminder's time; an alarm that does is only a reason to plan.
-        clock.now = Instant.parse("2026-10-17T16:10:00Z")
+    fun anAlarmDeliveredASecondEarlyIsPostedAndMarkedBeforeThePlan() {
+        clock.now = showtime.at.minusSeconds(1)
         fire(showtime)
-        assertEquals(0, notifications.size())
-        assertEquals(1, scheduler.plans.size)
+        assertTrue(posted() != null)
+        // Marked as posted, so the plan right after (which still has it) doesn't set it again
+        // (AlarmReminderSchedulerTest, ReminderAlarmsThroughTheReceiversTest).
+        assertEquals(listOf(showtime), scheduler.posted)
+        assertEquals(listOf(showtime, rate), scheduler.last)
     }
 
     @Test
@@ -147,6 +149,7 @@ class ReminderReceiversTest {
         clock.now = Instant.parse("2026-10-17T21:20:00Z")
         fire(rate)
         assertTrue(posted(ReminderKind.RATE_VISIT) != null)
+        assertEquals(listOf(showtime, rate), scheduler.posted)
     }
 
     @Test
@@ -154,6 +157,8 @@ class ReminderReceiversTest {
         runBlocking { repository.deleteVisit(visit) }
         fire(showtime)
         assertEquals(0, notifications.size())
+        assertTrue("not marked as posted", scheduler.posted.isEmpty())
+        assertEquals("but planned again", 1, scheduler.plans.size)
     }
 
     @Test
