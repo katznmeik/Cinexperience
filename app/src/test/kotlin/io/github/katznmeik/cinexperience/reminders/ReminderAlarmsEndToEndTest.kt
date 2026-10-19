@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import io.github.katznmeik.cinexperience.TestCinexApplication
@@ -17,6 +18,7 @@ import io.github.katznmeik.cinexperience.core.testing.FakeStore
 import io.github.katznmeik.cinexperience.core.testing.MutableClock
 import io.github.katznmeik.cinexperience.core.testing.SampleProgram
 import io.github.katznmeik.cinexperience.core.testing.SampleTickets
+import io.github.katznmeik.cinexperience.core.testing.buildProgram
 import io.github.katznmeik.cinexperience.ui.FakeAppContainer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -133,8 +135,9 @@ class ReminderAlarmsEndToEndTest {
 /**
  * The alarms through the receivers (spec §11.3): planned a week ahead, with nothing in
  * between (the app isn't opened), each reminder's own alarm fires at its time and posts
- * the notification; an alarm delivered a moment early posts once and isn't set again;
- * the reminders beyond the plan's limit follow as the alarms fire.
+ * the notification; an alarm delivered a moment early, delivered again, or a "Rate your
+ * visit" whose time changes after it was posted posts once and isn't set again; the
+ * reminders beyond the plan's limit follow as the alarms fire.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36], application = TestCinexApplication::class)
@@ -160,8 +163,12 @@ class ReminderAlarmsThroughTheReceiversTest {
         TestCinexApplication.next = null
     }
 
-    private fun container(store: FakeStore = SampleTickets.store(now = weekAhead, daysAhead = 7)) = FakeAppContainer(
+    private fun container(
+        store: FakeStore = SampleTickets.store(now = weekAhead, daysAhead = 7),
+        program: FakeProgramRepository = FakeProgramRepository(),
+    ) = FakeAppContainer(
         FakeCinexRepository(store),
+        programRepository = program,
         clock = clock,
         reminderSettingsStore = FakeReminderSettingsStore(ReminderSettings(beforeShowing = true, rateAfterVisit = true)),
         reminderScheduler = AlarmReminderScheduler(context),
@@ -169,13 +176,17 @@ class ReminderAlarmsThroughTheReceiversTest {
 
     private fun alarms() = alarmsOf(alarmManager)
 
-    /** Android delivers the alarm set for [trigger] at [now]. */
-    private fun fire(trigger: Instant, now: Instant = trigger) {
+    /** Android delivers the alarm set for [trigger] at [now]; its intent. */
+    private fun fire(trigger: Instant, now: Instant = trigger): Intent {
         clock.now = now
         val alarm = shadowOf(alarmManager).scheduledAlarms.single { it.triggerAtMs == trigger.toEpochMilli() }
+        val intent = shadowOf(alarm.operation).savedIntent
         shadowOf(alarmManager).fireAlarm(alarm)
         shadowOf(Looper.getMainLooper()).idle()
+        return intent
     }
+
+    private fun dismiss(kind: ReminderKind) = notificationManager.cancel(ReminderNotifier.tag(SampleTickets.VISIT), ReminderNotifier.id(kind))
 
     private fun posted(kind: ReminderKind, visitId: Long = SampleTickets.VISIT) =
         notifications.getNotification(ReminderNotifier.tag(visitId), ReminderNotifier.id(kind))
@@ -199,13 +210,19 @@ class ReminderAlarmsThroughTheReceiversTest {
         val coordinator = container().reminders.coordinator
         assertTrue(coordinator.rescheduleNow())
 
-        fire(showtime, now = showtime.minusSeconds(1))
+        val delivered = fire(showtime, now = showtime.minusSeconds(1))
         assertNotNull(posted(ReminderKind.BEFORE_SHOWING))
         // The plan right after still has the reminder (its time is a second ahead), but sets nothing for it.
         assertEquals(listOf("own rate" to rate), alarms())
 
-        // The owner swipes it away; the app opens and plans again, before and after its time: it doesn't come back.
-        notificationManager.cancel(ReminderNotifier.tag(SampleTickets.VISIT), ReminderNotifier.id(ReminderKind.BEFORE_SHOWING))
+        // The owner swipes it away. The same alarm delivered again (e.g. set again by a plan that
+        // ran between its delivery and its mark): nothing is posted.
+        dismiss(ReminderKind.BEFORE_SHOWING)
+        context.sendBroadcast(delivered)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNull(posted(ReminderKind.BEFORE_SHOWING))
+
+        // The app opens and plans again, before and after its time: it doesn't come back.
         for (now in listOf(showtime.minusMillis(500), showtime, showtime.plusSeconds(60))) {
             clock.now = now
             assertTrue(coordinator.rescheduleNow())
@@ -213,6 +230,36 @@ class ReminderAlarmsThroughTheReceiversTest {
         }
         assertNull(posted(ReminderKind.BEFORE_SHOWING))
         assertEquals(0, notifications.size())
+    }
+
+    @Test
+    fun rateYourVisitIsNotPostedAgainWhenItsTimeChangesAfterwards() = runTest {
+        // The program has the showing with a runtime of 100 minutes: Rate your visit at 20:25 UTC
+        // (20:15 Berlin + 100 min + 30 min).
+        val program = FakeProgramRepository()
+        program.state.update {
+            it.copy(program = buildProgram { film(SampleTickets.FILM, runtimeMinutes = 100) { showing("2026-10-17T20:15", "delphi LUX") } })
+        }
+        val coordinator = container(program = program).reminders.coordinator
+        assertTrue(coordinator.rescheduleNow())
+        val rateWithRuntime = Instant.parse("2026-10-17T20:25:00Z")
+        assertEquals(listOf("own before" to showtime, "own rate" to rateWithRuntime), alarms())
+        fire(showtime)
+        fire(rateWithRuntime)
+        assertNotNull(posted(ReminderKind.RATE_VISIT))
+        assertTrue(alarms().isEmpty())
+
+        // The owner dismisses it; then the runtime is unknown (the program deleted): the plan has
+        // Rate your visit at 21:15 UTC (+ 2.5 h + 30 min) now, but it was posted for this showing.
+        dismiss(ReminderKind.RATE_VISIT)
+        program.state.update { it.copy(program = null) }
+        clock.now = rateWithRuntime.plusSeconds(60)
+        assertTrue(coordinator.rescheduleNow())
+        assertEquals(emptyList<Pair<String, Instant>>(), alarms())
+        clock.now = rate.minusSeconds(60)
+        assertTrue(coordinator.rescheduleNow())
+        assertTrue(alarms().isEmpty())
+        assertNull(posted(ReminderKind.RATE_VISIT))
     }
 
     @Test

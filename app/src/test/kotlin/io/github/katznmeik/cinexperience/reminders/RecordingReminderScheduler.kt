@@ -9,7 +9,7 @@ class RecordingReminderScheduler : ReminderScheduler {
     /** Every plan, oldest first. */
     val plans: MutableList<List<PlannedReminder>> = Collections.synchronizedList(mutableListOf())
 
-    /** The times of the retry check-ins asked for, oldest first. */
+    /** The times of the failed plans that asked for a retry check-in, oldest first. */
     val retries: MutableList<Instant> = Collections.synchronizedList(mutableListOf())
 
     /** The reminders marked as posted, oldest first. */
@@ -22,11 +22,13 @@ class RecordingReminderScheduler : ReminderScheduler {
         plans += reminders
     }
 
-    override fun scheduleRetry(at: Instant, now: Instant) {
-        retries += at
+    override fun scheduleRetry(now: Instant) {
+        retries += now
     }
 
     override fun markPosted(reminder: PlannedReminder) {
         posted += reminder
     }
+
+    override fun isPosted(reminder: PlannedReminder): Boolean = reminder in posted
 }

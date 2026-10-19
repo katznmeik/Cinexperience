@@ -159,20 +159,28 @@ class ReminderNotificationsTest {
     @Test
     fun withoutAStoredTokenTheNotificationHasNoTapTargetsAndTheNextOneTriesAgain() {
         shadowOf(context).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
-        val preferences = FailingCommits(context.getSharedPreferences("token_test", Context.MODE_PRIVATE), failures = 1)
-        val intentToken = ReminderIntentToken { preferences }
+        val folder = BrokenPreferencesFolder(context)
+        val intentToken = ReminderIntentToken { context.getSharedPreferences("token_test", Context.MODE_PRIVATE) }
         val repository = FakeCinexRepository(SampleTickets.store())
         val settings = FakeReminderSettingsStore(ReminderSettings(beforeShowing = true, rateAfterVisit = true))
         val notifier = ReminderNotifier(context, repository, repository, settings, intentToken, clock)
         fun posted() = checkNotNull(notifications.getNotification(ReminderNotifier.tag(visit), ReminderNotifier.id(ReminderKind.BEFORE_SHOWING)))
 
-        // The token couldn't be stored: MainActivity wouldn't open anything, so nothing to tap.
-        assertTrue(runBlocking { notifier.onAlarm(showtime) })
-        assertNull(posted().contentIntent)
-        assertNull("no Show ticket, although the QR code is kept", posted().actions)
-        assertEquals("\u2068${SampleTickets.FILM}\u2069 starts at 20:15", posted().title)
+        // The token can't be stored (writing fails): MainActivity wouldn't open anything, so nothing to tap.
+        folder.breakIt()
+        try {
+            assertTrue(runBlocking { notifier.onAlarm(showtime) })
+            assertNull(posted().contentIntent)
+            assertNull("no Show ticket, although the QR code is kept", posted().actions)
+            assertEquals("\u2068${SampleTickets.FILM}\u2069 starts at 20:15", posted().title)
+            // Also not on the next try while writing still fails.
+            assertTrue(runBlocking { notifier.onAlarm(showtime) })
+            assertNull(posted().contentIntent)
+        } finally {
+            folder.repair()
+        }
 
-        // The next notification stores it and opens the visit.
+        // Writing works again: the next notification stores it and opens the visit.
         assertTrue(runBlocking { notifier.onAlarm(showtime) })
         token = intentToken
         assertOpens(posted().contentIntent, ReminderIntents.ACTION_OPEN_VISIT)

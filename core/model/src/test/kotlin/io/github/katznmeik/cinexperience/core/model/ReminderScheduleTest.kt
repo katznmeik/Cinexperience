@@ -68,6 +68,32 @@ class ReminderScheduleTest {
     }
 
     @Test
+    fun noPlanHasAReminderOfAShowingAfterItsLastPossibleTime() {
+        // e: until the start (18:15 UTC); f: start + 600 min + 30 min (04:45 UTC the next day).
+        val lastShowtime = ReminderSchedule.lastPossibleAt(ReminderKind.BEFORE_SHOWING, date, evening)
+        val lastRate = ReminderSchedule.lastPossibleAt(ReminderKind.RATE_VISIT, date, evening)
+        assertEquals(at("2026-10-17T18:15:00Z"), lastShowtime)
+        assertEquals(at("2026-10-18T04:45:00Z"), lastRate)
+        // Whatever the lead time or the runtime, a plan at that time or later has none.
+        for (lead in ReminderLeadTime.entries) {
+            val settings = ReminderSettings(beforeShowing = true, leadTime = lead)
+            for (now in listOf(lastShowtime.minus(lead.duration).minusMillis(1), lastShowtime.minusMillis(1))) {
+                assertTrue(plan(listOf(visit()), settings, now = now).all { !it.at.isAfter(lastShowtime) }, "$lead")
+            }
+            assertEquals(emptyList(), plan(listOf(visit()), settings, now = lastShowtime))
+        }
+        val rateOnly = ReminderSettings(rateAfterVisit = true)
+        for (runtime in listOf(null, 1, 100, 600, 601)) {
+            val runtimes = runtime?.let { mapOf(1L to it) }.orEmpty()
+            val planned = plan(listOf(visit()), rateOnly, runtimes, now = lastRate.minusMillis(1))
+            assertTrue(planned.all { !it.at.isAfter(lastRate) }, "$runtime")
+            assertEquals(emptyList(), plan(listOf(visit()), rateOnly, runtimes, now = lastRate), "$runtime")
+        }
+        // The longest runtime is planned until the last moment.
+        assertEquals(listOf(lastRate), plan(listOf(visit()), rateOnly, mapOf(1L to 600), now = lastRate.minusMillis(1)).times(ReminderKind.RATE_VISIT))
+    }
+
+    @Test
     fun visitsWithoutAStartTimeGetNoReminders() {
         assertEquals(emptyList(), plan(listOf(visit(startTime = null), visit(2, date.plusDays(3), startTime = null))))
     }

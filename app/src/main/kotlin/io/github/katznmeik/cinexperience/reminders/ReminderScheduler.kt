@@ -10,6 +10,8 @@ import androidx.core.content.edit
 import io.github.katznmeik.cinexperience.core.model.PlannedReminder
 import io.github.katznmeik.cinexperience.core.model.ReminderKind
 import io.github.katznmeik.cinexperience.core.model.ReminderLeadTime
+import io.github.katznmeik.cinexperience.core.model.ReminderSchedule
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -22,25 +24,45 @@ interface ReminderScheduler {
      * its time (replacing the one of the same visit and kind), except one already posted
      * ([markPosted]); every other alarm this app set whose time is still ahead is cancelled,
      * e.g. of a visit that was deleted or changed, of a reminder switched off, or a retry
-     * check-in (the plan worked). An alarm whose time has passed is left alone: it may be
-     * on its way, and the check when it fires decides. Never throws.
+     * check-in (the plan worked, so the retries' pauses start again at the shortest). An
+     * alarm whose time has passed is left alone: it may be on its way, and the check when
+     * it fires decides. Never throws.
      */
     fun schedule(reminders: List<PlannedReminder>, now: Instant)
 
     /**
-     * Sets a check-in that plans again after planning at [now] failed (e.g. the data
-     * couldn't be read in time after a restart): at [at], or earlier if a check-in still
-     * ahead is stored. Always set, as Android drops every alarm when the phone restarts.
-     * Never throws.
+     * Planning at [now] failed (e.g. the data couldn't be read in time after a restart):
+     * sets a check-in that plans again, after a pause that grows with each failed plan in a
+     * row ([ReminderRetry]). A check-in still ahead is set again at its time instead (Android
+     * drops every alarm when the phone restarts). Never throws.
      */
-    fun scheduleRetry(at: Instant, now: Instant)
+    fun scheduleRetry(now: Instant)
 
     /**
-     * [reminder] was posted: no plan sets its alarm again while its time hasn't passed
-     * (an alarm delivered a moment early would otherwise be planned and posted twice).
-     * Never throws.
+     * [reminder] was posted: no plan sets an alarm for its showing's reminder of that kind
+     * again (an alarm delivered a moment early, or a "Rate your visit" whose time changed
+     * with the runtime, would otherwise be posted twice), until no plan can have it any
+     * more ([ReminderSchedule.lastPossibleAt]). A moved showing (another date or start
+     * time) is a new reminder. Never throws.
      */
     fun markPosted(reminder: PlannedReminder)
+
+    /** Whether [reminder]'s showing already had its reminder of that kind posted ([markPosted]). Never throws. */
+    fun isPosted(reminder: PlannedReminder): Boolean
+}
+
+/**
+ * The pauses before a retry check-in (spec §11.3 rule 5): 15 minutes after the first
+ * failed plan in a row, then 30, 60 and 120, at most 240 minutes, so a plan that keeps
+ * failing wakes the phone rarely.
+ */
+internal object ReminderRetry {
+    private val FIRST: Duration = Duration.ofMinutes(15)
+    private val MAX: Duration = Duration.ofMinutes(240)
+
+    /** The pause after the failed plan that follows [failures] failed plans in a row. */
+    fun after(failures: Int): Duration =
+        if (failures >= 4) MAX else FIRST.multipliedBy(1L shl failures.coerceAtLeast(0))
 }
 
 /**
@@ -132,7 +154,8 @@ internal object ReminderAlarms {
  *
  * Android can't list an app's alarms, so the alarms set are kept in [keys]
  * (`reminder_alarms.xml`: key and trigger time, visit ids and kinds only; phone-local,
- * excluded from Auto Backup), with the reminders already posted; every key is stored
+ * excluded from Auto Backup), with the reminders already posted (by visit, kind, date
+ * and start time) and the number of failed plans in a row; every key is stored
  * before its alarm is set, so each alarm can be cancelled later. Every call sets all of
  * its alarms again (alarms may be gone: after a restart or a force stop), cancels the
  * stored ones that are no longer wanted and still ahead, and forgets the ones whose time
@@ -153,11 +176,10 @@ class AlarmReminderScheduler(
     @Synchronized
     override fun schedule(reminders: List<PlannedReminder>, now: Instant) {
         val nowMillis = now.toEpochMilli()
-        // Posted reminders are remembered until their time has passed (then no plan has them).
+        // Posted reminders are remembered until no plan can have them any more.
         val storedPosted = read(KEY_POSTED)
         val posted = storedPosted.filterValues { it > nowMillis }
-        val due = reminders.associateBy { ReminderAlarms.key(it.visitId, it.kind) }
-            .filter { (key, reminder) -> posted[key] != reminder.at.toEpochMilli() }
+        val due = reminders.filter { postedKey(it) !in posted }.associateBy { ReminderAlarms.key(it.visitId, it.kind) }
         val wanted: Map<String, Long> = due.mapValues { (_, reminder) -> reminder.at.toEpochMilli() }
         val stored = storedAlarms()
         if (!stored.entries.containsAll(wanted.entries)) write(KEY_SCHEDULED, stored + wanted)
@@ -167,27 +189,68 @@ class AlarmReminderScheduler(
         for (reminder in due.values) set(reminder.at, ReminderAlarms.intent(context, reminder))
         if (stored != wanted) write(KEY_SCHEDULED, wanted)
         if (storedPosted != posted) write(KEY_POSTED, posted)
+        // The plan worked: the next failure waits the shortest pause again.
+        if (failedPlans() != 0) storeFailedPlans(0)
     }
 
     @Synchronized
-    override fun scheduleRetry(at: Instant, now: Instant) {
+    override fun scheduleRetry(now: Instant) {
         val stored = storedAlarms()
-        val earlier = stored[ReminderAlarms.CHECK_IN_KEY]?.takeIf { it > now.toEpochMilli() && it < at.toEpochMilli() }
-        val time = earlier?.let(Instant::ofEpochMilli) ?: at
-        write(KEY_SCHEDULED, stored + (ReminderAlarms.CHECK_IN_KEY to time.toEpochMilli()))
+        val pending = stored[ReminderAlarms.CHECK_IN_KEY]?.takeIf { it > now.toEpochMilli() }
+        val time = if (pending != null) {
+            // The retry set after an earlier failure is still to come (this failure is no reason to
+            // wait longer); set again, as the phone may have restarted since.
+            Instant.ofEpochMilli(pending)
+        } else {
+            val failures = failedPlans()
+            storeFailedPlans(failures + 1)
+            val at = now.plus(ReminderRetry.after(failures))
+            write(KEY_SCHEDULED, stored + (ReminderAlarms.CHECK_IN_KEY to at.toEpochMilli()))
+            at
+        }
         set(time, ReminderAlarms.checkInIntent(context))
     }
 
     @Synchronized
     override fun markPosted(reminder: PlannedReminder) {
-        write(KEY_POSTED, read(KEY_POSTED) + (ReminderAlarms.key(reminder.visitId, reminder.kind) to reminder.at.toEpochMilli()))
+        try {
+            val until = ReminderSchedule.lastPossibleAt(reminder.kind, reminder.date, reminder.startTime).toEpochMilli()
+            write(KEY_POSTED, read(KEY_POSTED) + (postedKey(reminder) to until))
+        } catch (e: RuntimeException) {
+            // A date that can't be placed on the timeline: no plan has its reminders anyway.
+        }
     }
+
+    @Synchronized
+    override fun isPosted(reminder: PlannedReminder): Boolean = postedKey(reminder) in read(KEY_POSTED)
 
     /** The alarms this app set: key ([ReminderAlarms.key] or the check-in) → trigger time in epoch milliseconds. */
     fun storedAlarms(): Map<String, Long> = read(KEY_SCHEDULED)
 
-    /** The reminders posted whose time hasn't passed yet: key → their time in epoch milliseconds. */
+    /**
+     * The showings whose reminder was posted ("before:12|2026-10-17|20:15": kind, visit id,
+     * date and start time) → until when they are remembered, in epoch milliseconds.
+     */
     fun postedReminders(): Map<String, Long> = read(KEY_POSTED)
+
+    /** How many plans failed in a row; the next retry waits [ReminderRetry.after] that many. */
+    fun failedPlans(): Int = try {
+        keys.getInt(KEY_FAILED_PLANS, 0).coerceAtLeast(0)
+    } catch (e: RuntimeException) {
+        0
+    }
+
+    private fun storeFailedPlans(count: Int) {
+        try {
+            keys.edit(commit = true) { if (count == 0) remove(KEY_FAILED_PLANS) else putInt(KEY_FAILED_PLANS, count) }
+        } catch (e: Throwable) {
+            // Not stored: the pauses start again at the shortest.
+        }
+    }
+
+    /** What a posted reminder is remembered by: its kind, visit and showing, not its time. */
+    private fun postedKey(reminder: PlannedReminder): String =
+        "${ReminderAlarms.key(reminder.visitId, reminder.kind)}|${reminder.date}|${reminder.startTime}"
 
     private fun read(name: String): Map<String, Long> = try {
         keys.getStringSet(name, null).orEmpty().mapNotNull { entry ->
@@ -254,5 +317,6 @@ class AlarmReminderScheduler(
         const val PREFERENCES_NAME: String = "reminder_alarms"
         private const val KEY_SCHEDULED = "scheduled"
         private const val KEY_POSTED = "posted"
+        private const val KEY_FAILED_PLANS = "failedPlans"
     }
 }

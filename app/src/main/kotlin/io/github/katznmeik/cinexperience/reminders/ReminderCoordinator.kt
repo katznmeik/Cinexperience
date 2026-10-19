@@ -133,13 +133,24 @@ class ReminderCoordinator(
     }
 
     /**
-     * After planning failed (or took too long) in a receiver: a check-in in
-     * [RETRY_AFTER] plans again. Never throws.
+     * Whether [reminder] was posted already ([ReminderScheduler.isPosted]): an alarm set
+     * again by a plan that ran between its delivery and [markPosted] posts nothing.
+     * Never throws (false if that can't be read).
+     */
+    fun isPosted(reminder: PlannedReminder): Boolean = try {
+        scheduler.isPosted(reminder)
+    } catch (e: Throwable) {
+        false
+    }
+
+    /**
+     * After planning failed (or took too long) in a receiver: a check-in plans again, after
+     * a pause that grows with each failed plan in a row ([ReminderScheduler.scheduleRetry]).
+     * Never throws.
      */
     fun scheduleRetry() {
         try {
-            val now = clock.instant()
-            scheduler.scheduleRetry(now.plus(RETRY_AFTER), now)
+            scheduler.scheduleRetry(clock.instant())
         } catch (e: Throwable) {
             // The next start or change plans again.
         }
@@ -189,9 +200,6 @@ class ReminderCoordinator(
 
         /** The longest pause before a failing repository is tried again. */
         val MAX_RETRY_DELAY: Duration = 5.minutes
-
-        /** A receiver whose planning failed tries again with a check-in this much later. */
-        val RETRY_AFTER: java.time.Duration = java.time.Duration.ofMinutes(15)
 
         private val FIRST_RETRY_DELAY: Duration = 5.seconds
 

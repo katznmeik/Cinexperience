@@ -254,9 +254,11 @@ class ReminderCoordinatorTest {
                 scheduler.schedule(reminders, now)
             }
 
-            override fun scheduleRetry(at: Instant, now: Instant) = scheduler.scheduleRetry(at, now)
+            override fun scheduleRetry(now: Instant) = scheduler.scheduleRetry(now)
 
             override fun markPosted(reminder: PlannedReminder) = scheduler.markPosted(reminder)
+
+            override fun isPosted(reminder: PlannedReminder): Boolean = scheduler.isPosted(reminder)
         }
         val coordinator = ReminderCoordinator(repository, repository, program, settings, importing, failing, clock)
         assertFalse(coordinator.rescheduleNow())
@@ -266,8 +268,9 @@ class ReminderCoordinatorTest {
     }
 
     @Test
-    fun aRetryIsACheckInAQuarterOfAnHourLater() {
+    fun aFailedPlanAsksTheSchedulerForARetry() {
+        // The scheduler picks the pause (AlarmReminderSchedulerTest).
         coordinator().scheduleRetry()
-        assertEquals(listOf(SampleProgram.FETCHED_AT.plusSeconds(15 * 60)), scheduler.retries)
+        assertEquals(listOf(SampleProgram.FETCHED_AT), scheduler.retries)
     }
 }

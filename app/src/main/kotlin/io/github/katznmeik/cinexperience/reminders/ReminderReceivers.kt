@@ -6,11 +6,12 @@ import android.content.Intent
 import io.github.katznmeik.cinexperience.CinexApplication
 
 /**
- * A reminder alarm fired (spec §11.3): the reminder is checked again and its notification
- * posted ([ReminderNotifier.onAlarm]) and marked as posted, so no plan sets it again; a
- * retry check-in only plans. Either way the reminders are planned again, so the ones
- * beyond the plan's limit follow. Not exported: only the app's own alarms reach it, and
- * only with [ReminderAlarms.ACTION] or [ReminderAlarms.ACTION_CHECK_IN].
+ * A reminder alarm fired (spec §11.3): unless it was posted already, the reminder is
+ * checked again and its notification posted ([ReminderNotifier.onAlarm]) and marked as
+ * posted, so no plan sets it again; a retry check-in only plans. Either way the reminders
+ * are planned again, so the ones beyond the plan's limit follow. Not exported: only the
+ * app's own alarms reach it, and only with [ReminderAlarms.ACTION] or
+ * [ReminderAlarms.ACTION_CHECK_IN].
  */
 class ReminderAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -21,7 +22,9 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         }
         val reminders = context.reminders() ?: return
         reminders.runForReceiver(goAsync(), intent.isForeground()) {
-            if (reminder != null && reminders.notifier.onAlarm(reminder)) reminders.coordinator.markPosted(reminder)
+            if (reminder != null && !reminders.coordinator.isPosted(reminder) && reminders.notifier.onAlarm(reminder)) {
+                reminders.coordinator.markPosted(reminder)
+            }
             reminders.coordinator.rescheduleNow()
         }
     }
@@ -32,7 +35,8 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
  * (spec §11.3 rule 4): Android drops every alarm when the phone restarts. Exported for
  * these protected system broadcasts only, which no other app can send; any other action
  * (an explicit intent from another app) is ignored. If planning fails or takes too long
- * (e.g. a slow start after an update), a check-in alarm tries again in 15 minutes.
+ * (e.g. a slow start after an update), a check-in alarm tries again later (after 15
+ * minutes, then after growing pauses while planning keeps failing).
  */
 class ReminderRestartReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

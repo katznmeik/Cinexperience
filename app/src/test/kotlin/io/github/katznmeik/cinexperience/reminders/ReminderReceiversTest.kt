@@ -134,7 +134,7 @@ class ReminderReceiversTest {
         repository.observeFailure = java.io.IOException("database")
         broadcast(Intent(Intent.ACTION_BOOT_COMPLETED))
         assertTrue(scheduler.plans.isEmpty())
-        assertEquals(listOf(clock.now.plusSeconds(15 * 60)), scheduler.retries)
+        assertEquals(listOf(clock.now), scheduler.retries)
         // An alarm whose plan fails too.
         fire(showtime)
         assertEquals(2, scheduler.retries.size)
@@ -150,6 +150,16 @@ class ReminderReceiversTest {
         fire(rate)
         assertTrue(posted(ReminderKind.RATE_VISIT) != null)
         assertEquals(listOf(showtime, rate), scheduler.posted)
+    }
+
+    @Test
+    fun aReminderPostedAlreadyIsNotPostedAgain() {
+        // E.g. its alarm set again by a plan that ran between its delivery and its mark.
+        scheduler.posted += showtime
+        fire(showtime)
+        assertEquals(0, notifications.size())
+        assertEquals(listOf(showtime), scheduler.posted)
+        assertEquals("but planned again", 1, scheduler.plans.size)
     }
 
     @Test

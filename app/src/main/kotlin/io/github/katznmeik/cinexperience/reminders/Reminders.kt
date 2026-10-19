@@ -24,9 +24,10 @@ class Reminders(
      * Runs [work] for a broadcast receiver in [scope], then finishes [pending]
      * (`goAsync()`; `null` only when a test calls the receiver directly). The work gets
      * [FOREGROUND_TIMEOUT] for a foreground broadcast ([foreground]: Android allows 10 s)
-     * and [BACKGROUND_TIMEOUT] otherwise (a restart or an app update: 60 s). If it fails,
-     * returns false (it couldn't plan) or runs out of time, a check-in alarm plans again
-     * later ([ReminderCoordinator.scheduleRetry]). Nothing is thrown, not even an `Error`.
+     * and [BACKGROUND_TIMEOUT] otherwise (a reminder's alarm, a restart, an app update:
+     * 60 s). If it fails, returns false (it couldn't plan) or runs out of time, a check-in
+     * alarm plans again later, after a pause that grows while planning keeps failing
+     * ([ReminderCoordinator.scheduleRetry]). Nothing is thrown, not even an `Error`.
      */
     fun runForReceiver(pending: BroadcastReceiver.PendingResult?, foreground: Boolean, work: suspend () -> Boolean) {
         scope.launch {
@@ -47,10 +48,10 @@ class Reminders(
     }
 
     companion object {
-        /** For a foreground broadcast (e.g. a reminder's alarm), within Android's 10 s. */
+        /** For a foreground broadcast (`FLAG_RECEIVER_FOREGROUND`), within Android's 10 s. */
         val FOREGROUND_TIMEOUT: Duration = 8.seconds
 
-        /** For a background broadcast (a restart, an app update), within Android's 60 s. */
+        /** For a background broadcast (a reminder's alarm, a restart, an app update), within Android's 60 s. */
         val BACKGROUND_TIMEOUT: Duration = 50.seconds
     }
 }

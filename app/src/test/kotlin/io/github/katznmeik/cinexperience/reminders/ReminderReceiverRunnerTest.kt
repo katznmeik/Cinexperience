@@ -24,9 +24,9 @@ import java.time.ZoneOffset
 
 /**
  * The receivers' background work (spec §11.3 rule 4): 8 s for a foreground broadcast,
- * 50 s for a background one (a restart, an app update: slow startup work fits); if
- * planning fails, throws (even an `Error`) or runs out of time, a check-in in 15 minutes
- * plans again. Nothing escapes into the app's scope.
+ * 50 s for a background one (a reminder's alarm, a restart, an app update: slow startup
+ * work fits); if planning fails, throws (even an `Error`) or runs out of time, a retry
+ * check-in is asked for. Nothing escapes into the app's scope.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -35,7 +35,7 @@ class ReminderReceiverRunnerTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val scheduler = RecordingReminderScheduler()
     private val clock = Clock.fixed(SampleProgram.FETCHED_AT, ZoneOffset.UTC)
-    private val retryAt = SampleProgram.FETCHED_AT.plusSeconds(15 * 60)
+    private val retryAt = SampleProgram.FETCHED_AT // the failed plan's time
 
     private fun reminders(scope: CoroutineScope): Reminders {
         val repository = FakeCinexRepository()

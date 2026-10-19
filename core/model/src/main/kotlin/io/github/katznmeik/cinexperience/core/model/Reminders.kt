@@ -134,6 +134,19 @@ object ReminderSchedule {
     }
 
     /**
+     * From when on no plan has a reminder of [kind] for the showing on [date] at
+     * [startTime], whatever the lead time or the runtime: for e the start (it comes before
+     * the showing starts), for f [RATE_AFTER_END] after the start plus the longest valid
+     * runtime ([RUNTIME_MINUTES]). So a posted reminder needs to be remembered only until
+     * then. Throws [DateTimeException] or [ArithmeticException] for a date that can't be
+     * placed on the timeline.
+     */
+    fun lastPossibleAt(kind: ReminderKind, date: LocalDate, startTime: LocalTime): Instant = when (kind) {
+        ReminderKind.BEFORE_SHOWING -> ShowingTime.startOf(date, startTime)
+        ReminderKind.RATE_VISIT -> rateVisitAt(date, startTime, RUNTIME_MINUTES.last)
+    }
+
+    /**
      * The reminders to schedule at [now] for [visits] with [settings]: soonest first
      * (by time, visit id, kind), at most [MAX_SCHEDULED]. [runtimes] are the runtimes
      * in minutes of the visits' showings in the program, by visit id (a visit without

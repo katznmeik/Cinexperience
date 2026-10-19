@@ -3,6 +3,7 @@ package io.github.katznmeik.cinexperience.reminders
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import java.security.MessageDigest
 import java.security.SecureRandom
 
@@ -47,8 +48,16 @@ class ReminderIntentToken(private val openPreferences: () -> SharedPreferences) 
         @SuppressLint("UseKtx")
         val editor = prefs.edit()
         editor.putString(KEY, token)
-        val committed = editor.commit()
-        return committed
+        if (editor.commit()) return true
+        // Android keeps a value whose commit failed in memory, where the next read would find
+        // it as if it were stored: take it out again (whether this write reaches the disk
+        // doesn't matter, the file never had the token).
+        try {
+            prefs.edit(commit = true) { remove(KEY) }
+        } catch (e: Throwable) {
+            // Then the next call's read finds it; at worst a notification opens nothing after a restart.
+        }
+        return false
     }
 
     /** Whether [candidate] is the token (compared in constant time); false while there is none. */
