@@ -68,7 +68,7 @@ Look at the screenshot PNGs after every UI change.
 | Module | Type | Content |
 |---|---|---|
 | `app` | application | `MainActivity`, `CinexApp` (NavHost + bottom bar), manual DI `AppContainer`, the reminders (`reminders/`: coordinator, alarms, notifications, receivers, intents), screenshot tests |
-| `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic, the reminders' schedule (`ReminderSchedule`, `ReminderAlarmChain`) (no Android) |
+| `core:model` | Kotlin/JVM | domain classes, rating and seat-colour logic, the reminders' schedule (`ReminderSchedule`) (no Android) |
 | `core:data` | Android lib + Room/KSP | database, DAOs, repositories, seed data, file stores (reference screenshots, visit photos), backup export/import engine, `ReminderSettingsStore` |
 | `core:program` | Android lib + kotlinx.serialization | Yorck's program (v1.1, spec §11.1): model (`Program`, `Film`, `Showing`), page parser, Yorck-name → seed-key table, `ProgramLinks`, visit pre-fill, the HTTPS download (the app's **only network code**), cache `files/program/program.json`, `ProgramRepository` |
 | `core:ticket` | Android lib (+ Robolectric tests), uses core:model | Yorck's ticket PDF (v1.4, spec §11.2): the own small PDF reader (`pdf/`), text in reading order (`text/`), the ticket fields (`TicketPdfReader` → `TicketPdfContent`, `TicketPdfRules`), the QR code's module grid (`qr/`, `QrModuleGrid`); pure Kotlin except the JPEG decoding (`BitmapLuminanceDecoder`) |
@@ -216,24 +216,32 @@ Don't duplicate config in module build files.
   `onAppStart`) reschedules on every change of visits, settings and program (the first
   change at once, quick further ones debounced, one run at a time, never during a backup
   import; a failing repository is retried without limit, nothing is thrown, `Throwable`
-  is caught), `rescheduleNow` after every alarm and from `ReminderRestartReceiver`
-  (exported; boot, package replaced, time zone; checks the action; 50 s for background
-  broadcasts, 8 s for foreground ones; on failure a check-in in 15 min).
-  `AlarmReminderScheduler`: `setAndAllowWhileIdle(RTC_WAKEUP)`, never exact alarms;
-  `ReminderAlarmChain` (core:model) keeps them on time: a reminder's own alarm only once
-  ≤ 10 min away (Android's window `min(0.75 × distance, 1 h)` ≤ 7.5 min), before that one
-  shared check-in alarm that arrives ≥ 5 min before the soonest reminder and plans again.
-  Immutable broadcasts to the non-exported `ReminderAlarmReceiver`; keys with trigger
-  times in `reminder_alarms.xml`; an alarm whose time has passed is never cancelled (it
-  may be on its way). At fire time `ReminderNotifier` posts only if the time has come
-  (`isDue`), `isStillDue` and the permission allow. Notifications: channels "Showtime
-  reminders" and "Rate your visit", `VISIBILITY_PRIVATE` with a public version without
-  film, cinema or seat (Android's "sensitive notifications" setting decides what the lock
-  screen shows), never the booking number, texts through `isolate()`, "Show ticket" only
-  with a kept QR code. Taps go to `MainActivity` (`ReminderIntents`,
-  `IncomingReminderViewModel`; once, like the ticket intents; only with the per-install
-  `ReminderIntentToken` in `reminder_intents.xml`, so another app's intent opens nothing)
-  and only navigate (`EditVisitRoute`, `TicketRoute`; not again if that screen is shown).
+  is caught; the retry pause starts at 5 s again once data arrives), `rescheduleNow`
+  after every alarm and from `ReminderRestartReceiver` (exported; boot, package replaced,
+  time zone; checks the action; 50 s for background broadcasts, 8 s for foreground ones;
+  on failure a retry check-in in 15 min, always set again, also when one is stored).
+  `AlarmReminderScheduler`: exact alarms, one per planned reminder at its time
+  (`setExactAndAllowWhileIdle(RTC_WAKEUP)`), so a reminder comes on time also when the
+  app hasn't been opened for days (App Standby limits inexact alarms); the app holds
+  `USE_EXACT_ALARM` (granted at install, no prompt; never `SCHEDULE_EXACT_ALARM`); if
+  `canScheduleExactAlarms()` is ever false it falls back to `setAndAllowWhileIdle`. The
+  app isn't distributed through Google Play, whose policy reserves `USE_EXACT_ALARM` for
+  alarm and calendar apps: don't publish it there without rethinking this. Immutable
+  broadcasts to the non-exported `ReminderAlarmReceiver`; keys with trigger times in
+  `reminder_alarms.xml`; an alarm whose time has passed is never cancelled (it may be on
+  its way), only unwanted ones still ahead. A posted reminder is marked there
+  (`markPosted`, until its time has passed), so the plan after its alarm never sets it
+  again, also when the alarm came a moment early. At fire time `ReminderNotifier` posts
+  only if `isStillDue` and the permission allow. Notifications: channels "Showtime
+  reminders" and "Rate your visit", `setOnlyAlertOnce`, `VISIBILITY_PRIVATE` with a
+  public version without film, cinema or seat (Android's "sensitive notifications"
+  setting decides what the lock screen shows), never the booking number, texts through
+  `isolate()`, "Show ticket" only with a kept QR code. Taps go to `MainActivity`
+  (`ReminderIntents`, `IncomingReminderViewModel`; once, like the ticket intents; only
+  with the per-install `ReminderIntentToken` in `reminder_intents.xml`, so another app's
+  intent opens nothing; a token that couldn't be stored is never handed out: that
+  notification has no tap targets, the next one tries again) and only navigate
+  (`EditVisitRoute`, `TicketRoute`; not again if that screen is shown).
   `reminder_alarms.xml` and `reminder_intents.xml` are phone-local: Auto Backup excludes
   them. No logs with visit data.
 - **Seats** are identified by a stable `SeatId` stored in the layout (see
