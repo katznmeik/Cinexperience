@@ -1,8 +1,8 @@
 # Cinexperience — Product Specification
 
-**Status:** v1.3.0 released (2026-10-17); v1.4 (ticket import, ticket QR code, reminders) specified
+**Status:** v1.3.0 released (2026-10-17); v1.4.0 (ticket import, ticket QR code, reminders) built, release pending
 **Owner:** katznmeik
-**Last updated:** 2026-10-19 (rev. 35)
+**Last updated:** 2026-10-19 (rev. 36)
 
 ---
 
