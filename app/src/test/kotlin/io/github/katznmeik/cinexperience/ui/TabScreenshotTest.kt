@@ -18,6 +18,7 @@ import io.github.katznmeik.cinexperience.core.data.repository.CinemaRankingsRepo
 import io.github.katznmeik.cinexperience.core.testing.FakeBackupRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
+import io.github.katznmeik.cinexperience.core.testing.FakeReminderSettingsStore
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
@@ -30,6 +31,15 @@ import io.github.katznmeik.cinexperience.feature.tickets.importing.ContentTicket
 import io.github.katznmeik.cinexperience.feature.tickets.importing.DefaultTicketReader
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketFileSource
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketReader
+import io.github.katznmeik.cinexperience.reminders.RecordingReminderScheduler
+import io.github.katznmeik.cinexperience.reminders.ReminderCoordinator
+import io.github.katznmeik.cinexperience.reminders.ReminderIntentToken
+import io.github.katznmeik.cinexperience.reminders.ReminderNotifier
+import io.github.katznmeik.cinexperience.reminders.ReminderScheduler
+import io.github.katznmeik.cinexperience.reminders.Reminders
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -54,6 +64,10 @@ internal class FakeAppContainer(
     override val clock: Clock = Clock.fixed(SampleProgram.FETCHED_AT, ZoneOffset.UTC),
     override val ticketFileSource: TicketFileSource = ContentTicketFileSource(RuntimeEnvironment.getApplication()),
     override val ticketReader: TicketReader = DefaultTicketReader,
+    override val reminderSettingsStore: FakeReminderSettingsStore = FakeReminderSettingsStore(),
+    val reminderScheduler: ReminderScheduler = RecordingReminderScheduler(),
+    /** Runs the receivers' work at once, on the calling thread, until it suspends. */
+    reminderScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
 ) : AppContainer {
     override val applicationContext: Context = RuntimeEnvironment.getApplication()
     override val appVersion: String = "0.1.0"
@@ -67,6 +81,15 @@ internal class FakeAppContainer(
     override val referenceImageStore = FakeReferenceImageStore()
     override val visitPhotoStore = FakeVisitPhotoStore()
     override val programFilterStore = InMemoryProgramFilterStore()
+    override val reminders: Reminders by lazy {
+        val intentToken = ReminderIntentToken(applicationContext)
+        Reminders(
+            ReminderCoordinator(repository, repository, programRepository, reminderSettingsStore, backupRepository.isImporting, reminderScheduler, clock),
+            ReminderNotifier(applicationContext, repository, repository, reminderSettingsStore, intentToken, clock),
+            intentToken,
+            reminderScope,
+        )
+    }
 }
 
 /**

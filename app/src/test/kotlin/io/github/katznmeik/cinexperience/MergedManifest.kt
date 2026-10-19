@@ -22,6 +22,20 @@ internal class MergedManifest private constructor(private val manifest: Element)
     /** An `android:` attribute of `<application>`; `null` if it isn't set. */
     fun applicationAttribute(name: String): String? = manifest.elements("application").single().android(name)
 
+    /** A `<receiver>`: its class name, `android:exported`, `android:permission` and the actions of its intent filters. */
+    data class Receiver(val name: String, val exported: String?, val permission: String?, val actions: Set<String>)
+
+    /** Every `<receiver>` of the application, the libraries' too. */
+    val receivers: List<Receiver>
+        get() = manifest.elements("receiver").map { receiver ->
+            Receiver(
+                name = receiver.android("name").orEmpty(),
+                exported = receiver.android("exported"),
+                permission = receiver.android("permission"),
+                actions = receiver.elements("action").mapNotNull { it.android("name") }.toSet(),
+            )
+        }
+
     private fun Element.elements(tag: String): List<Element> =
         getElementsByTagName(tag).let { nodes -> (0 until nodes.length).map { nodes.item(it) as Element } }
 

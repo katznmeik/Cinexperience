@@ -1,5 +1,6 @@
 package io.github.katznmeik.cinexperience.feature.backup
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -32,17 +33,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.data.backup.BackupRepository
 import io.github.katznmeik.cinexperience.core.data.backup.ImportPreview
 import io.github.katznmeik.cinexperience.core.data.backup.ImportSource
 import io.github.katznmeik.cinexperience.core.data.backup.SafetyCopy
+import io.github.katznmeik.cinexperience.core.model.ReminderKind
+import io.github.katznmeik.cinexperience.core.model.ReminderLeadTime
 import io.github.katznmeik.cinexperience.core.program.ProgramTime
 import io.github.katznmeik.cinexperience.core.ui.component.CinexScreen
 import io.github.katznmeik.cinexperience.core.ui.component.MessageSnackbarHost
@@ -87,12 +92,14 @@ internal interface ProgramSettingsActions {
 @Composable
 internal fun SettingsEntry(
     viewModel: SettingsViewModel,
+    reminderViewModel: ReminderSettingsViewModel,
     onOpenManage: () -> Unit,
     onOpenAllVisits: () -> Unit,
     onImportTicket: (uri: String) -> Unit = {},
     onRunsBackupImportChanged: (Boolean) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val reminderState by reminderViewModel.uiState.collectAsStateWithLifecycle()
     // Whether this screen runs the backup import: the app's import lock covers every screen but this one.
     val runsImport = state.backup.task is BackupTask.Importing
     val reportRunsImport by rememberUpdatedState(onRunsBackupImportChanged)
@@ -139,7 +146,56 @@ internal fun SettingsEntry(
             override fun onCancelDelete() = viewModel.onCancelDeleteProgram()
         }
     }
-    SettingsScreen(state, onOpenManage, onOpenAllVisits, actions = actions, programActions = programActions, onImportTicket = onPickTicket)
+    val reminderActions = rememberReminderActions(reminderViewModel)
+    SettingsScreen(
+        state,
+        onOpenManage,
+        onOpenAllVisits,
+        actions = actions,
+        programActions = programActions,
+        onImportTicket = onPickTicket,
+        reminders = reminderState,
+        reminderActions = reminderActions,
+    )
+}
+
+/**
+ * The reminder switches with Android's notification permission (spec §6.7, §11.3
+ * rule 1): switching one on asks for it when it isn't granted; the screen checks it
+ * again whenever it resumes (e.g. back from Android's settings).
+ */
+@Composable
+private fun rememberReminderActions(viewModel: ReminderSettingsViewModel): ReminderSettingsActions {
+    val context = LocalContext.current
+    LifecycleResumeEffect(viewModel, context) {
+        viewModel.onNotificationsChecked(notificationsAllowed(context))
+        onPauseOrDispose {}
+    }
+    val permissionRequest = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        viewModel.onPermissionResult(granted && notificationsAllowed(context))
+    }
+    return remember(viewModel, context, permissionRequest) {
+        object : ReminderSettingsActions {
+            override fun onSwitchChanged(kind: ReminderKind, on: Boolean) {
+                if (!viewModel.onSwitchChanged(kind, on, notificationsAllowed(context))) return
+                try {
+                    permissionRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } catch (e: ActivityNotFoundException) {
+                    viewModel.onPermissionResult(false)
+                }
+            }
+
+            override fun onLeadTimeChanged(leadTime: ReminderLeadTime) = viewModel.onLeadTimeChanged(leadTime)
+
+            override fun onOpenNotificationSettings() {
+                try {
+                    context.startActivity(notificationSettingsIntent(context))
+                } catch (e: ActivityNotFoundException) {
+                    viewModel.onNotificationSettingsUnavailable()
+                }
+            }
+        }
+    }
 }
 
 /** What the Import ticket picker offers: Yorck's ticket is a PDF. */
@@ -153,7 +209,7 @@ private fun launchPicker(viewModel: SettingsViewModel, launch: () -> Unit) {
     }
 }
 
-/** Settings (spec §6.7): backup, data management, about. */
+/** Settings (spec §6.7): backup, data management, reminders, program, about. */
 @Composable
 internal fun SettingsScreen(
     state: SettingsUiState,
@@ -163,6 +219,8 @@ internal fun SettingsScreen(
     actions: BackupActions = BackupActions.None,
     programActions: ProgramSettingsActions = ProgramSettingsActions.None,
     onImportTicket: () -> Unit = {},
+    reminders: ReminderSettingsState = ReminderSettingsState.OFF,
+    reminderActions: ReminderSettingsActions = ReminderSettingsActions.None,
 ) {
     val backup = state.backup
     // While an import replaces the data nothing else may write: Back and the Data rows
@@ -207,6 +265,7 @@ internal fun SettingsScreen(
                     onClick = onImportTicket,
                 )
             }
+            Section("Reminders") { ReminderRows(reminders, enabled = !importing, reminderActions) }
             Section("Program") { ProgramRows(state.program, enabled = !importing, programActions) }
             Section("About") {
                 Column(

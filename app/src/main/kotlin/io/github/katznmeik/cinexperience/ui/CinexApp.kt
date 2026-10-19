@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -33,6 +34,7 @@ import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import io.github.katznmeik.cinexperience.core.program.FilmKey
 import io.github.katznmeik.cinexperience.core.ui.component.CinexNavigationBar
 import io.github.katznmeik.cinexperience.core.ui.component.CinexNavigationBarItem
@@ -56,18 +58,21 @@ import io.github.katznmeik.cinexperience.feature.seatmap.layoutEditorScreen
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToHallDetail
 import io.github.katznmeik.cinexperience.feature.seatmap.navigateToLayoutEditor
 import io.github.katznmeik.cinexperience.feature.tickets.ImportTicketRoute
+import io.github.katznmeik.cinexperience.feature.tickets.TicketRoute
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketUris
 import io.github.katznmeik.cinexperience.feature.tickets.navigateToImportTicket
 import io.github.katznmeik.cinexperience.feature.tickets.navigateToTicket
 import io.github.katznmeik.cinexperience.feature.tickets.ticketImportScreen
 import io.github.katznmeik.cinexperience.feature.tickets.ticketScreen
 import io.github.katznmeik.cinexperience.feature.visits.AddVisitRoute
+import io.github.katznmeik.cinexperience.feature.visits.EditVisitRoute
 import io.github.katznmeik.cinexperience.feature.visits.allVisitsScreen
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAddVisit
 import io.github.katznmeik.cinexperience.feature.visits.navigateToAllVisits
 import io.github.katznmeik.cinexperience.feature.visits.navigateToEditVisit
 import io.github.katznmeik.cinexperience.feature.visits.navigateToImportedVisit
 import io.github.katznmeik.cinexperience.feature.visits.visitEditScreens
+import io.github.katznmeik.cinexperience.reminders.ReminderTarget
 
 /**
  * Root composable: bottom navigation (shown on the four tab screens only, as in
@@ -85,6 +90,11 @@ import io.github.katznmeik.cinexperience.feature.visits.visitEditScreens
  * [onPendingTicketImportOpened] then marks it as handled. The import replaces itself
  * with Add visit or with the visit that has the ticket already.
  *
+ * [pendingReminder] is a tapped reminder (spec §11.3 rule 7): it opens the visit
+ * (`EditVisitRoute`) or with "Show ticket" its ticket (`TicketRoute`) on top of what is
+ * shown, the same way (unless that very screen is shown already), and
+ * [onPendingReminderOpened] marks it as handled.
+ *
  * While a backup import runs, in this window of the app or another one, the screens
  * are covered by [BackupImportLock], except the Settings screen here that runs it.
  */
@@ -95,6 +105,8 @@ fun CinexApp(
     navController: NavHostController = rememberNavController(),
     pendingTicketImport: ImportTicketRoute? = null,
     onPendingTicketImportOpened: () -> Unit = {},
+    pendingReminder: ReminderTarget? = null,
+    onPendingReminderOpened: () -> Unit = {},
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -120,6 +132,15 @@ fun CinexApp(
         if (importing || !navigationReady) return@LaunchedEffect
         navController.navigate(route)
         ticketImportOpened()
+    }
+    val reminderOpened by rememberUpdatedState(onPendingReminderOpened)
+    LaunchedEffect(pendingReminder, importing, navigationReady) {
+        val target = pendingReminder ?: return@LaunchedEffect
+        if (importing || !navigationReady) return@LaunchedEffect
+        if (!navController.currentBackStackEntry.shows(target)) {
+            if (target.showTicket) navController.navigateToTicket(target.visitId) else navController.navigateToEditVisit(target.visitId)
+        }
+        reminderOpened()
     }
 
     Scaffold(
@@ -278,6 +299,7 @@ fun CinexApp(
                 cinemaRepository = container.cinemaRepository,
                 backupRepository = container.backupRepository,
                 programRepository = container.programRepository,
+                reminderSettingsStore = container.reminderSettingsStore,
                 appVersion = container.appVersion,
                 buildId = container.buildId,
                 onOpenManage = navController::navigateToManageCinemas,
@@ -308,6 +330,16 @@ fun CinexApp(
 }
 
 private fun <T> barSpec() = tween<T>(CinexTransitions.DURATION_MS, easing = FastOutSlowInEasing)
+
+/** Whether this entry is the screen [target] opens: that visit's form, or with "Show ticket" its ticket. */
+private fun NavBackStackEntry?.shows(target: ReminderTarget): Boolean {
+    val destination = this?.destination ?: return false
+    return if (target.showTicket) {
+        destination.hasRoute(TicketRoute::class) && toRoute<TicketRoute>().visitId == target.visitId
+    } else {
+        destination.hasRoute(EditVisitRoute::class) && toRoute<EditVisitRoute>().visitId == target.visitId
+    }
+}
 
 private fun NavDestination?.isOn(tab: TopLevelDestination): Boolean =
     this?.hierarchy?.any { it.hasRoute(tab.route::class) } == true

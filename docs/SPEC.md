@@ -2,7 +2,7 @@
 
 **Status:** v1.3.0 released (2026-10-17); v1.4 (ticket import, ticket QR code, reminders) specified
 **Owner:** katznmeik
-**Last updated:** 2026-10-18 (rev. 33)
+**Last updated:** 2026-10-19 (rev. 35)
 
 ---
 
@@ -737,11 +737,13 @@ a–d stay ideas.
 4. Reminders are scheduled again whenever a visit is saved, changed or
    deleted, the settings change, the phone restarts, the app is updated, the
    time zone changes or a backup is imported.
-5. They use Android's normal (inexact) alarms, so a reminder can arrive a few
-   minutes late; the app does not ask for the exact-alarm permission.
-6. New permissions: notifications (`POST_NOTIFICATIONS`, asked at runtime) and
-   receiving the restart broadcast (`RECEIVE_BOOT_COMPLETED`). Nothing is
-   downloaded; the reminders work entirely on the phone.
+5. They use Android's exact alarms, so a reminder arrives on time, also when the
+   app hasn't been opened for days; the phone is woken only at the reminders'
+   times (and again, with growing pauses, if planning fails).
+6. New permissions: notifications (`POST_NOTIFICATIONS`, asked at runtime),
+   receiving the restart broadcast (`RECEIVE_BOOT_COMPLETED`) and exact alarms
+   (`USE_EXACT_ALARM`, granted at install, no prompt). Nothing is downloaded;
+   the reminders work entirely on the phone.
 7. Tapping "Show ticket" opens the ticket (§6.11); tapping the notification
    itself opens the visit (§6.4).
 
