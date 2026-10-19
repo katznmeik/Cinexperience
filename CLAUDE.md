@@ -218,8 +218,11 @@ Don't duplicate config in module build files.
   import; a failing repository is retried without limit, nothing is thrown, `Throwable`
   is caught; the retry pause starts at 5 s again once data arrives), `rescheduleNow`
   after every alarm and from `ReminderRestartReceiver` (exported; boot, package replaced,
-  time zone; checks the action; 50 s for background broadcasts, 8 s for foreground ones;
-  on failure a retry check-in in 15 min, always set again, also when one is stored).
+  time zone; checks the action; 50 s for background broadcasts, alarms included, 8 s for
+  foreground ones). A failed plan in a receiver sets a retry check-in after growing
+  pauses (`ReminderRetry`: 15, 30, 60, 120, then 240 min; the count of failed plans is
+  stored with it and reset by the next plan that works); one still ahead is set again
+  at its time (Android drops alarms on a restart).
   `AlarmReminderScheduler`: exact alarms, one per planned reminder at its time
   (`setExactAndAllowWhileIdle(RTC_WAKEUP)`), so a reminder comes on time also when the
   app hasn't been opened for days (App Standby limits inexact alarms); the app holds
@@ -229,18 +232,23 @@ Don't duplicate config in module build files.
   alarm and calendar apps: don't publish it there without rethinking this. Immutable
   broadcasts to the non-exported `ReminderAlarmReceiver`; keys with trigger times in
   `reminder_alarms.xml`; an alarm whose time has passed is never cancelled (it may be on
-  its way), only unwanted ones still ahead. A posted reminder is marked there
-  (`markPosted`, until its time has passed), so the plan after its alarm never sets it
-  again, also when the alarm came a moment early. At fire time `ReminderNotifier` posts
-  only if `isStillDue` and the permission allow. Notifications: channels "Showtime
-  reminders" and "Rate your visit", `setOnlyAlertOnce`, `VISIBILITY_PRIVATE` with a
-  public version without film, cinema or seat (Android's "sensitive notifications"
-  setting decides what the lock screen shows), never the booking number, texts through
-  `isolate()`, "Show ticket" only with a kept QR code. Taps go to `MainActivity`
+  its way), only unwanted ones still ahead. A posted reminder is marked there by its
+  showing (`markPosted`: visit, kind, date and start time, not its time) until no plan
+  can have it any more (`ReminderSchedule.lastPossibleAt`: the start, for "Rate your
+  visit" start + 600 + 30 min), so no plan sets it again, also when its alarm came a
+  moment early or its time changed (lead time, runtime); a moved showing is a new one.
+  At fire time the receiver skips a reminder marked already (`isPosted`), and
+  `ReminderNotifier` posts only if `isStillDue` and the permission allow.
+  Notifications: channels "Showtime reminders" and "Rate your visit",
+  `setOnlyAlertOnce`, `VISIBILITY_PRIVATE` with a public version without film, cinema
+  or seat (Android's "sensitive notifications" setting decides what the lock screen
+  shows), never the booking number, texts through `isolate()`, "Show ticket" only with
+  a kept QR code. Taps go to `MainActivity`
   (`ReminderIntents`, `IncomingReminderViewModel`; once, like the ticket intents; only
   with the per-install `ReminderIntentToken` in `reminder_intents.xml`, so another app's
-  intent opens nothing; a token that couldn't be stored is never handed out: that
-  notification has no tap targets, the next one tries again) and only navigate
+  intent opens nothing; a token that couldn't be stored is never handed out, and is taken
+  out of memory again, where Android keeps a failed commit's value: that notification has
+  no tap targets, the next one tries again) and only navigate
   (`EditVisitRoute`, `TicketRoute`; not again if that screen is shown).
   `reminder_alarms.xml` and `reminder_intents.xml` are phone-local: Auto Backup excludes
   them. No logs with visit data.

@@ -2,7 +2,7 @@
 
 **Status:** v1.3.0 released (2026-10-17); v1.4 (ticket import, ticket QR code, reminders) specified
 **Owner:** katznmeik
-**Last updated:** 2026-10-19 (rev. 34)
+**Last updated:** 2026-10-19 (rev. 35)
 
 ---
 
@@ -739,7 +739,7 @@ a–d stay ideas.
    time zone changes or a backup is imported.
 5. They use Android's exact alarms, so a reminder arrives on time, also when the
    app hasn't been opened for days; the phone is woken only at the reminders'
-   times (and once more if planning after a restart fails).
+   times (and again, with growing pauses, if planning fails).
 6. New permissions: notifications (`POST_NOTIFICATIONS`, asked at runtime),
    receiving the restart broadcast (`RECEIVE_BOOT_COMPLETED`) and exact alarms
    (`USE_EXACT_ALARM`, granted at install, no prompt). Nothing is downloaded;
