@@ -57,6 +57,9 @@ class TicketAccessibilityTest(private val fontScale: Float) {
     fun withQrCode() = check("ticket_qr", TicketScreenStates.withQrCode())
 
     @Test
+    fun withMembershipCard() = check("ticket_qr_membership_card", TicketScreenStates.withMembershipCard())
+
+    @Test
     fun qrCodeRemoved() = check("ticket_qr_removed", TicketScreenStates.qrCodeRemoved())
 
     @Test

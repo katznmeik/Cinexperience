@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.katznmeik.cinexperience.core.ui.component.LabelChip
 import io.github.katznmeik.cinexperience.core.ui.component.MutedText
+import io.github.katznmeik.cinexperience.core.ui.component.OutlinedPillButton
 import io.github.katznmeik.cinexperience.core.ui.component.TopBarIconButton
 import io.github.katznmeik.cinexperience.core.ui.icon.CinexIcons
 import io.github.katznmeik.cinexperience.core.ui.text.dayHeaderText
@@ -37,9 +38,9 @@ import io.github.katznmeik.cinexperience.core.ui.text.timeText
 import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 
 @Composable
-internal fun TicketEntry(viewModel: TicketViewModel, onBack: () -> Unit) {
+internal fun TicketEntry(viewModel: TicketViewModel, onBack: () -> Unit, onShowMembershipCard: () -> Unit) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    TicketScreen(state, onBack)
+    TicketScreen(state, onBack, onShowMembershipCard = onShowMembershipCard)
 }
 
 /** Shown without a ticket (or without its visit). */
@@ -79,17 +80,23 @@ internal fun TicketDetails.placeText(): String? =
  * brightness with the screen kept on while it is shown; below it the film, day and
  * start time, cinema · hall, all seats (the visit's own one marked) and the booking
  * number in large type. Without a QR code the booking number comes first, with a
- * note why. Everything but the QR panel stays dark (spec §7).
+ * note why. Everything but the QR panel stays dark (spec §7). With a membership card
+ * stored, "Show membership card" follows (v1.5).
  */
 @Composable
-internal fun TicketScreen(state: TicketContent, onBack: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TicketScreen(
+    state: TicketContent,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    onShowMembershipCard: () -> Unit = {},
+) {
     Column(modifier.fillMaxSize()) {
         TicketTopBar(onBack)
         when (state) {
             TicketContent.Loading -> Unit
             TicketContent.NotFound -> MutedText(TICKET_NOT_FOUND, Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
             is TicketContent.Error -> MutedText(state.message, Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-            is TicketContent.Shown -> TicketBody(state.ticket)
+            is TicketContent.Shown -> TicketBody(state.ticket, onShowMembershipCard.takeIf { state.hasMembershipCard })
         }
     }
 }
@@ -115,7 +122,7 @@ private fun TicketTopBar(onBack: () -> Unit) {
 }
 
 @Composable
-private fun TicketBody(ticket: TicketDetails) {
+private fun TicketBody(ticket: TicketDetails, onShowMembershipCard: (() -> Unit)?) {
     // The height below the top bar: the QR code is never taller than that, so it always fits (landscape).
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val qrMaxSide = maxHeight - BODY_TOP_PADDING - QR_BOTTOM_ROOM
@@ -148,6 +155,9 @@ private fun TicketBody(ticket: TicketDetails) {
                     )
                 }
                 ShowingDetails(ticket)
+            }
+            if (onShowMembershipCard != null) {
+                OutlinedPillButton(text = "Show membership card", onClick = onShowMembershipCard, icon = null)
             }
         }
     }

@@ -137,6 +137,17 @@ object CinexIcons {
     /** A page with an arrow into it: importing a file, e.g. a ticket PDF (Settings → Import ticket). */
     val ImportFile: ImageVector by lazy { strokeIcon("ImportFile", "M6 3h8l4 4v14H6z", "M14 3v4h4", "M12 10v7M9 14l3 3l3-3") }
 
+    /** A card with a portrait and two lines: the membership card (Settings → Membership card, v1.5). */
+    val MembershipCard: ImageVector by lazy {
+        strokeIcon(
+            "MembershipCard",
+            "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z",
+            "M8.5 8.5a1.75 1.75 0 1 0 0 3.5a1.75 1.75 0 1 0 0-3.5z",
+            "M5.75 16a2.75 2.75 0 0 1 5.5 0",
+            "M14 10h4M14 14h3",
+        )
+    }
+
     /** Seat kind glyphs (see [SeatKindGlyphs]), as icons for the editor's seat type chips. */
     val Wheelchair: ImageVector by lazy { strokeIcon("Wheelchair", *SeatKindGlyphs.Wheelchair.toTypedArray()) }
 

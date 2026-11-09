@@ -28,6 +28,9 @@ internal object TicketScreenStates {
     /** Two days before the showing, with the QR code. */
     fun withQrCode(): TicketContent = of()
 
+    /** [withQrCode] with a membership card stored: "Show membership card" (v1.5, spec §6.11). */
+    fun withMembershipCard(): TicketContent = (of() as TicketContent.Shown).copy(hasMembershipCard = true)
+
     /** Ten days after the showing: the QR code was removed. */
     fun qrCodeRemoved(): TicketContent =
         of(SampleTickets.store(tickets = listOf(SampleTickets.ticket(qr = null))), showing.qrModulesExpireAt.plus(Duration.ofDays(3)))

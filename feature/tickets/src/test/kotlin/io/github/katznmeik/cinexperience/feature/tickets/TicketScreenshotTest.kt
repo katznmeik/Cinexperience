@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.katznmeik.cinexperience.core.testing.MainDispatcherRule
 import io.github.katznmeik.cinexperience.core.testing.PHONE_QUALIFIERS
@@ -36,9 +37,10 @@ class TicketScreenshotTest {
     val composeRule = createComposeRule()
 
     private var backs = 0
+    private var cardsShown = 0
 
     private fun capture(name: String, state: TicketContent) {
-        composeRule.setContent { ScreenshotSurface { TicketScreen(state, onBack = { backs++ }) } }
+        composeRule.setContent { ScreenshotSurface { TicketScreen(state, onBack = { backs++ }, onShowMembershipCard = { cardsShown++ }) } }
         composeRule.waitForIdle()
         composeRule.onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
     }
@@ -52,6 +54,21 @@ class TicketScreenshotTest {
         composeRule.onNodeWithContentDescription("Row 7, Seat 11").assertExists()
         composeRule.onNodeWithText("Saturday 17 Oct · 20:15").assertExists()
         composeRule.onNodeWithText("delphi LUX · Saal 4").assertExists()
+    }
+
+    /** With a membership card stored, "Show membership card" follows the booking number and opens the card (v1.5). */
+    @Test
+    @Config(qualifiers = "w412dp-h1400dp-port-night-xxhdpi")
+    fun withMembershipCard() {
+        capture("ticket_qr_membership_card", TicketScreenStates.withMembershipCard())
+        composeRule.onNodeWithText("Show membership card").performScrollTo().performClick()
+        assertEquals(1, cardsShown)
+    }
+
+    @Test
+    fun withoutMembershipCardNoButton() {
+        composeRule.setContent { ScreenshotSurface { TicketScreen(TicketScreenStates.withQrCode(), onBack = {}) } }
+        composeRule.onNodeWithText("Show membership card").assertDoesNotExist()
     }
 
     /** In landscape the height limits the QR code: it fits on the screen whole, centred, without scrolling. */

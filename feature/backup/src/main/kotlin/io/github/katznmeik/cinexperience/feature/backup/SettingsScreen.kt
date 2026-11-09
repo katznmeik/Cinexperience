@@ -96,6 +96,7 @@ internal fun SettingsEntry(
     onOpenManage: () -> Unit,
     onOpenAllVisits: () -> Unit,
     onImportTicket: (uri: String) -> Unit = {},
+    onOpenMembershipCard: () -> Unit = {},
     onRunsBackupImportChanged: (Boolean) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -154,6 +155,7 @@ internal fun SettingsEntry(
         actions = actions,
         programActions = programActions,
         onImportTicket = onPickTicket,
+        onOpenMembershipCard = onOpenMembershipCard,
         reminders = reminderState,
         reminderActions = reminderActions,
     )
@@ -219,6 +221,7 @@ internal fun SettingsScreen(
     actions: BackupActions = BackupActions.None,
     programActions: ProgramSettingsActions = ProgramSettingsActions.None,
     onImportTicket: () -> Unit = {},
+    onOpenMembershipCard: () -> Unit = {},
     reminders: ReminderSettingsState = ReminderSettingsState.OFF,
     reminderActions: ReminderSettingsActions = ReminderSettingsActions.None,
 ) {
@@ -263,6 +266,14 @@ internal fun SettingsScreen(
                     subtitle = IMPORT_TICKET_SUBTITLE,
                     enabled = !importing,
                     onClick = onImportTicket,
+                )
+                RowDivider()
+                SettingsRow(
+                    icon = CinexIcons.MembershipCard,
+                    title = "Membership card",
+                    subtitle = MEMBERSHIP_CARD_SUBTITLE,
+                    enabled = !importing,
+                    onClick = onOpenMembershipCard,
                 )
             }
             Section("Reminders") { ReminderRows(reminders, enabled = !importing, reminderActions) }

@@ -1,6 +1,7 @@
 package io.github.katznmeik.cinexperience.core.testing
 
 import io.github.katznmeik.cinexperience.core.model.BookingNumber
+import io.github.katznmeik.cinexperience.core.model.MembershipCard
 import io.github.katznmeik.cinexperience.core.model.QrModules
 import io.github.katznmeik.cinexperience.core.model.ScreeningFormat
 import io.github.katznmeik.cinexperience.core.model.SeatId
@@ -104,4 +105,20 @@ object SampleTickets {
             tickets = s.tickets + tickets,
         )
     }
+}
+
+/**
+ * An INVENTED membership card (spec §4.8) for tests and screenshots, never a real
+ * one: "Alex Example", membership number "TEST-0042", "Yorck Unlimited", with the
+ * invented QR modules of [SampleTickets.qrModules] (a version-2 grid, so it differs
+ * from the ticket's).
+ */
+object SampleMembershipCard {
+    const val NAME: String = "Alex Example"
+    const val MEMBER_NUMBER: String = "TEST-0042"
+    const val MEMBERSHIP_TYPE: String = "Yorck Unlimited"
+
+    val qrModules: QrModules get() = SampleTickets.qrModules(25)
+
+    val card: MembershipCard get() = MembershipCard(NAME, MEMBER_NUMBER, MEMBERSHIP_TYPE, qrModules)
 }

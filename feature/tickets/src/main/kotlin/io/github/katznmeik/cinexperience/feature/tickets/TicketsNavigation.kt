@@ -10,6 +10,7 @@ import io.github.katznmeik.cinexperience.core.data.repository.CinemaRepository
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
+import io.github.katznmeik.cinexperience.core.data.settings.MembershipCardStore
 import io.github.katznmeik.cinexperience.core.model.VisitPrefillArgs
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
 import io.github.katznmeik.cinexperience.core.ui.component.ScreenBackground
@@ -44,23 +45,29 @@ data class ImportTicketRoute(val uri: String? = null)
 fun NavController.navigateToImportTicket(uri: String?) = navigate(ImportTicketRoute(uri))
 
 /**
+ * @param membershipCardStore whether a membership card is stored: then "Show membership
+ *   card" is offered (v1.5, spec §6.11).
  * @param clock "now" for the QR code's expiry (7 days after the showing) and "Today".
+ * @param onShowMembershipCard opens the membership card (spec §6.12).
  */
 fun NavGraphBuilder.ticketScreen(
     visitRepository: VisitRepository,
     hallRepository: HallRepository,
     ticketRepository: TicketRepository,
+    membershipCardStore: MembershipCardStore,
     clock: Clock,
     onBack: () -> Unit,
+    onShowMembershipCard: () -> Unit,
 ) {
     composable<TicketRoute> { entry ->
         val visitId = entry.toRoute<TicketRoute>().visitId
         ScreenBackground {
             TicketEntry(
                 viewModel = viewModel(
-                    factory = TicketViewModel.factory(visitId, visitRepository, hallRepository, ticketRepository, clock),
+                    factory = TicketViewModel.factory(visitId, visitRepository, hallRepository, ticketRepository, membershipCardStore, clock),
                 ),
                 onBack = dropUnlessResumed(block = onBack),
+                onShowMembershipCard = dropUnlessResumed(block = onShowMembershipCard),
             )
         }
     }

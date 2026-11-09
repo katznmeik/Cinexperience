@@ -23,6 +23,8 @@ data object SettingsRoute
  * @param onImportTicket imports the ticket PDF the file picker returned (Data → Import
  *   ticket, spec §6.7, §6.10), as a `content:` URI; the picker's read permission lasts
  *   while the app runs (no persistable permission is taken).
+ * @param onOpenMembershipCard opens the membership card (Data → Membership card, v1.5,
+ *   spec §6.7, §6.12).
  * @param onRunsBackupImportChanged whether this screen runs a backup import now: the
  *   app covers every other screen meanwhile (also in another window of the app), not this one.
  */
@@ -36,6 +38,7 @@ fun NavGraphBuilder.settingsScreen(
     onOpenManage: () -> Unit,
     onOpenAllVisits: () -> Unit,
     onImportTicket: (uri: String) -> Unit = {},
+    onOpenMembershipCard: () -> Unit = {},
     onRunsBackupImportChanged: (Boolean) -> Unit = {},
 ) {
     composable<SettingsRoute> {
@@ -47,6 +50,7 @@ fun NavGraphBuilder.settingsScreen(
                 onOpenAllVisits = dropUnlessResumed(block = onOpenAllVisits),
                 // Not dropped unless resumed: the picker's result arrives while the screen is only started.
                 onImportTicket = onImportTicket,
+                onOpenMembershipCard = dropUnlessResumed(block = onOpenMembershipCard),
                 onRunsBackupImportChanged = onRunsBackupImportChanged,
             )
         }

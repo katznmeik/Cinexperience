@@ -52,5 +52,8 @@ internal fun safetyCopiesSummary(copies: List<SafetyCopy>, zone: ZoneId = ZoneId
 /** Subtitle of Data → "Import ticket" (spec §6.7, §6.10). */
 internal const val IMPORT_TICKET_SUBTITLE = "Fills in a visit from a Yorck ticket PDF"
 
+/** Subtitle of Data → "Membership card" (v1.5, spec §6.7, §6.12). */
+internal const val MEMBERSHIP_CARD_SUBTITLE = "Your Yorck card's QR code for the entrance"
+
 /** "45%" */
 internal fun percentText(progress: Float): String = "${(progress.coerceIn(0f, 1f) * 100).roundToInt()}%"
