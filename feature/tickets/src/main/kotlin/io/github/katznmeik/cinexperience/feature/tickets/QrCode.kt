@@ -25,7 +25,7 @@ import io.github.katznmeik.cinexperience.core.ui.theme.CinexTheme
 /** Light modules around the code on every side (the QR standard's quiet zone). */
 internal const val QUIET_ZONE_MODULES = 4
 
-/** Read by screen readers for the QR code. */
+/** Read by screen readers for the ticket's QR code. */
 internal const val QR_CODE_DESCRIPTION = "Ticket QR code"
 
 /**
@@ -45,14 +45,19 @@ internal data class QrGeometry(val modulePx: Int, val offsetPx: Int) {
 }
 
 /**
- * The ticket's QR code (spec §6.11, §7): black modules on a white panel with the
+ * The ticket's QR code (spec §6.11, §7), also the membership card's (§6.12): black modules on a white panel with the
  * quiet zone, drawn from [modules] (the app never decodes or generates QR codes),
  * as large as the width allows and at most [maxSide] (the visible height, so the
  * code always fits, also in landscape), centred. The panel is the one light
  * surface in the app.
  */
 @Composable
-internal fun QrCodePanel(modules: QrModules, modifier: Modifier = Modifier, maxSide: Dp = Dp.Infinity) {
+internal fun QrCodePanel(
+    modules: QrModules,
+    modifier: Modifier = Modifier,
+    maxSide: Dp = Dp.Infinity,
+    description: String = QR_CODE_DESCRIPTION,
+) {
     val dark = CinexTheme.colors.ticketQrModule
     val light = CinexTheme.colors.ticketQrBackground
     BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
@@ -61,7 +66,7 @@ internal fun QrCodePanel(modules: QrModules, modifier: Modifier = Modifier, maxS
                 .size(minOf(maxWidth, maxSide).coerceAtLeast(0.dp))
                 .clip(RoundedCornerShape(8.dp))
                 .semantics {
-                    contentDescription = QR_CODE_DESCRIPTION
+                    contentDescription = description
                     role = Role.Image
                 },
         ) { drawQrCode(modules, dark, light) }

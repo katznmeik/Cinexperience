@@ -13,6 +13,7 @@ import io.github.katznmeik.cinexperience.core.data.repository.RankingsRepository
 import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideRepository
 import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
+import io.github.katznmeik.cinexperience.core.data.settings.MembershipCardStore
 import io.github.katznmeik.cinexperience.core.data.settings.ReminderSettingsStore
 import io.github.katznmeik.cinexperience.core.program.DefaultProgramRepository
 import io.github.katznmeik.cinexperience.core.program.ProgramRepository
@@ -22,6 +23,8 @@ import io.github.katznmeik.cinexperience.feature.tickets.importing.ContentTicket
 import io.github.katznmeik.cinexperience.feature.tickets.importing.DefaultTicketReader
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketFileSource
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketReader
+import io.github.katznmeik.cinexperience.feature.tickets.membership.CardImageReader
+import io.github.katznmeik.cinexperience.feature.tickets.membership.DefaultCardImageReader
 import io.github.katznmeik.cinexperience.reminders.AlarmReminderScheduler
 import io.github.katznmeik.cinexperience.reminders.ReminderCoordinator
 import io.github.katznmeik.cinexperience.reminders.ReminderIntentToken
@@ -93,6 +96,21 @@ interface AppContainer {
     val ticketReader: TicketReader get() = DefaultTicketReader
 
     /**
+     * The owner's membership card (v1.5, spec §4.8): phone-local, neither in the backup
+     * file nor in Auto Backup.
+     */
+    val membershipCardStore: MembershipCardStore
+
+    /**
+     * Opens the membership card's screenshot: a `content:` URI of the photo picker,
+     * read like the ticket file ([ticketFileSource]).
+     */
+    val cardImageSource: TicketFileSource get() = ticketFileSource
+
+    /** Finds the QR code in the membership card's screenshot (core:ticket, spec §11.4). */
+    val cardImageReader: CardImageReader get() = DefaultCardImageReader
+
+    /**
      * "Now" for the Program tab, the film page, a cinema's "Now showing", the Next
      * visit card, the upcoming visits, the ticket screen and the QR codes' expiry at
      * start: the system clock.
@@ -129,6 +147,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val visitPhotoStore: VisitPhotoStore get() = data.visitPhotoStore
     override val backupRepository: BackupRepository get() = data.backupRepository
     override val reminderSettingsStore: ReminderSettingsStore get() = data.reminderSettingsStore
+    override val membershipCardStore: MembershipCardStore get() = data.membershipCardStore
 
     override val rankingsRepository: RankingsRepository by lazy {
         CinemaRankingsRepository(cinemaRepository, visitRepository)

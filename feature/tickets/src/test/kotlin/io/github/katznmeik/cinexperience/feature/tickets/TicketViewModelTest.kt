@@ -9,6 +9,7 @@ import io.github.katznmeik.cinexperience.core.testing.MutableClock
 import io.github.katznmeik.cinexperience.core.testing.SampleProgram
 import io.github.katznmeik.cinexperience.core.testing.SampleTickets
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -146,5 +147,25 @@ class TicketViewModelTest {
     fun aLoadFailureIsAMessage() = runTest {
         val failing = FakeCinexRepository(SampleTickets.store()).apply { observeFailure = IOException("db") }
         assertEquals(TicketContent.Error(TicketViewModel.LOAD_FAILED), viewModel(repository = failing).uiState.value)
+    }
+
+    /** "Show membership card" follows whether a card is stored (v1.5, spec §6.11); a failing store means none. */
+    @Test
+    fun offersTheMembershipCardWhileOneIsStored() = runTest {
+        val repository = FakeCinexRepository(SampleTickets.store())
+        val cards = MutableStateFlow(false)
+        val vm = TicketViewModel(SampleTickets.VISIT, repository, repository, repository, clock, ticks.map { }, hasMembershipCard = cards)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+
+        assertEquals(false, (vm.uiState.value as TicketContent.Shown).hasMembershipCard)
+        cards.value = true
+        assertEquals(true, (vm.uiState.value as TicketContent.Shown).hasMembershipCard)
+
+        val failing = TicketViewModel(
+            SampleTickets.VISIT, repository, repository, repository, clock, ticks.map { },
+            hasMembershipCard = flow { throw IOException("unreadable") },
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { failing.uiState.collect {} }
+        assertEquals(false, (failing.uiState.value as TicketContent.Shown).hasMembershipCard)
     }
 }

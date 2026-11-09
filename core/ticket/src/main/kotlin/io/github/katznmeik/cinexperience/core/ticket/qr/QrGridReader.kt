@@ -128,7 +128,7 @@ internal object QrGridReader {
     }
 
     /** Iterative intermeans (Ridler–Calvard): halfway between the mean dark and the mean light luminance. */
-    private fun threshold(image: LuminanceImage): Double? {
+    internal fun threshold(image: LuminanceImage): Double? {
         val histogram = LongArray(256)
         for (y in 0 until image.height) for (x in 0 until image.width) histogram[image.luminance(x, y)]++
         var threshold = histogram.indices.sumOf { it * histogram[it] }.toDouble() / histogram.sum()

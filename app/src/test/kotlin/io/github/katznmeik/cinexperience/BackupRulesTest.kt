@@ -2,9 +2,11 @@ package io.github.katznmeik.cinexperience
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import io.github.katznmeik.cinexperience.core.data.settings.SharedPreferencesMembershipCardStore
 import io.github.katznmeik.cinexperience.core.data.settings.SharedPreferencesReminderSettingsStore
 import io.github.katznmeik.cinexperience.core.model.ReminderKind
 import io.github.katznmeik.cinexperience.core.program.ProgramFiles
+import io.github.katznmeik.cinexperience.core.testing.SampleMembershipCard
 import io.github.katznmeik.cinexperience.reminders.AlarmReminderScheduler
 import io.github.katznmeik.cinexperience.reminders.ReminderIntentToken
 import kotlinx.coroutines.Dispatchers
@@ -46,8 +48,12 @@ class BackupRulesTest {
         return includes to excludes
     }
 
-    /** The reminders' phone-local preference files (spec §11.3): their alarms' bookkeeping and the intents' token. */
-    private val phoneLocal = listOf("sharedpref/reminder_alarms.xml", "sharedpref/reminder_intents.xml")
+    /**
+     * The phone-local preference files: the reminders' alarms' bookkeeping and the intents'
+     * token (spec §11.3), and the membership card (v1.5, spec §4.8, §8: the owner's name and
+     * membership number stay on the phone).
+     */
+    private val phoneLocal = listOf("sharedpref/reminder_alarms.xml", "sharedpref/reminder_intents.xml", "sharedpref/membership_card.xml")
 
     @Test
     fun onlyTheDatabaseAndPreferencesAreBackedUp() {
@@ -94,11 +100,26 @@ class BackupRulesTest {
 
     /** The names the exclusions use are the files' real names. */
     @Test
-    fun theExcludedFilesAreTheRemindersPhoneLocalOnes() {
+    fun theExcludedFilesAreThePhoneLocalOnes() {
         assertEquals(
             phoneLocal,
-            listOf(AlarmReminderScheduler.PREFERENCES_NAME, ReminderIntentToken.PREFERENCES_NAME).map { "sharedpref/$it.xml" },
+            listOf(AlarmReminderScheduler.PREFERENCES_NAME, ReminderIntentToken.PREFERENCES_NAME, SharedPreferencesMembershipCardStore.PREFERENCES_NAME)
+                .map { "sharedpref/$it.xml" },
         )
+    }
+
+    /** The membership card is written to the file the rules exclude. */
+    @Test
+    fun theMembershipCardIsNotBackedUp() {
+        val store = SharedPreferencesMembershipCardStore(context, Dispatchers.Unconfined)
+        assertTrue(runBlocking { store.save(SampleMembershipCard.card) })
+        val file = File(context.dataDir, "shared_prefs/${SharedPreferencesMembershipCardStore.PREFERENCES_NAME}.xml")
+        assertTrue(file.path, file.isFile)
+        val (_, excludes) = rules(R.xml.data_extraction_rules)
+        val (_, legacyExcludes) = rules(R.xml.backup_rules)
+        assertTrue(excludes.contains("cloud-backup" to "sharedpref/" + file.name))
+        assertTrue(excludes.contains("device-transfer" to "sharedpref/" + file.name))
+        assertTrue(legacyExcludes.contains(null to "sharedpref/" + file.name))
     }
 
     @Test

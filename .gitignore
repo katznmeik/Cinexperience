@@ -27,6 +27,15 @@ yorck-pages/
 /tickets/
 *.ticket.pdf
 
+# Real membership card screenshots for RealMembershipCardTest
+# (CINEX_MEMBERSHIP_CARD_IMAGE): they hold a name, a membership number and a QR
+# code and are never committed (spec §11.4). Keep them in cards/ at the
+# repository root or name them *.card.jpg / *.card.png.
+/cards/
+*.card.jpg
+*.card.jpeg
+*.card.png
+
 # Signing material — never commit (spec §14.4)
 *.jks
 *.keystore

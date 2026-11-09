@@ -60,6 +60,9 @@ import io.github.katznmeik.cinexperience.feature.seatmap.navigateToLayoutEditor
 import io.github.katznmeik.cinexperience.feature.tickets.ImportTicketRoute
 import io.github.katznmeik.cinexperience.feature.tickets.TicketRoute
 import io.github.katznmeik.cinexperience.feature.tickets.importing.TicketUris
+import io.github.katznmeik.cinexperience.feature.tickets.membership.membershipCardScreens
+import io.github.katznmeik.cinexperience.feature.tickets.membership.navigateToEditMembershipCard
+import io.github.katznmeik.cinexperience.feature.tickets.membership.navigateToMembershipCard
 import io.github.katznmeik.cinexperience.feature.tickets.navigateToImportTicket
 import io.github.katznmeik.cinexperience.feature.tickets.navigateToTicket
 import io.github.katznmeik.cinexperience.feature.tickets.ticketImportScreen
@@ -247,8 +250,18 @@ fun CinexApp(
                 visitRepository = container.visitRepository,
                 hallRepository = container.hallRepository,
                 ticketRepository = container.ticketRepository,
+                membershipCardStore = container.membershipCardStore,
                 clock = container.clock,
                 onBack = navController::navigateUp,
+                onShowMembershipCard = navController::navigateToMembershipCard,
+            )
+            // The membership card with its QR code, and its form (v1.5, spec §6.12, §6.13).
+            membershipCardScreens(
+                store = container.membershipCardStore,
+                fileSource = container.cardImageSource,
+                reader = container.cardImageReader,
+                onBack = navController::navigateUp,
+                onEdit = navController::navigateToEditMembershipCard,
             )
             // The ticket import (v1.4, spec §6.10): Share, Open with, Settings → Import ticket.
             // It replaces itself with Add visit, or with the visit that has the ticket already.
@@ -309,6 +322,7 @@ fun CinexApp(
                 onImportTicket = { uri ->
                     if (!importing) navController.navigateToImportTicket(uri.takeIf { it.length <= TicketUris.MAX_LENGTH })
                 },
+                onOpenMembershipCard = { if (!importing) navController.navigateToMembershipCard() },
                 onRunsBackupImportChanged = { runsBackupImport = it },
             )
             manageCinemasScreen(

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.katznmeik.cinexperience.core.data.repository.HallRepository
 import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
+import io.github.katznmeik.cinexperience.core.data.settings.MembershipCardStore
 import io.github.katznmeik.cinexperience.core.model.BookingNumber
 import io.github.katznmeik.cinexperience.core.model.HallDetail
 import io.github.katznmeik.cinexperience.core.model.QrModules
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.Clock
 import java.time.Instant
@@ -41,7 +43,8 @@ sealed interface TicketContent {
 
     data class Error(val message: String) : TicketContent
 
-    data class Shown(val ticket: TicketDetails) : TicketContent
+    /** [hasMembershipCard]: "Show membership card" is offered (v1.5, spec §6.11). */
+    data class Shown(val ticket: TicketDetails, val hasMembershipCard: Boolean = false) : TicketContent
 }
 
 /** Why the screen shows the booking number without a QR code. */
@@ -83,6 +86,7 @@ data class TicketDetails(
  * seats and the booking number. It only reads; it works offline.
  *
  * @param ticks re-evaluates "now" (default: every minute), so an expired QR code goes.
+ * @param hasMembershipCard whether a membership card is stored (spec §6.11, v1.5).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TicketViewModel(
@@ -92,7 +96,11 @@ class TicketViewModel(
     ticketRepository: TicketRepository,
     private val clock: Clock,
     ticks: Flow<Unit> = minuteTicks(),
+    hasMembershipCard: Flow<Boolean> = flowOf(false),
 ) : ViewModel() {
+
+    /** A card that can't be read is no card: the ticket shows without the button. */
+    private val cardStored = hasMembershipCard.catch { emit(false) }.distinctUntilChanged()
 
     val uiState: StateFlow<TicketContent> =
         combine(visitRepository.observeVisit(visitId), ticketRepository.observeTicket(visitId)) { visit, ticket -> visit to ticket }
@@ -101,8 +109,8 @@ class TicketViewModel(
                 if (visit == null || ticket == null) {
                     flowOf(TicketContent.NotFound)
                 } else {
-                    combine(hallRepository.observeHallDetail(visit.hallId), ticks) { hall, _ ->
-                        TicketContent.Shown(details(visit, ticket, hall, clock.instant()))
+                    combine(hallRepository.observeHallDetail(visit.hallId), ticks, cardStored) { hall, _, card ->
+                        TicketContent.Shown(details(visit, ticket, hall, clock.instant()), hasMembershipCard = card)
                     }
                 }
             }
@@ -118,9 +126,15 @@ class TicketViewModel(
             visitRepository: VisitRepository,
             hallRepository: HallRepository,
             ticketRepository: TicketRepository,
+            membershipCardStore: MembershipCardStore,
             clock: Clock,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { TicketViewModel(visitId, visitRepository, hallRepository, ticketRepository, clock) }
+            initializer {
+                TicketViewModel(
+                    visitId, visitRepository, hallRepository, ticketRepository, clock,
+                    hasMembershipCard = membershipCardStore.card.map { it != null },
+                )
+            }
         }
     }
 }

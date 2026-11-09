@@ -1,8 +1,8 @@
 # Cinexperience — Product Specification
 
-**Status:** v1.4.0 released (2026-10-19)
+**Status:** v1.4.0 released (2026-10-19); v1.5.0 (membership card) built, release pending
 **Owner:** katznmeik
-**Last updated:** 2026-10-19 (rev. 37)
+**Last updated:** 2026-11-09 (rev. 39)
 
 ---
 
@@ -22,6 +22,10 @@ app and website lack (e.g. "this week at delphi LUX, starting 16–17 o'clock").
 From v1.4 a Yorck ticket PDF can be shared to the app: it fills in the visit
 (cinema, hall, seat, date and time, film), shows the ticket's QR code for the
 entrance, and reminds before the showing and to rate the visit afterwards.
+
+From v1.5 the app also keeps the owner's Yorck membership card (e.g. Yorck
+Unlimited): a screenshot of the card is added once, and the app shows its QR
+code for the entrance like the ticket's.
 
 ## 2. Goals & non-goals
 
@@ -44,6 +48,11 @@ entrance, and reminds before the showing and to rate the visit afterwards.
 - Import a Yorck ticket PDF from the Share menu into an upcoming visit (§11.2).
 - Show the ticket's QR code for the entrance, offline and sharp (§6.11).
 - Remind before the showing and to rate the visit afterwards (§11.3).
+
+### Goals (v1.5)
+- Add the membership card ("Kundenkarte") from a screenshot and show its QR
+  code for the entrance, offline and sharp, with name, membership number and
+  membership type (§4.8, §6.12, §11.4).
 
 ### Non-goals (v1)
 - Multiple users, accounts, login, cloud sync or a backend server.
@@ -195,6 +204,22 @@ visit.
 Never stored: the PDF itself, the "booked by" name, prices, transaction and
 ticket numbers.
 
+### 4.8 MembershipCard (v1.5)
+At most one: the owner's Yorck membership card ("Kundenkarte"), added from a
+screenshot (§6.13, §11.4).
+
+| Field | Type | Notes |
+|---|---|---|
+| name | String? | as typed by the owner (the app can't read it from the image); ≤ 100 characters |
+| memberNumber | String? | "Mitgliedsnummer", as typed; ≤ 40 characters |
+| membershipType | String? | "Art der Mitgliedschaft", as typed, e.g. "Yorck Unlimited"; ≤ 60 characters |
+| qrModules | bit grid | the card's QR code as read from the screenshot (21 × 21 on the card checked); kept until the card is replaced or removed |
+
+The texts are plain text: surrounding spaces, control and format characters
+are removed, an empty text is "none". The card is kept on the phone only: not
+in the database, not in the backup file and not in Android Auto Backup (§8).
+Never stored: the screenshot itself and anything else on it (photo, page).
+
 ## 5. Rating logic
 
 - **Hall category score** = mean of all non-empty values for that category
@@ -316,7 +341,8 @@ Save is always allowed — nothing besides hall is required.
   Import backup (validates, previews, warns that it replaces all data), Restore safety copy, Android Auto Backup shown as "On" (§8)
 - **Data:** Manage cinemas & halls (add, rename, delete user-added ones; shows
   counts and how many layouts are drawn); All visits (§6.8); Import ticket
-  (v1.4: picks a ticket PDF with the file picker, §6.10)
+  (v1.4: picks a ticket PDF with the file picker, §6.10); Membership card
+  (v1.5: opens the card, §6.12)
 - **Reminders** (v1.4, §11.3): "Before the showing" switch with the lead time
   (1, 2 or 3 hours; default 2) and "Rate after the visit" switch, both off
   until switched on. Switching one on asks for Android's notification
@@ -395,6 +421,33 @@ Save is always allowed — nothing besides hall is required.
   scanned.
 - Works offline. Seven days after the showing the QR code is removed; the
   screen then shows the booking number with a note.
+- v1.5: when a membership card is stored, "Show membership card" below the
+  booking number opens it (§6.12), e.g. for an entrance that asks for both.
+
+### 6.12 Membership card (v1.5)
+- Opened from Settings → Data → Membership card (§6.7) and from the ticket
+  (§6.11).
+- **No card yet:** a short explanation (take a screenshot of the card on
+  yorck.de → Konto → Übersicht) and "Add membership card" (§6.13).
+- **With a card:** the QR code as large as fits, drawn sharply from its
+  modules, **black on white** (§7), with the brightness at maximum and the
+  screen kept on while it is shown, like the ticket (§6.11). Below: the name,
+  the membership number in large type and the membership type (each only if
+  typed in). Actions: "Edit" (§6.13) and "Remove card" (after a
+  confirmation).
+- Works offline; the card doesn't expire in the app.
+
+### 6.13 Add / edit membership card (v1.5)
+- **Screenshot:** "Choose screenshot" opens Android's photo picker (no
+  permission needed). The app finds the card's QR code in the image (§11.4)
+  and shows it; if none can be read, a clear message says so and nothing
+  changes.
+- **Fields:** Name, Membership number, Membership type ("Yorck Unlimited"
+  pre-filled for a new card); all optional. They are typed in once: the app
+  doesn't read text from the image (no OCR, §11.4).
+- **Save** (needs a QR code) stores the card, replacing the previous one; Back
+  discards the changes. Editing a stored card keeps its QR code unless another
+  screenshot is chosen.
 
 ## 7. Look & feel
 
@@ -407,6 +460,7 @@ Save is always allowed — nothing besides hall is required.
 - **Ticket QR code** (v1.4): the only light surface in the app. The QR code is
   drawn black on a white panel with a quiet zone, because entrance scanners
   read dark-on-light codes reliably; the rest of the ticket screen stays dark.
+  v1.5: the membership card's QR code (§6.12) uses the same panel.
 - Mockups of all v1 screens: https://claude.ai/artifact/24gq7hLsHPUoABFm2Ro8Q9
 - Seats to avoid carry a × mark; the favourite seat carries a ⭐. Seats without
   data have a subtle light rim so they stay visible (≥3:1 contrast).
@@ -451,6 +505,10 @@ Save is always allowed — nothing besides hall is required.
   not in the backup; after a restore, importing the ticket PDF again brings
   the QR code back (the booking number identifies the visit). The reminder
   settings are app settings (Auto Backup, not the backup file).
+- **Membership card (v1.5):** neither in the backup file nor in Auto Backup:
+  it holds the owner's name and membership number, and adding the screenshot
+  again takes seconds (§4.8). A backup import leaves it untouched; the backup
+  format does not change.
 
 ## 9. Preloaded data
 
@@ -522,6 +580,7 @@ can be renamed but not deleted).
 | Serialization | kotlinx.serialization (backup JSON; v1.1 also the program data) |
 | Network (v1.1) | Android's built-in HTTPS client, only in `core:program`; no third-party network or HTML library (§11.1) |
 | Ticket PDF (v1.4) | The app's own small reader for Yorck's ticket PDFs, in `core:ticket`; no PDF, OCR or QR-code library (§11.2) |
+| Membership card (v1.5) | Android's own image decoder; the QR code is found and checked by the app's code in `core:ticket`; no OCR or QR-code library (§11.4) |
 | Reminders (v1.4) | Android's AlarmManager and notifications; no new library (§11.3) |
 | Seat map | Custom Compose `Canvas` with zoom/pan |
 | Build | Gradle (Kotlin DSL), version catalog |
@@ -747,6 +806,51 @@ a–d stay ideas.
 7. Tapping "Show ticket" opens the ticket (§6.11); tapping the notification
    itself opens the visit (§6.4).
 
+### 11.4 v1.5: Membership card
+
+The owner's membership card ("Kundenkarte", e.g. Yorck Unlimited) is shown on
+yorck.de under Konto → Übersicht (screens: §6.12, §6.13). The app never
+accesses the Yorck account or the network for it: the owner takes a screenshot
+and adds it.
+
+**The image** (checked on a phone screenshot, November 2026): the browser's
+page with a white card on top; the card shows the name, a photo placeholder,
+"Mitgliedsnummer" with the number, "Art der Mitgliedschaft" with the type
+("Yorck Unlimited") and a version-1 QR code (21 × 21 modules, about 33 px per
+module), upright, black on white, with other page content (browser bar, page,
+a help button) around the card.
+
+**Reading:**
+- Android's own decoder reads the image (JPEG, PNG or another format it
+  decodes); its size is checked before the pixels are decoded, and large
+  images are decoded at a reduced resolution.
+- The app looks for the QR code's three finder patterns (dark–light–dark–
+  light–dark in the ratio 1:1:3:1:1, across and down). Exactly one code must
+  be found, upright or turned by a quarter, of versions 1–4 (§11.2). Its module
+  grid is then read and checked exactly like the ticket's (§11.2: finder,
+  timing and alignment patterns, format information, error correction); only a
+  grid that passes is kept.
+- The content is never decoded, and the app generates no QR codes: the
+  screen redraws the modules.
+- Name, membership number and membership type are typed in by the owner (no
+  OCR).
+
+**Security & privacy** (binding, like §11.2):
+1. The image is untrusted: at most 20 MB, at most 100 million pixels as stated
+   in the file, decoded to at most 4096 pixels on the longer side and 12
+   million pixels; anything else, an image that can't be decoded, no code,
+   several codes or a slanted code (e.g. a photo of a screen) is refused with a
+   message; nothing is stored.
+2. Only the module grid and the typed texts are kept (§4.8); the image is read
+   in memory only and never stored, logged or shared.
+3. No new permission (Android's photo picker), no network code, no OCR, image
+   or QR-code library.
+4. Tests: invented images (generated screenshots with invented codes), plus
+   damaged, oversized, slanted and several-code variants; the app shows a
+   message and never crashes. A real screenshot is only checked locally (path
+   in an environment variable, file in a git-ignored folder). **No real
+   membership card, name, number or QR code is ever committed.**
+
 ## 12. Milestones
 
 | # | Milestone | Content |
@@ -763,6 +867,7 @@ a–d stay ideas.
 | M9 | Program | Yorck's program with filters, film page, "Now showing", links to yorck.de, log visit from a showing (v1.1, §11.1) |
 | M10 | Ticket import & QR code | Ticket PDF reader, import into Add visit, ticket screen with the QR code, Next visit card, Upcoming in All visits; schema and backup version 3 (v1.4, §11.2, §6.10, §6.11) |
 | M11 | Reminders | Showtime reminder and "Rate your visit" (v1.4, §11.3) |
+| M12 | Membership card | Membership card from a screenshot, its screen with the QR code, "Show membership card" on the ticket (v1.5, §4.8, §6.12, §6.13, §11.4) |
 
 ## 13. Development approach
 
@@ -783,8 +888,8 @@ complexity:
 | `feature:backup` | The Settings tab (§6.7): backup export / import with preview, restore safety copy, Settings → Program, About, entries to Manage cinemas & halls and All visits | Medium |
 | `core:program` | v1.1: downloading, checking and caching Yorck's program; the only module with network code (§11.1) | High |
 | `feature:program` | v1.1: Program tab, filters, saved filters, film page (§6.9) | Medium |
-| `core:ticket` | v1.4: the ticket PDF reader, the ticket fields and checks, the QR module grid (§11.2) | High |
-| `feature:tickets` | v1.4: ticket import (Share menu, Open with, and the file from Settings → Import ticket, whose row in `feature:backup` opens the file picker), the ticket screen with the QR code (§6.10, §6.11) | Medium |
+| `core:ticket` | v1.4: the ticket PDF reader, the ticket fields and checks, the QR module grid (§11.2); v1.5: finding the QR code in the membership card's screenshot (§11.4) | High |
+| `feature:tickets` | v1.4: ticket import (Share menu, Open with, and the file from Settings → Import ticket, whose row in `feature:backup` opens the file picker), the ticket screen with the QR code (§6.10, §6.11); v1.5: the membership card screens (§6.12, §6.13) | Medium |
 | Reminders | v1.4: scheduling rules (`core:model`), alarms, notifications and the restart receiver (`app`) (§11.3) | Medium |
 
 Working rules:
@@ -896,4 +1001,6 @@ but cannot run an emulator there — hands-on verification is done by the owner.
 - A ticket PDF for a booking with several seats (§11.2); a one-seat ticket
   was checked in October 2026.
 - v1.1 Program: the meaning of the `SV` label (§11.1).
+- v1.5 Membership card: whether Yorck ever changes the card's QR code (e.g.
+  with a renewal); the owner then replaces the screenshot (§6.13).
 - Yorck-app screenshots of hall seat plans (for preloaded layouts).

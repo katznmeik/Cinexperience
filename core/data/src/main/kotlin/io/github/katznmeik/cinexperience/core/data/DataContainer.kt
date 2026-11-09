@@ -22,7 +22,9 @@ import io.github.katznmeik.cinexperience.core.data.repository.SeatOverrideReposi
 import io.github.katznmeik.cinexperience.core.data.repository.TicketRepository
 import io.github.katznmeik.cinexperience.core.data.repository.VisitRepository
 import io.github.katznmeik.cinexperience.core.data.seed.Seeder
+import io.github.katznmeik.cinexperience.core.data.settings.MembershipCardStore
 import io.github.katznmeik.cinexperience.core.data.settings.ReminderSettingsStore
+import io.github.katznmeik.cinexperience.core.data.settings.SharedPreferencesMembershipCardStore
 import io.github.katznmeik.cinexperience.core.data.settings.SharedPreferencesReminderSettingsStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -117,6 +119,9 @@ class DataContainer internal constructor(
 
     /** The reminder settings (spec §6.7, §11.3), in shared preferences: Auto Backup, not the backup file. */
     val reminderSettingsStore: ReminderSettingsStore by lazy { SharedPreferencesReminderSettingsStore(appContext, ioDispatcher) }
+
+    /** The membership card (spec §4.8), in shared preferences: phone-local, neither Auto Backup nor the backup file. */
+    val membershipCardStore: MembershipCardStore by lazy { SharedPreferencesMembershipCardStore(appContext, ioDispatcher) }
 
     /** Backup export and import (spec §8). */
     val backupRepository: BackupRepository get() = roomBackupRepository

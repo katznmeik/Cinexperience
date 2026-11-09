@@ -18,6 +18,7 @@ import io.github.katznmeik.cinexperience.core.data.repository.CinemaRankingsRepo
 import io.github.katznmeik.cinexperience.core.testing.FakeBackupRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeCinexRepository
 import io.github.katznmeik.cinexperience.core.testing.FakeProgramRepository
+import io.github.katznmeik.cinexperience.core.testing.FakeMembershipCardStore
 import io.github.katznmeik.cinexperience.core.testing.FakeReminderSettingsStore
 import io.github.katznmeik.cinexperience.core.testing.FakeReferenceImageStore
 import io.github.katznmeik.cinexperience.core.testing.FakeVisitPhotoStore
@@ -65,6 +66,7 @@ internal class FakeAppContainer(
     override val ticketFileSource: TicketFileSource = ContentTicketFileSource(RuntimeEnvironment.getApplication()),
     override val ticketReader: TicketReader = DefaultTicketReader,
     override val reminderSettingsStore: FakeReminderSettingsStore = FakeReminderSettingsStore(),
+    override val membershipCardStore: FakeMembershipCardStore = FakeMembershipCardStore(),
     val reminderScheduler: ReminderScheduler = RecordingReminderScheduler(),
     /** Runs the receivers' work at once, on the calling thread, until it suspends. */
     reminderScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
