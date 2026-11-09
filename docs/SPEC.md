@@ -1,8 +1,8 @@
 # Cinexperience — Product Specification
 
-**Status:** v1.4.0 released (2026-10-19); v1.5.0 (membership card) built, release pending
+**Status:** v1.5.0 released (2026-11-09)
 **Owner:** katznmeik
-**Last updated:** 2026-11-09 (rev. 39)
+**Last updated:** 2026-11-09 (rev. 40)
 
 ---
 
