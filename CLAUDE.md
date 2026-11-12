@@ -24,7 +24,7 @@ SHA-1) and the Gradle distribution (`distributionSha256Sum` in
 ```sh
 ./gradlew testDebugUnitTest recordRoborazziDebug assembleDebug lintDebug   # local pre-push check
 ./gradlew :core:model:test                                       # pure JVM unit tests
-./gradlew recordRoborazziDebug    # PNGs -> app/ and feature/*/build/outputs/roborazzi/
+./gradlew recordRoborazziDebug    # PNGs -> app/, core/seatmapui/ and feature/*/build/outputs/roborazzi/
 ./gradlew lintDebug               # Android Lint: no errors allowed; 16 intentional warnings (README)
 ./gradlew assembleRelease         # needs CINEX_* env vars, else debug-signed + warning
 python3 -I -B -m unittest discover -s scripts/seed -p 'test_*.py'   # seed generator tests
