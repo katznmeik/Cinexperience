@@ -163,7 +163,7 @@ a third of the first design.
    effort for data integrity, untrusted input and concurrency; a lower effort
    level or a smaller model tier for convention checks, test-gap lists and
    accessibility coverage, which are mostly searching and listing.
-5. **A shorter CLAUDE.md.** It is about 9,000 words and is loaded into every
+5. **A shorter CLAUDE.md.** It is about 7,200 words and is loaded into every
    agent of every session, not only reviews. Keep the module map, commands and
    the short conventions there, and move the long sections (Reminders, Ticket
    PDF, Program / network, Backup, Seed data, Seat numbering) into a
